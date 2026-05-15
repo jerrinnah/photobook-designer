@@ -1,0 +1,12 @@
+node_modules
+release
+dist
+electron
+build/icon.iconset
+build/ico_tmp
+*.dmg
+*.exe
+*.icns
+*.ico
+.DS_Store
+*.log
