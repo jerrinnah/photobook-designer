@@ -13,6 +13,8 @@ dist-ssr
 *.local
 .env
 .env.*
+# Allow tracked production env — the Supabase anon key is public-safe
+!.env.production
 photobook-dist.zip
 release/
 build/icon.iconset/

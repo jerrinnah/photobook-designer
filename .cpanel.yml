@@ -1,0 +1,25 @@
+---
+deployment:
+  tasks:
+    # ── Configure ────────────────────────────────────────────────────
+    # Where the static files should land. Change PUBLIC_HTML if your
+    # docroot is not the default ($HOME/public_html), e.g. a subdomain
+    # or addon domain might be $HOME/photobook.example.com
+    - export PUBLIC_HTML="$HOME/public_html"
+    - export REPO="$HOME/repositories/photobook-designer"
+
+    # ── Make sure Node is on PATH ────────────────────────────────────
+    # cPanel uses CloudLinux Node.js Selector — load the alt-node bin.
+    # If your host pins a specific version, change the path below.
+    - export PATH="/opt/cpanel/ea-nodejs20/bin:/opt/alt/alt-nodejs20/root/usr/bin:$PATH"
+    - node --version || (echo "Node not found — enable Node.js Selector in cPanel and pick v20" && exit 1)
+
+    # ── Build ────────────────────────────────────────────────────────
+    - cd "$REPO" && npm ci --omit=dev --no-audit --no-fund
+    - cd "$REPO" && npm run build
+
+    # ── Deploy: replace contents of public_html with dist/ ──────────
+    # rsync --delete keeps the docroot clean. Excludes cgi-bin in case
+    # your host uses one for other apps.
+    - /usr/bin/rsync -a --delete --exclude 'cgi-bin' "$REPO/dist/" "$PUBLIC_HTML/"
+    - echo "Deployed at $(date)" >> "$REPO/deploy.log"
