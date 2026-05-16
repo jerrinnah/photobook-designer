@@ -1,5 +1,6 @@
 import { useBookStore } from '../store/useBookStore';
 import { TEMPLATES } from '../layouts/templates';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 function getSuggestions(spread, photos, blendEdges) {
   if (!spread) return [];
@@ -77,23 +78,43 @@ export default function DesignSuggestions() {
   const { spreads, activeSpreadId, photos, blendEdges } = useBookStore();
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const tips = getSuggestions(spread, photos, blendEdges);
+  // Collapsed by default so templates above get the full sidebar height.
+  // Always render the header (even with no tips) so users can toggle it back open.
+  const [collapsed, setCollapsed] = useLocalStorage('suggestions-collapsed', true);
   if (tips.length === 0) return null;
 
   return (
-    <div style={{ borderTop: '1px solid #1a1a1a', padding: '10px 12px 14px' }}>
-      <div style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
-        Suggestions
-      </div>
-      {tips.map((tip, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 13, color: tip.color, flexShrink: 0, marginTop: 1, lineHeight: 1 }}>
-            {tip.icon}
-          </span>
-          <span style={{ fontSize: 11, color: '#666', lineHeight: 1.45 }}>
-            {tip.text}
-          </span>
+    <div style={{ borderTop: '1px solid #1a1a1a', flexShrink: 0 }}>
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        style={{
+          width: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 12px',
+          background: 'none', border: 'none',
+          color: '#555', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+        title={collapsed ? 'Expand suggestions' : 'Collapse suggestions'}
+      >
+        <span>Suggestions {tips.length > 0 && <span style={{ color: '#4f8ef7', marginLeft: 4 }}>({tips.length})</span>}</span>
+        <span style={{ fontSize: 12, color: '#666', transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.15s' }}>▾</span>
+      </button>
+
+      {!collapsed && (
+        <div style={{ padding: '0 12px 14px' }}>
+          {tips.map((tip, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 13, color: tip.color, flexShrink: 0, marginTop: 1, lineHeight: 1 }}>
+                {tip.icon}
+              </span>
+              <span style={{ fontSize: 11, color: '#666', lineHeight: 1.45 }}>
+                {tip.text}
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
