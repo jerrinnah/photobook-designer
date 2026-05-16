@@ -164,14 +164,31 @@ const pickHighDensityTemplate = (portraitDominant, sw, sh) => {
 
 // Pull autosaved state (if any) from localStorage and use it as initial state.
 // Photo IDs are deduped here too — same defensive normalization as loadProject.
+// Helper: make sure spreads[0] is always the cover with a full-bleed template.
+const enforceCover = (spreads) => spreads.map((sp, i) => {
+  if (i !== 0) return sp;
+  const coverTpl = TEMPLATES.find((t) => t.id === 'full-bleed') || TEMPLATES[0];
+  // If cover already has the full-bleed template, just stamp the role.
+  if (sp.templateId === coverTpl.id) return { ...sp, role: 'cover' };
+  // Otherwise rebuild it with full-bleed, preserving any photo in cell 0.
+  const existingPhotoId = sp.cells?.[0]?.photoId ?? null;
+  return {
+    ...sp,
+    role: 'cover',
+    templateId: coverTpl.id,
+    cellGeometry: coverTpl.cells.map((c) => ({ ...c })),
+    cells: coverTpl.cells.map((c) => ({ ...makeCell(c), photoId: existingPhotoId })),
+  };
+});
+
 const buildInitialState = () => {
   const saved = loadAutosave();
   const defaults = {
-    spreads: [
+    spreads: enforceCover([
       makeSpread(1, TEMPLATES[0]),
       makeSpread(2, TEMPLATES[2]),
       makeSpread(3, TEMPLATES[10]),
-    ],
+    ]),
     activeSpreadId: 1,
     photos: [],
     spreadSizeId: 'sq-10',
@@ -193,9 +210,9 @@ const buildInitialState = () => {
   );
   captionIdCounter = maxCapId + 1;
 
-  // Dedupe photo assignments
+  // Dedupe photo assignments + enforce cover on spread 0
   const seen = new Set();
-  const normalizedSpreads = (saved.spreads || defaults.spreads).map((sp) => ({
+  const normalizedSpreads = enforceCover((saved.spreads || defaults.spreads).map((sp) => ({
     ...sp,
     cells: (sp.cells || []).map((c) => {
       if (!c?.photoId) return c;
@@ -203,7 +220,7 @@ const buildInitialState = () => {
       seen.add(c.photoId);
       return c;
     }),
-  }));
+  })));
 
   return {
     spreads: normalizedSpreads.length ? normalizedSpreads : defaults.spreads,
@@ -723,8 +740,10 @@ export const useBookStore = create((set, get) => ({
     const portraitDominant = pool.length > 0 && portraitCount > pool.length / 2;
 
     // Only upgrade UNTOUCHED spreads (no photos placed) with low cell counts.
-    // Spreads the user already designed are left alone.
-    let spreads = s.spreads.map((sp) => {
+    // Spreads the user already designed are left alone. Cover (index 0) is
+    // ALWAYS preserved — never reshuffled or re-templated by Design All.
+    let spreads = s.spreads.map((sp, idx) => {
+      if (idx === 0) return sp; // cover protected
       const hasAnyPhoto = sp.cells.some((c) => c.photoId);
       const editableCells = sp.cells.filter((c) => !c.locked).length;
       if (!hasAnyPhoto && editableCells < MIN_CELLS_PER_SPREAD) {
@@ -748,8 +767,10 @@ export const useBookStore = create((set, get) => ({
       spreads.push(makeSpread(++maxId, tmpl));
     }
 
-    // Fill ONLY empty, non-locked cells — never overwrite existing placements
-    const newSpreads = spreads.map((spread) => {
+    // Fill ONLY empty, non-locked cells — never overwrite existing placements.
+    // Skip the cover spread entirely.
+    const newSpreads = spreads.map((spread, idx) => {
+      if (idx === 0) return spread;
       const newCells = [...spread.cells];
       const newGeo = [...spread.cellGeometry];
       spread.cells.forEach((cell, i) => {
@@ -822,7 +843,8 @@ export const useBookStore = create((set, get) => ({
     );
 
     const poolIds = new Set(pool.map((p) => p.id));
-    const newSpreads = s.spreads.map((spread) => {
+    const newSpreads = s.spreads.map((spread, idx) => {
+      if (idx === 0) return spread; // cover spread is protected from reshuffle
       // First pass: clear pool-photo assignments for non-locked cells
       const cleared = spread.cells.map((cell) =>
         (!cell.locked && cell.photoId && poolIds.has(cell.photoId))

@@ -6,6 +6,7 @@ import { getScreenDims, getEffectiveExportSize } from '../layouts/spreadSizes';
 import SeamHandles from './SeamHandles';
 import useImage from '../hooks/useImage';
 import { loadPhoto as loadPhotoFile } from '../utils/photoLoader';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Convert gradient angle + two stops to Konva linearGradient start/end points
 function gradientPoints(angle, w, h) {
@@ -376,6 +377,52 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const ghostResizeRef = useRef(null);
   const moveDragRef = useRef(null);
   const [snapGuides, setSnapGuides] = useState({ v: [], h: [] });
+  const [zoom, setZoom] = useLocalStorage('canvas-zoom', 1);
+  const zoomContainerRef = useRef(null);
+  const pinchRef = useRef(null);
+
+  // Clamp helper
+  const setZoomClamped = (z) => setZoom(Math.max(0.25, Math.min(4, z)));
+
+  // Wheel + pinch zoom on the canvas wrapper
+  useEffect(() => {
+    const el = zoomContainerRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const delta = -e.deltaY * 0.0015;
+      setZoom((z) => Math.max(0.25, Math.min(4, z * (1 + delta))));
+    };
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchRef.current = { dist: Math.hypot(dx, dy), zoomAtStart: zoom };
+      }
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const ratio = dist / pinchRef.current.dist;
+        setZoom(() => Math.max(0.25, Math.min(4, pinchRef.current.zoomAtStart * ratio)));
+      }
+    };
+    const onTouchEnd = () => { pinchRef.current = null; };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [zoom, setZoom]);
 
   const handlePickPhotoForCell = (cellIndex) => {
     pendingCellRef.current = cellIndex;
@@ -608,12 +655,34 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const selectedCell = selectedCellIndex !== null ? spread.cells[selectedCellIndex] : null;
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: 24 }}>
+    <div
+      ref={zoomContainerRef}
+      style={{
+        flex: 1, overflow: 'auto',
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        padding: 24, position: 'relative',
+        // Center small canvases; allow scroll once content exceeds container
+        minHeight: 0, minWidth: 0,
+      }}
+    >
+      {/* Outer reserves the scaled footprint so scrollbars appear when zoomed in */}
+      <div style={{
+        width: SPREAD_W * zoom,
+        height: SPREAD_H * zoom,
+        flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={() => setDragOver(null)}
-        style={{ position: 'relative', boxShadow: '0 8px 48px rgba(0,0,0,0.7)' }}
+        style={{
+          position: 'relative',
+          width: SPREAD_W, height: SPREAD_H,
+          transform: `scale(${zoom})`,
+          transformOrigin: 'center center',
+          boxShadow: '0 8px 48px rgba(0,0,0,0.7)',
+        }}
       >
         <Stage
           width={SPREAD_W} height={SPREAD_H} ref={stageRef}
@@ -1416,6 +1485,53 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           T+ Text
         </button>
       </div>
+      </div>
+
+      {/* Zoom controls — floating, bottom-right of viewport */}
+      <div style={{
+        position: 'sticky', bottom: 12, left: '100%',
+        transform: 'translateX(-100%)',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        background: 'rgba(20,20,20,0.92)',
+        border: '1px solid #2a2a2a', borderRadius: 6,
+        padding: '4px 6px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+        marginRight: 12, marginTop: 'auto',
+        zIndex: 5,
+        backdropFilter: 'blur(8px)',
+      }}>
+        <button onClick={() => setZoomClamped(zoom / 1.25)} style={zoomBtnStyle} title="Zoom out (Cmd/Ctrl + wheel)">−</button>
+        <button
+          onClick={() => setZoom(1)}
+          style={{ ...zoomBtnStyle, minWidth: 50, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
+          title="Reset to 100%"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button onClick={() => setZoomClamped(zoom * 1.25)} style={zoomBtnStyle} title="Zoom in (Cmd/Ctrl + wheel)">+</button>
+        <button
+          onClick={() => {
+            const el = zoomContainerRef.current;
+            if (!el) return;
+            const padding = 48;
+            const fitX = (el.clientWidth - padding) / SPREAD_W;
+            const fitY = (el.clientHeight - padding) / SPREAD_H;
+            setZoomClamped(Math.min(fitX, fitY));
+          }}
+          style={{ ...zoomBtnStyle, fontSize: 10, padding: '4px 8px' }}
+          title="Fit to screen"
+        >
+          Fit
+        </button>
+      </div>
     </div>
   );
 }
+
+const zoomBtnStyle = {
+  background: '#181818', border: '1px solid #2a2a2a',
+  borderRadius: 4, color: '#bbb',
+  fontSize: 14, padding: '4px 9px',
+  cursor: 'pointer', lineHeight: 1,
+  minWidth: 28, textAlign: 'center',
+};
