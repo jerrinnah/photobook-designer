@@ -3,6 +3,8 @@ import { useBookStore } from '../store/useBookStore';
 import { TEMPLATES } from '../layouts/templates';
 import DesignSuggestions from './DesignSuggestions';
 import SpreadBackground from './SpreadBackground';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import CollapsedRail from './CollapsedRail';
 
 const THUMB_W = 76;
 const THUMB_H = 38;
@@ -38,6 +40,11 @@ export default function LayoutPicker({ mobile = false }) {
   const { spreads, activeSpreadId, setTemplate } = useBookStore();
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const [catFilter, setCatFilter] = useState('all'); // 'all' | 'Standard' | 'Wedding' | 'Event' | 'Print'
+  const [collapsed, setCollapsed] = useLocalStorage('layoutpicker-collapsed', false);
+
+  if (!mobile && collapsed) {
+    return <CollapsedRail label="Layouts" side="right" onExpand={() => setCollapsed(false)} />;
+  }
 
   const visibleTemplates = TEMPLATES.filter((t) => {
     if (catFilter === 'all') return true;
@@ -72,8 +79,14 @@ export default function LayoutPicker({ mobile = false }) {
 
   return (
     <aside style={{ width: mobile ? '100%' : 200, height: mobile ? '100%' : undefined, background: '#111', borderLeft: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '12px 12px 6px', fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>
-        Layout
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px 6px 12px' }}>
+        <span style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>Layout</span>
+        {!mobile && (
+          <button onClick={() => setCollapsed(true)} title="Collapse panel" style={{
+            background: 'none', border: 'none', color: '#555',
+            fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+          }}>›</button>
+        )}
       </div>
 
       {/* Category filter tabs */}

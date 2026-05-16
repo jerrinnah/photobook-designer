@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { useBookStore } from '../store/useBookStore';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import CollapsedRail from './CollapsedRail';
 
 const THUMB_W = 110;
 const THUMB_H = 56;
@@ -165,16 +167,24 @@ export default function SpreadNav({ mobile = false }) {
   const [count, setCount] = useState(1);
   const [draggedId, setDraggedId] = useState(null);
   const [dragTargetId, setDragTargetId] = useState(null);
+  const [collapsed, setCollapsed] = useLocalStorage('spreadnav-collapsed', false);
 
   const handleAdd = () => {
     if (count === 1) addSpread();
     else addMultipleSpreads(count);
   };
 
+  if (!mobile && collapsed) {
+    return <CollapsedRail label="Spreads" side="left" onExpand={() => setCollapsed(false)} />;
+  }
+
   return (
     <div style={{ width: mobile ? '100%' : 130, height: mobile ? '100%' : undefined, background: '#111', borderRight: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '12px 10px 8px', fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>
-        Spreads
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 6px 6px 10px' }}>
+        <span style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>Spreads</span>
+        {!mobile && (
+          <button onClick={() => setCollapsed(true)} title="Collapse panel" style={collapseBtn}>‹</button>
+        )}
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {spreads.map((sp) => (
@@ -237,3 +247,8 @@ export default function SpreadNav({ mobile = false }) {
     </div>
   );
 }
+
+const collapseBtn = {
+  background: 'none', border: 'none', color: '#555',
+  fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+};

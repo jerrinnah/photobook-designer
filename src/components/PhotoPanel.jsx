@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useBookStore } from '../store/useBookStore';
 import { loadPhoto } from '../utils/photoLoader';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import CollapsedRail from './CollapsedRail';
 
 // ── Perceptual hashing (dHash 8×8 = 64-bit fingerprint) ──────────────
 // Resizes image to 9×8 greyscale, compares adjacent horizontal pixels.
@@ -87,6 +89,7 @@ export default function PhotoPanel({ mobile = false }) {
   const [simMap, setSimMap] = useState(null);   // Map photoId → {groupNum, isKeep} | null
   const [computing, setComputing] = useState(false);
   const hashCache = useRef(new Map()); // photoId → hash bits
+  const [collapsed, setCollapsed] = useLocalStorage('photopanel-collapsed', false);
 
   const usedIds = new Set(
     spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean))
@@ -180,6 +183,10 @@ export default function PhotoPanel({ mobile = false }) {
   // Group colours for similar badges
   const GROUP_COLORS = ['#e05c5c', '#f6a623', '#b89fff', '#6fcf97', '#4f8ef7', '#f6c90e', '#ff8c69', '#7fffd4'];
 
+  if (!mobile && collapsed) {
+    return <CollapsedRail label="Photos" side="left" onExpand={() => setCollapsed(false)} />;
+  }
+
   return (
     <aside style={{
       width: mobile ? '100%' : 180,
@@ -190,8 +197,14 @@ export default function PhotoPanel({ mobile = false }) {
       flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      <div style={{ padding: '12px 12px 6px', fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>
-        Photos
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px 6px 12px' }}>
+        <span style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>Photos</span>
+        {!mobile && (
+          <button onClick={() => setCollapsed(true)} title="Collapse panel" style={{
+            background: 'none', border: 'none', color: '#555',
+            fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+          }}>‹</button>
+        )}
       </div>
 
       {/* Counters */}
