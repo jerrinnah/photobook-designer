@@ -655,22 +655,26 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const selectedCell = selectedCellIndex !== null ? spread.cells[selectedCellIndex] : null;
 
   return (
-    <div
-      ref={zoomContainerRef}
-      style={{
-        flex: 1, overflow: 'auto',
-        display: 'flex', justifyContent: 'center', alignItems: 'center',
-        padding: 24, position: 'relative',
-        // Center small canvases; allow scroll once content exceeds container
-        minHeight: 0, minWidth: 0,
-      }}
-    >
-      {/* Outer reserves the scaled footprint so scrollbars appear when zoomed in */}
+    <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, minWidth: 0 }}>
+      <div
+        ref={zoomContainerRef}
+        style={{
+          flex: 1, overflow: 'auto',
+          // Grid place-items handles both "smaller than container = centered"
+          // and "bigger than container = scrollable from top-left" cleanly,
+          // unlike flex centering which clips content on the top/left.
+          display: 'grid',
+          placeItems: 'center',
+          padding: 24,
+          minHeight: 0, minWidth: 0,
+        }}
+      >
+      {/* Outer reserves the scaled footprint so scrollbars size correctly */}
       <div style={{
         width: SPREAD_W * zoom,
         height: SPREAD_H * zoom,
-        flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'grid',
+        placeItems: 'center',
       }}>
       <div
         onDrop={handleDrop}
@@ -1486,18 +1490,17 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
         </button>
       </div>
       </div>
+      </div>
 
-      {/* Zoom controls — floating, bottom-right of viewport */}
+      {/* Zoom controls — anchored to canvas viewport, NOT inside scroll area */}
       <div style={{
-        position: 'sticky', bottom: 12, left: '100%',
-        transform: 'translateX(-100%)',
+        position: 'absolute', bottom: 12, right: 12,
         display: 'inline-flex', alignItems: 'center', gap: 4,
         background: 'rgba(20,20,20,0.92)',
         border: '1px solid #2a2a2a', borderRadius: 6,
         padding: '4px 6px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-        marginRight: 12, marginTop: 'auto',
-        zIndex: 5,
+        zIndex: 10,
         backdropFilter: 'blur(8px)',
       }}>
         <button onClick={() => setZoomClamped(zoom / 1.25)} style={zoomBtnStyle} title="Zoom out (Cmd/Ctrl + wheel)">−</button>
