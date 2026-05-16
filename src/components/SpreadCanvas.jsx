@@ -384,6 +384,19 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   // Clamp helper
   const setZoomClamped = (z) => setZoom(Math.max(0.25, Math.min(4, z)));
 
+  // Center the scaled canvas in the scroll viewport whenever zoom changes
+  // (and on mount). Without this, the spread can end up scrolled to a corner.
+  useEffect(() => {
+    const el = zoomContainerRef.current;
+    if (!el) return;
+    // Defer to next frame so layout has updated with the new zoom
+    requestAnimationFrame(() => {
+      const sx = (el.scrollWidth - el.clientWidth) / 2;
+      const sy = (el.scrollHeight - el.clientHeight) / 2;
+      el.scrollTo({ left: sx, top: sy, behavior: 'instant' });
+    });
+  }, [zoom, spreadSizeId]);
+
   // Wheel + pinch zoom on the canvas wrapper
   useEffect(() => {
     const el = zoomContainerRef.current;
@@ -1500,24 +1513,55 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
       {/* Zoom controls — anchored to canvas viewport, NOT inside scroll area */}
       <div style={{
-        position: 'absolute', bottom: 12, right: 12,
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        background: 'rgba(20,20,20,0.92)',
-        border: '1px solid #2a2a2a', borderRadius: 6,
-        padding: '4px 6px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+        position: 'absolute', bottom: 12, left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        background: 'rgba(20,20,20,0.94)',
+        border: '1px solid #2a2a2a', borderRadius: 8,
+        padding: '6px 8px',
+        boxShadow: '0 6px 22px rgba(0,0,0,0.65)',
         zIndex: 10,
-        backdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(10px)',
       }}>
         <button onClick={() => setZoomClamped(zoom / 1.25)} style={zoomBtnStyle} title="Zoom out (Cmd/Ctrl + wheel)">−</button>
-        <button
-          onClick={() => setZoom(1)}
-          style={{ ...zoomBtnStyle, minWidth: 50, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
-          title="Reset to 100%"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
+
+        {/* Slider */}
+        <input
+          type="range"
+          min="25" max="400" step="5"
+          value={Math.round(zoom * 100)}
+          onChange={(e) => setZoomClamped(Number(e.target.value) / 100)}
+          style={{
+            width: 120,
+            accentColor: '#4f8ef7',
+            cursor: 'pointer',
+          }}
+          title="Zoom level"
+        />
+
         <button onClick={() => setZoomClamped(zoom * 1.25)} style={zoomBtnStyle} title="Zoom in (Cmd/Ctrl + wheel)">+</button>
+
+        <div style={{ width: 1, height: 18, background: '#2a2a2a', margin: '0 2px' }} />
+
+        {/* Quick-jump presets */}
+        {[0.5, 1, 1.5, 2].map((preset) => (
+          <button
+            key={preset}
+            onClick={() => setZoom(preset)}
+            style={{
+              ...zoomBtnStyle,
+              minWidth: 40, fontSize: 10,
+              background: Math.abs(zoom - preset) < 0.01 ? '#1e2535' : '#181818',
+              color: Math.abs(zoom - preset) < 0.01 ? '#4f8ef7' : '#bbb',
+              borderColor: Math.abs(zoom - preset) < 0.01 ? '#2c4070' : '#2a2a2a',
+              fontWeight: Math.abs(zoom - preset) < 0.01 ? 600 : 400,
+            }}
+            title={`Set zoom to ${Math.round(preset * 100)}%`}
+          >
+            {Math.round(preset * 100)}%
+          </button>
+        ))}
+
         <button
           onClick={() => {
             const el = zoomContainerRef.current;
@@ -1527,11 +1571,20 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
             const fitY = (el.clientHeight - padding) / SPREAD_H;
             setZoomClamped(Math.min(fitX, fitY));
           }}
-          style={{ ...zoomBtnStyle, fontSize: 10, padding: '4px 8px' }}
-          title="Fit to screen"
+          style={{ ...zoomBtnStyle, fontSize: 10, padding: '4px 10px' }}
+          title="Fit spread to screen"
         >
           Fit
         </button>
+
+        {/* Current zoom indicator */}
+        <div style={{
+          minWidth: 46, fontSize: 11, color: '#888',
+          fontVariantNumeric: 'tabular-nums', textAlign: 'right',
+          paddingLeft: 4,
+        }}>
+          {Math.round(zoom * 100)}%
+        </div>
       </div>
     </div>
   );
