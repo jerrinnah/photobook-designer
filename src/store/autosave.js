@@ -41,7 +41,7 @@ const writeOrFallback = (state) => {
     localStorage.setItem(KEY, full);
     localStorage.setItem(META_KEY, JSON.stringify({ savedAt: Date.now(), bytes: full.length, partial: false }));
     notify('saved', { savedAt: Date.now(), bytes: full.length, partial: false });
-  } catch (e) {
+  } catch {
     // Quota exceeded or too big — save structure only (no photo base64)
     try {
       const partial = JSON.stringify({

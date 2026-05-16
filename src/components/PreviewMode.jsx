@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Stage, Layer, Rect, Image as KImage, Group, Text as KText, Line } from 'react-konva';
 import { useBookStore } from '../store/useBookStore';
 import { getScreenDims } from '../layouts/spreadSizes';
@@ -262,23 +262,22 @@ function MiniThumb({ spread, active, onClick, width, height }) {
 }
 
 export default function PreviewMode({ onClose, mobile = false }) {
-  const { spreads, spreadSizeId, customSize } = useBookStore();
+  const { spreads } = useBookStore();
   const [idx, setIdx] = useState(0);
-  const { w: exportW, h: exportH } = getScreenDims(spreadSizeId, customSize);
 
   const previewW = Math.min(window.innerWidth * (mobile ? 0.94 : 0.86), 1100);
 
   // Touch swipe for mobile
-  const touchStartX = useState({ current: null })[0];
-  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const touchStartXRef = useRef(null);
+  const onTouchStart = (e) => { touchStartXRef.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (touchStartXRef.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartXRef.current;
     if (Math.abs(dx) > 50) {
       if (dx < 0) setIdx((i) => Math.min(i + 1, spreads.length - 1));
       else setIdx((i) => Math.max(i - 1, 0));
     }
-    touchStartX.current = null;
+    touchStartXRef.current = null;
   };
 
   useEffect(() => {

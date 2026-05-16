@@ -136,17 +136,6 @@ const portraitCellRatio = (tmpl, sw, sh) => {
   return portraitCount / tmpl.cells.length;
 };
 
-const pickOrientedTemplate = (portraitDominant, sw, sh) => {
-  // Exclude print-size templates from auto-design selection
-  const pool = TEMPLATES.filter((t) => !t.printSize);
-  const scored = pool.map((t) => ({ t, ratio: portraitCellRatio(t, sw, sh) }));
-  const suited = portraitDominant
-    ? scored.filter(({ ratio }) => ratio >= 0.4)
-    : scored.filter(({ ratio }) => ratio <= 0.4);
-  const candidates = suited.length > 0 ? suited : scored;
-  return candidates[Math.floor(Math.random() * candidates.length)].t;
-};
-
 // Pick a template with at least minCells cells, oriented to match the photo pool
 const MIN_CELLS_PER_SPREAD = 18;
 

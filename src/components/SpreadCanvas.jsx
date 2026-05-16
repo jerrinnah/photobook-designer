@@ -37,72 +37,71 @@ const hexToRgba = (hex, alpha) => {
   return `rgba(${r},${g},${b},${alpha})`;
 };
 
+function GradRect({ g, width, height }) {
+  const type = g.type || 'linear';
+  const stops = g.stops || ['#111', '#050505'];
+  if (type === 'radial') {
+    return (
+      <Rect x={0} y={0} width={width} height={height} listening={false}
+        fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientStartRadius={0}
+        fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientEndRadius={Math.max(width, height) * 0.75}
+        fillRadialGradientColorStops={[0, stops[0], 1, stops[1]]} />
+    );
+  }
+  if (type === 'vignette') {
+    return (
+      <Rect x={0} y={0} width={width} height={height} listening={false}
+        fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientStartRadius={Math.min(width, height) * 0.25}
+        fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientEndRadius={Math.max(width, height) * 0.75}
+        fillRadialGradientColorStops={[0, stops[1], 1, stops[0]]} />
+    );
+  }
+  const pts = gradientPoints(g.angle || 180, width, height);
+  return (
+    <Rect x={0} y={0} width={width} height={height} listening={false}
+      fillLinearGradientStartPoint={pts.start} fillLinearGradientEndPoint={pts.end}
+      fillLinearGradientColorStops={[0, stops[0], 1, stops[1]]} />
+  );
+}
+
+function OverlayRect({ ov, width, height }) {
+  const transparent = hexToRgba(ov.color, 0);
+  const opaque = hexToRgba(ov.color, ov.opacity);
+  if (ov.type === 'vignette') {
+    return (
+      <Rect x={0} y={0} width={width} height={height} listening={false}
+        fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientStartRadius={Math.min(width, height) * 0.2}
+        fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientEndRadius={Math.max(width, height) * 0.75}
+        fillRadialGradientColorStops={[0, transparent, 1, opaque]} />
+    );
+  }
+  if (ov.type === 'radial') {
+    return (
+      <Rect x={0} y={0} width={width} height={height} listening={false}
+        fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientStartRadius={0}
+        fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
+        fillRadialGradientEndRadius={Math.max(width, height) * 0.7}
+        fillRadialGradientColorStops={[0, opaque, 1, transparent]} />
+    );
+  }
+  const pts = gradientPoints(ov.angle || 180, width, height);
+  return (
+    <Rect x={0} y={0} width={width} height={height} listening={false}
+      fillLinearGradientStartPoint={pts.start} fillLinearGradientEndPoint={pts.end}
+      fillLinearGradientColorStops={[0, transparent, 1, opaque]} />
+  );
+}
+
 // Renders the correct background fill/gradient/image Konva nodes
 function SpreadBackground({ spread, w, h }) {
   const { bgMode, bgColor, bgGradient, bgImage, bgOverlay } = spread;
-
-  const GradRect = ({ g, width, height }) => {
-    const type = g.type || 'linear';
-    const stops = g.stops || ['#111', '#050505'];
-    if (type === 'radial') {
-      return (
-        <Rect x={0} y={0} width={width} height={height} listening={false}
-          fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientStartRadius={0}
-          fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientEndRadius={Math.max(width, height) * 0.75}
-          fillRadialGradientColorStops={[0, stops[0], 1, stops[1]]} />
-      );
-    }
-    if (type === 'vignette') {
-      return (
-        <Rect x={0} y={0} width={width} height={height} listening={false}
-          fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientStartRadius={Math.min(width, height) * 0.25}
-          fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientEndRadius={Math.max(width, height) * 0.75}
-          fillRadialGradientColorStops={[0, stops[1], 1, stops[0]]} />
-      );
-    }
-    const pts = gradientPoints(g.angle || 180, width, height);
-    return (
-      <Rect x={0} y={0} width={width} height={height} listening={false}
-        fillLinearGradientStartPoint={pts.start} fillLinearGradientEndPoint={pts.end}
-        fillLinearGradientColorStops={[0, stops[0], 1, stops[1]]} />
-    );
-  };
-
-  const OverlayRect = ({ ov, width, height }) => {
-    const transparent = hexToRgba(ov.color, 0);
-    const opaque = hexToRgba(ov.color, ov.opacity);
-    if (ov.type === 'vignette') {
-      return (
-        <Rect x={0} y={0} width={width} height={height} listening={false}
-          fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientStartRadius={Math.min(width, height) * 0.2}
-          fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientEndRadius={Math.max(width, height) * 0.75}
-          fillRadialGradientColorStops={[0, transparent, 1, opaque]} />
-      );
-    }
-    if (ov.type === 'radial') {
-      return (
-        <Rect x={0} y={0} width={width} height={height} listening={false}
-          fillRadialGradientStartPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientStartRadius={0}
-          fillRadialGradientEndPoint={{ x: width / 2, y: height / 2 }}
-          fillRadialGradientEndRadius={Math.max(width, height) * 0.7}
-          fillRadialGradientColorStops={[0, opaque, 1, transparent]} />
-      );
-    }
-    const pts = gradientPoints(ov.angle || 180, width, height);
-    return (
-      <Rect x={0} y={0} width={width} height={height} listening={false}
-        fillLinearGradientStartPoint={pts.start} fillLinearGradientEndPoint={pts.end}
-        fillLinearGradientColorStops={[0, transparent, 1, opaque]} />
-    );
-  };
-
   if (bgMode === 'gradient' && bgGradient) {
     return <GradRect g={bgGradient} width={w} height={h} />;
   }
@@ -203,6 +202,22 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
   const photo = photos.find((p) => p.id === cell.photoId);
   const [img] = useImage(photo?.src);
   const kImgRef = useRef(null);
+  const fx = cell.effects;
+
+  // Cache/uncache whenever filters or image change — runs unconditionally
+  // so hook order stays stable across renders even when geometry is invalid.
+  useEffect(() => {
+    const node = kImgRef.current;
+    if (!node || !img) return;
+    const filters = [];
+    if (fx?.bw)               filters.push(Konva.Filters.Grayscale);
+    if (fx?.sepia)            filters.push(Konva.Filters.Sepia);
+    if ((fx?.blur ?? 0) > 0)  filters.push(Konva.Filters.Blur);
+    if ((fx?.brightness ?? 0) !== 0) filters.push(Konva.Filters.Brighten);
+    if ((fx?.contrast ?? 0) !== 0)   filters.push(Konva.Filters.Contrast);
+    if (filters.length > 0) node.cache();
+    else node.clearCache();
+  }, [img, fx?.bw, fx?.sepia, fx?.blur, fx?.brightness, fx?.contrast]);
 
   const x = geo.x * spreadW + gap / 2;
   const y = geo.y * spreadH + gap / 2;
@@ -211,9 +226,8 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
   const isSelected = selectedCellIndex === cellIndex;
   if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return null;
   const rotation = cell.rotation || 0;
-  const fx = cell.effects;
 
-  // Build Konva filter list from effects
+  // Build the same filter list for the KImage render
   const activeFilters = [];
   if (fx) {
     if (fx.bw)          activeFilters.push(Konva.Filters.Grayscale);
@@ -222,18 +236,6 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
     if (fx.brightness !== 0) activeFilters.push(Konva.Filters.Brighten);
     if (fx.contrast !== 0)   activeFilters.push(Konva.Filters.Contrast);
   }
-
-  // Cache/uncache whenever filters or image change
-  useEffect(() => {
-    const node = kImgRef.current;
-    if (!node || !img) return;
-    if (activeFilters.length > 0) {
-      node.cache();
-    } else {
-      node.clearCache();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [img, fx?.bw, fx?.sepia, fx?.blur, fx?.brightness, fx?.contrast]);
 
   const imgProps = (() => {
     if (!img) return null;
@@ -363,7 +365,7 @@ const cellBtnStyle = (extra = {}) => ({
 
 export default function SpreadCanvas({ stageRef, mobile = false }) {
   const {
-    spreads, activeSpreadId, photos, assignPhoto, addPhotos, addCellAt,
+    spreads, activeSpreadId, assignPhoto, addPhotos, addCellAt,
     spreadSizeId, customSize, blendEdges, gap,
     selectedCellIndex, setSelectedCell,
     splitCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
@@ -857,6 +859,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                         onMouseEnter={() => { document.body.style.cursor = 'move'; }}
                         onMouseLeave={() => { document.body.style.cursor = 'default'; }}
                         onDragStart={(e) => {
+                          // eslint-disable-next-line react-hooks/refs -- fires on drag, not render
                           moveDragRef.current = { startX: e.target.x(), startY: e.target.y(), geo: { ...rGeo } };
                         }}
                         onDragMove={(e) => {
@@ -911,6 +914,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                         onMouseEnter={(e) => { document.body.style.cursor = rhCursors[id]; e.target.fill('#6aa8ff'); e.target.getLayer().batchDraw(); }}
                         onMouseLeave={(e) => { document.body.style.cursor = 'default'; e.target.fill('#4f8ef7'); e.target.getLayer().batchDraw(); }}
                         onDragStart={(e) => {
+                          // eslint-disable-next-line react-hooks/refs -- fires on drag, not render
                           resizeDragRef.current = { startX: e.target.x(), startY: e.target.y(), geo: { ...rGeo }, xe, ye };
                         }}
                         onDragMove={(e) => {
