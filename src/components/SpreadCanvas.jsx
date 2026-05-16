@@ -654,27 +654,32 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
   const selectedCell = selectedCellIndex !== null ? spread.cells[selectedCellIndex] : null;
 
+  // Padding around the canvas (breathing room). Wrapper always ≥ viewport
+  // so flex centering works without overflow-clipping artefacts, and grows
+  // when the scaled canvas exceeds the viewport so scrollbars work cleanly.
+  const PAD = 24;
+  const wrapperW = SPREAD_W * zoom + PAD * 2;
+  const wrapperH = SPREAD_H * zoom + PAD * 2;
+
   return (
     <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, minWidth: 0 }}>
       <div
         ref={zoomContainerRef}
         style={{
           flex: 1, overflow: 'auto',
-          // Grid place-items handles both "smaller than container = centered"
-          // and "bigger than container = scrollable from top-left" cleanly,
-          // unlike flex centering which clips content on the top/left.
-          display: 'grid',
-          placeItems: 'center',
-          padding: 24,
           minHeight: 0, minWidth: 0,
         }}
       >
-      {/* Outer reserves the scaled footprint so scrollbars size correctly */}
+      {/* Wrapper grows when zoom > 1, but stays at least viewport size so the
+          flex centering keeps the canvas centered without clipping. */}
       <div style={{
-        width: SPREAD_W * zoom,
-        height: SPREAD_H * zoom,
-        display: 'grid',
-        placeItems: 'center',
+        minWidth: '100%',
+        minHeight: '100%',
+        width: wrapperW,
+        height: wrapperH,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
       <div
         onDrop={handleDrop}
@@ -686,6 +691,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           transform: `scale(${zoom})`,
           transformOrigin: 'center center',
           boxShadow: '0 8px 48px rgba(0,0,0,0.7)',
+          flexShrink: 0,
         }}
       >
         <Stage
