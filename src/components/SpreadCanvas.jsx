@@ -360,7 +360,7 @@ const cellBtnStyle = (extra = {}) => ({
   ...extra,
 });
 
-export default function SpreadCanvas({ stageRef }) {
+export default function SpreadCanvas({ stageRef, mobile = false }) {
   const {
     spreads, activeSpreadId, photos, assignPhoto, addPhotos, addCellAt,
     spreadSizeId, customSize, blendEdges, gap,
@@ -425,7 +425,7 @@ export default function SpreadCanvas({ stageRef }) {
   if (!spread) return null;
 
   // ── Cell resize handles ──────────────────────────────────────────────
-  const RH_SIZE = 10; // handle square size (px)
+  const RH_SIZE = mobile ? 22 : 10; // bigger touch targets on mobile
   const RH_MIN = 0.04; // minimum cell dimension (normalised)
 
   const RH_DEFS = [

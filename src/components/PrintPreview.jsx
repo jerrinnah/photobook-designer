@@ -127,7 +127,7 @@ function SpreadMiniature({ spread, cmyk, photos }) {
   );
 }
 
-export default function PrintPreview({ onClose }) {
+export default function PrintPreview({ onClose, mobile = false }) {
   const { spreads, photos, spreadSizeId, customSize, bookName } = useBookStore();
   const [cmyk, setCmyk] = useState(false);
   const [selectedSize, setSelectedSize] = useState('4×6"');
@@ -194,10 +194,14 @@ export default function PrintPreview({ onClose }) {
         >✕ Close</button>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left: specs panel */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: mobile ? 'column' : 'row', overflow: 'hidden' }}>
+        {/* Left (top on mobile): specs panel */}
         <div style={{
-          width: 240, background: '#111', borderRight: '1px solid #1a1a1a',
+          width: mobile ? '100%' : 240,
+          maxHeight: mobile ? '40%' : 'none',
+          background: '#111',
+          borderRight: mobile ? 'none' : '1px solid #1a1a1a',
+          borderBottom: mobile ? '1px solid #1a1a1a' : 'none',
           overflowY: 'auto', padding: '14px 14px',
           flexShrink: 0,
         }}>

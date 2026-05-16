@@ -34,7 +34,7 @@ function TemplateSVG({ tmpl, active }) {
 
 const GROUP_ORDER = ['Print Sizes', 'Single', 'Two–Three', 'Four–Five', 'Six–Seven', 'Eight–Eleven', 'Twelve–Fourteen', 'Fifteen–Seventeen', '18+ Dense'];
 
-export default function LayoutPicker() {
+export default function LayoutPicker({ mobile = false }) {
   const { spreads, activeSpreadId, setTemplate } = useBookStore();
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const [catFilter, setCatFilter] = useState('all'); // 'all' | 'Standard' | 'Wedding' | 'Event' | 'Print'
@@ -71,7 +71,7 @@ export default function LayoutPicker() {
     : ALL_ORDER.filter((k) => groups[k]);
 
   return (
-    <aside style={{ width: 200, background: '#111', borderLeft: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <aside style={{ width: mobile ? '100%' : 200, height: mobile ? '100%' : undefined, background: '#111', borderLeft: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 12px 6px', fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>
         Layout
       </div>

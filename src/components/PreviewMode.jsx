@@ -261,13 +261,25 @@ function MiniThumb({ spread, active, onClick, width, height }) {
   );
 }
 
-export default function PreviewMode({ onClose }) {
+export default function PreviewMode({ onClose, mobile = false }) {
   const { spreads, spreadSizeId, customSize } = useBookStore();
   const [idx, setIdx] = useState(0);
   const { w: exportW, h: exportH } = getScreenDims(spreadSizeId, customSize);
 
-  const previewW = Math.min(window.innerWidth * 0.86, 1100);
-  const previewH = Math.round(previewW * exportH / exportW);
+  const previewW = Math.min(window.innerWidth * (mobile ? 0.94 : 0.86), 1100);
+
+  // Touch swipe for mobile
+  const touchStartX = useState({ current: null })[0];
+  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(dx) > 50) {
+      if (dx < 0) setIdx((i) => Math.min(i + 1, spreads.length - 1));
+      else setIdx((i) => Math.max(i - 1, 0));
+    }
+    touchStartX.current = null;
+  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -294,23 +306,26 @@ export default function PreviewMode({ onClose }) {
         gap: 16,
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onTouchStart={mobile ? onTouchStart : undefined}
+      onTouchEnd={mobile ? onTouchEnd : undefined}
     >
       {/* Close + counter */}
-      <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: '#555' }}>
+      <div className={mobile ? 'safe-top' : ''} style={{ position: 'absolute', top: mobile ? 0 : 16, right: 16, left: mobile ? 16 : 'auto', display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', padding: mobile ? '12px 0 0' : 0, zIndex: 10 }}>
+        <span style={{ fontSize: 12, color: '#888' }}>
           {idx + 1} / {spreads.length}
           {spread?.role ? ` · ${spread.role.toUpperCase()}` : ''}
         </span>
         <button onClick={onClose} style={{
           background: 'none', border: '1px solid #333',
-          borderRadius: 4, color: '#888', fontSize: 13, cursor: 'pointer', padding: '4px 10px',
+          borderRadius: 4, color: '#aaa', fontSize: 13, cursor: 'pointer', padding: '6px 12px',
+          minHeight: mobile ? 38 : undefined,
         }}>
           ✕ Close
         </button>
       </div>
 
       {/* Main preview */}
-      <div style={{ boxShadow: '0 12px 60px rgba(0,0,0,0.8)', borderRadius: 2 }}>
+      <div style={{ boxShadow: '0 12px 60px rgba(0,0,0,0.8)', borderRadius: 2, maxWidth: '100%' }}>
         <SpreadPreview spread={spread} width={previewW} />
       </div>
 
@@ -356,7 +371,9 @@ export default function PreviewMode({ onClose }) {
         </button>
       </div>
 
-      <div style={{ fontSize: 11, color: '#333' }}>← → to navigate · ESC to close</div>
+      <div style={{ fontSize: 11, color: '#333' }}>
+        {mobile ? 'Swipe to navigate · Tap × to close' : '← → to navigate · ESC to close'}
+      </div>
     </div>
   );
 }

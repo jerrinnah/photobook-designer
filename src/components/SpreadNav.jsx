@@ -160,7 +160,7 @@ function SpreadThumb({ spread, active, onDragStart, onDragOver, onDrop, isDragTa
   );
 }
 
-export default function SpreadNav() {
+export default function SpreadNav({ mobile = false }) {
   const { spreads, activeSpreadId, addSpread, addMultipleSpreads, reorderSpreads } = useBookStore();
   const [count, setCount] = useState(1);
   const [draggedId, setDraggedId] = useState(null);
@@ -172,7 +172,7 @@ export default function SpreadNav() {
   };
 
   return (
-    <div style={{ width: 130, background: '#111', borderRight: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: mobile ? '100%' : 130, height: mobile ? '100%' : undefined, background: '#111', borderRight: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 10px 8px', fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>
         Spreads
       </div>

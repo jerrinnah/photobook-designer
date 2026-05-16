@@ -6,11 +6,18 @@ import LayoutPicker from './components/LayoutPicker';
 import Toolbar from './components/Toolbar';
 import PreviewMode from './components/PreviewMode';
 import PrintPreview from './components/PrintPreview';
+import MobileShell from './components/MobileShell';
+import { useIsMobile } from './hooks/useIsMobile';
 
 export default function App() {
   const stageRef = useRef(null);
   const [previewing, setPreviewing] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return <MobileShell stageRef={stageRef} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0d0d0d', color: '#e0e0e0', fontFamily: 'system-ui, sans-serif' }}>

@@ -72,7 +72,7 @@ function clusterSimilar(photos, hashes, threshold = 10) {
   return simMap; // empty map = no duplicates found
 }
 
-export default function PhotoPanel() {
+export default function PhotoPanel({ mobile = false }) {
   const {
     photos, spreads, addPhotos, removePhoto,
     selectedPhotoIds, togglePhotoSelection, setPhotoSelection, selectAllPhotos, clearPhotoSelection,
@@ -182,9 +182,10 @@ export default function PhotoPanel() {
 
   return (
     <aside style={{
-      width: 180,
+      width: mobile ? '100%' : 180,
+      height: mobile ? '100%' : undefined,
       background: '#141414',
-      borderRight: '1px solid #222',
+      borderRight: mobile ? 'none' : '1px solid #222',
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
