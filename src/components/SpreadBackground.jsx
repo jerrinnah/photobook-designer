@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useBookStore } from '../store/useBookStore';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const cssGrad = (type, angle, stops) => {
   if (type === 'radial') return `radial-gradient(ellipse at center, ${stops[0]}, ${stops[1]})`;
@@ -80,6 +81,8 @@ export default function SpreadBackground() {
 
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const fileRef = useRef(null);
+  // Collapsed by default so templates above get the full sidebar height
+  const [collapsed, setCollapsed] = useLocalStorage('spreadbg-collapsed', true);
   if (!spread) return null;
 
   const mode = spread.bgMode || 'color';
@@ -110,11 +113,25 @@ export default function SpreadBackground() {
   const previewBg = (p) => cssGrad(p.type || 'linear', p.angle, p.stops);
 
   return (
-    <div style={{ borderTop: '1px solid #1a1a1a' }}>
-      <div style={{ padding: '10px 12px 6px', fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>
-        Background
-      </div>
+    <div style={{ borderTop: '1px solid #1a1a1a', flexShrink: 0 }}>
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        style={{
+          width: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 12px',
+          background: 'none', border: 'none',
+          color: '#555', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+        title={collapsed ? 'Expand background panel' : 'Collapse background panel'}
+      >
+        <span>Background{spread?.bgMode === 'gradient' || spread?.bgMode === 'image' ? ' ●' : ''}</span>
+        <span style={{ fontSize: 12, color: '#666', transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.15s' }}>▾</span>
+      </button>
 
+      {!collapsed && (
+        <>
       {/* Mode tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', margin: '0 0 8px' }}>
         {[['color','Solid'],['gradient','Gradient'],['image','Image']].map(([key, label]) => (
@@ -263,6 +280,8 @@ export default function SpreadBackground() {
           </>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
