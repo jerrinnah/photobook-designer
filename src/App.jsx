@@ -7,16 +7,22 @@ import Toolbar from './components/Toolbar';
 import PreviewMode from './components/PreviewMode';
 import PrintPreview from './components/PrintPreview';
 import MobileShell from './components/MobileShell';
-import { useIsMobile } from './hooks/useIsMobile';
+import RotateOverlay from './components/RotateOverlay';
+import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
   const stageRef = useRef(null);
   const [previewing, setPreviewing] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
-  const isMobile = useIsMobile();
+  const { isMobile, isPortrait } = useViewport();
 
   if (isMobile) {
-    return <MobileShell stageRef={stageRef} />;
+    return (
+      <>
+        <MobileShell stageRef={stageRef} />
+        {isPortrait && <RotateOverlay />}
+      </>
+    );
   }
 
   return (

@@ -2,13 +2,24 @@ import { useEffect, useState } from 'react';
 
 const MOBILE_BREAKPOINT = 768;
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT
-  );
+const read = () => {
+  if (typeof window === 'undefined') return { isMobile: false, isPortrait: false };
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  return {
+    isMobile: w < MOBILE_BREAKPOINT,
+    isPortrait: h > w,
+  };
+};
 
+export function useIsMobile() {
+  return useViewport().isMobile;
+}
+
+export function useViewport() {
+  const [v, setV] = useState(read);
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    const onResize = () => setV(read());
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
     return () => {
@@ -16,6 +27,5 @@ export function useIsMobile() {
       window.removeEventListener('orientationchange', onResize);
     };
   }, []);
-
-  return isMobile;
+  return v;
 }
