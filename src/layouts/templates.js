@@ -703,4 +703,74 @@ export const TEMPLATES = [
     { x:0.666, y:0.5, w:0.111, h:0.5, hint:'45' }, { x:0.777, y:0.5, w:0.111, h:0.5, hint:'45' },
     { x:0.888, y:0.5, w:0.112, h:0.5, hint:'45' },
   ]},
+
+  // ══ COVER TEMPLATES ═════════════════════════════════════════════════
+  // Pre-styled covers: bgColor + cell + captions are all applied on click.
+  // Every text element is editable — double-click to change text, single
+  // click to drag / restyle via the floating caption toolbar.
+
+  // 1. Arch Romance — based on the "Jim & Pam" reference
+  { id: 'cover-arch-romance', name: 'Arch Romance', category: 'Cover',
+    bgColor: '#e8e1d2',
+    cells: [{ x: 0.18, y: 0.12, w: 0.64, h: 0.46, hint: '45' }],
+    captions: [
+      { x: 0.44, y: 0.04, w: 0.12, text: '01\n05\n22', fontSize: 26, color: '#3a3a2e', align: 'center', fontFamily: 'Georgia, serif', lineHeight: 1.1 },
+      { x: 0.10, y: 0.62, w: 0.80, text: 'Jim & Pam', fontSize: 86, color: '#3a3a2e', align: 'center', fontFamily: 'Georgia, serif', italic: false, bold: false },
+      { x: 0.22, y: 0.79, w: 0.56, text: '"I am certain of our love, I love you.\nYou made me believe that love exists\nand I will be by your side forever."', fontSize: 16, color: '#5a5a4a', align: 'center', fontFamily: 'Georgia, serif', italic: true, lineHeight: 1.5 },
+      { x: 0.35, y: 0.93, w: 0.30, text: 'Our Wedding', fontSize: 14, color: '#3a3a2e', align: 'center', fontFamily: 'Georgia, serif', letterSpacing: 2 },
+    ],
+  },
+
+  // 2. Bold Letterspace — based on the "Felicity & Anthony" reference
+  { id: 'cover-bold-letterspace', name: 'Bold Letterspace', category: 'Cover',
+    bgColor: '#1a1a1a',
+    cells: [{ x: 0, y: 0, w: 1, h: 1, hint: '169' }],
+    captions: [
+      { x: 0.15, y: 0.16, w: 0.70, text: '3 · 30 · 2025', fontSize: 26, color: '#ffffff', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 8, shadow: true },
+      { x: 0.10, y: 0.24, w: 0.80, text: 'FELICITY', fontSize: 76, color: '#ffffff', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 14, shadow: true },
+      { x: 0.40, y: 0.35, w: 0.20, text: '— & —', fontSize: 22, color: '#ffffff', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 4, shadow: true },
+      { x: 0.10, y: 0.40, w: 0.80, text: 'ANTHONY', fontSize: 76, color: '#ffffff', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 14, shadow: true },
+    ],
+  },
+
+  // 3. Side Editorial — photo right half, text left
+  { id: 'cover-side-editorial', name: 'Side Editorial', category: 'Cover',
+    bgColor: '#f5f0e6',
+    cells: [{ x: 0.5, y: 0, w: 0.5, h: 1, hint: '169' }],
+    captions: [
+      { x: 0.05, y: 0.10, w: 0.40, text: 'CHAPTER\nONE', fontSize: 16, color: '#888', align: 'left', fontFamily: 'Helvetica, sans-serif', letterSpacing: 4, lineHeight: 1.4 },
+      { x: 0.05, y: 0.32, w: 0.42, text: 'Our\nStory', fontSize: 96, color: '#2a2a2a', align: 'left', fontFamily: 'Georgia, serif', lineHeight: 0.95 },
+      { x: 0.05, y: 0.74, w: 0.42, text: 'A photobook by the family\n— 2026 edition', fontSize: 16, color: '#666', align: 'left', fontFamily: 'Georgia, serif', italic: true, lineHeight: 1.5 },
+    ],
+  },
+
+  // 4. Minimal Bottom — photo top 2/3, text below
+  { id: 'cover-minimal-bottom', name: 'Minimal Bottom', category: 'Cover',
+    bgColor: '#ffffff',
+    cells: [{ x: 0, y: 0, w: 1, h: 0.72, hint: '169' }],
+    captions: [
+      { x: 0.10, y: 0.77, w: 0.80, text: 'Memories', fontSize: 64, color: '#1a1a1a', align: 'center', fontFamily: 'Georgia, serif' },
+      { x: 0.30, y: 0.90, w: 0.40, text: '— 2025 —', fontSize: 16, color: '#888', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 6 },
+    ],
+  },
+
+  // 5. Grand Script — full bleed photo with overlay title
+  { id: 'cover-grand-script', name: 'Grand Script', category: 'Cover',
+    bgColor: '#1a1a1a',
+    cells: [{ x: 0, y: 0, w: 1, h: 1, hint: '169' }],
+    captions: [
+      { x: 0.10, y: 0.40, w: 0.80, text: 'Forever', fontSize: 140, color: '#ffffff', align: 'center', fontFamily: 'Georgia, serif', italic: true, shadow: true },
+      { x: 0.30, y: 0.62, w: 0.40, text: 'OUR JOURNEY · 2026', fontSize: 14, color: '#ffffff', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 6, shadow: true },
+    ],
+  },
+
+  // 6. Date Card — date as the hero, photo as backdrop
+  { id: 'cover-date-card', name: 'Date Card', category: 'Cover',
+    bgColor: '#0a0a0a',
+    cells: [{ x: 0, y: 0, w: 1, h: 1, hint: '169' }],
+    captions: [
+      { x: 0.10, y: 0.30, w: 0.80, text: 'TWELVE\nNIGHTS', fontSize: 64, color: '#ffffff', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 10, lineHeight: 1.05, shadow: true },
+      { x: 0.30, y: 0.58, w: 0.40, text: 'A holiday photobook\nDecember 2025', fontSize: 15, color: '#ddd', align: 'center', fontFamily: 'Georgia, serif', italic: true, lineHeight: 1.55, shadow: true },
+    ],
+  },
 ];

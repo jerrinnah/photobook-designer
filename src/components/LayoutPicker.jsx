@@ -48,6 +48,7 @@ export default function LayoutPicker({ mobile = false }) {
 
   const visibleTemplates = TEMPLATES.filter((t) => {
     if (catFilter === 'all') return true;
+    if (catFilter === 'Cover') return t.category === 'Cover';
     if (catFilter === 'Print') return t.printSize;
     if (catFilter === 'Wedding') return t.category === 'Wedding';
     if (catFilter === 'Event') return t.category === 'Event';
@@ -57,7 +58,9 @@ export default function LayoutPicker({ mobile = false }) {
   const groups = visibleTemplates.reduce((acc, tmpl) => {
     const n = tmpl.cells.length;
     let label;
-    if (tmpl.category === 'Wedding' || tmpl.category === 'Event') {
+    if (tmpl.category === 'Cover') {
+      label = 'Cover';
+    } else if (tmpl.category === 'Wedding' || tmpl.category === 'Event') {
       label = tmpl.category === 'Wedding' ? 'Wedding' : 'Event';
     } else if (tmpl.printSize) {
       label = 'Print Sizes';
@@ -72,7 +75,7 @@ export default function LayoutPicker({ mobile = false }) {
   }, {});
 
   const WEDDING_ORDER = ['Wedding', 'Event'];
-  const ALL_ORDER = ['Wedding', 'Event', 'Print Sizes', 'Single', 'Two–Three', 'Four–Five', 'Six–Seven', 'Eight–Eleven', 'Twelve–Fourteen', 'Fifteen–Seventeen', '18+ Dense'];
+  const ALL_ORDER = ['Cover', 'Wedding', 'Event', 'Print Sizes', 'Single', 'Two–Three', 'Four–Five', 'Six–Seven', 'Eight–Eleven', 'Twelve–Fourteen', 'Fifteen–Seventeen', '18+ Dense'];
   const sortedLabels = catFilter === 'Wedding' || catFilter === 'Event'
     ? WEDDING_ORDER.filter((k) => groups[k])
     : ALL_ORDER.filter((k) => groups[k]);
@@ -90,19 +93,19 @@ export default function LayoutPicker({ mobile = false }) {
       </div>
 
       {/* Category filter tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', marginBottom: 4 }}>
-        {[['all','All'],['Standard','Std'],['Wedding','Wed'],['Event','Evt'],['Print','Print']].map(([key, label]) => (
+      <div style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', marginBottom: 4, flexWrap: 'wrap' }}>
+        {[['all','All'],['Cover','Cover'],['Standard','Std'],['Wedding','Wed'],['Event','Evt'],['Print','Print']].map(([key, label]) => (
           <button key={key}
             onClick={() => setCatFilter(key)}
             style={{
               flex: 1, padding: '4px 0', fontSize: 8.5, letterSpacing: 0.3,
               background: catFilter === key ? '#1e2535' : 'transparent',
               color: catFilter === key
-                ? (key === 'Wedding' ? '#f6c9a0' : key === 'Event' ? '#9ad' : '#4f8ef7')
+                ? (key === 'Wedding' ? '#f6c9a0' : key === 'Event' ? '#9ad' : key === 'Cover' ? '#e8b87a' : '#4f8ef7')
                 : '#444',
               border: 'none',
               borderBottom: catFilter === key
-                ? `1px solid ${key === 'Wedding' ? '#c08040' : key === 'Event' ? '#4a7a9d' : '#4f8ef7'}`
+                ? `1px solid ${key === 'Wedding' ? '#c08040' : key === 'Event' ? '#4a7a9d' : key === 'Cover' ? '#a07a30' : '#4f8ef7'}`
                 : '1px solid #222',
               cursor: 'pointer',
               textTransform: 'uppercase',
@@ -118,13 +121,15 @@ export default function LayoutPicker({ mobile = false }) {
               fontSize: 9, letterSpacing: 1, textTransform: 'uppercase',
               marginBottom: 5, marginTop: 4,
               color: label === 'Print Sizes' ? '#4a7a4a' : label === '18+ Dense' ? '#c9a227'
-                : label === 'Wedding' ? '#c08040' : label === 'Event' ? '#4a7a9d' : '#333',
+                : label === 'Wedding' ? '#c08040' : label === 'Event' ? '#4a7a9d'
+                : label === 'Cover' ? '#a07a30' : '#333',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
               {label === 'Print Sizes' && <span style={{ color: '#4a7a4a' }}>⬛</span>}
               {label === '18+ Dense' && <span>⚡</span>}
               {label === 'Wedding' && <span>♥</span>}
               {label === 'Event' && <span>★</span>}
+              {label === 'Cover' && <span>✦</span>}
               {label}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>

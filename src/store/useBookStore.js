@@ -153,13 +153,16 @@ const pickHighDensityTemplate = (portraitDominant, sw, sh) => {
 
 // Pull autosaved state (if any) from localStorage and use it as initial state.
 // Photo IDs are deduped here too — same defensive normalization as loadProject.
-// Helper: make sure spreads[0] is always the cover with a full-bleed template.
+// Helper: make sure spreads[0] always has role:'cover'.
+// Preserves any Cover-category template the user already picked; falls back
+// to 'full-bleed' only when no valid cover template is in place.
 const enforceCover = (spreads) => spreads.map((sp, i) => {
   if (i !== 0) return sp;
+  const currentTpl = TEMPLATES.find((t) => t.id === sp.templateId);
+  if (currentTpl?.category === 'Cover' || currentTpl?.id === 'full-bleed') {
+    return { ...sp, role: 'cover' };
+  }
   const coverTpl = TEMPLATES.find((t) => t.id === 'full-bleed') || TEMPLATES[0];
-  // If cover already has the full-bleed template, just stamp the role.
-  if (sp.templateId === coverTpl.id) return { ...sp, role: 'cover' };
-  // Otherwise rebuild it with full-bleed, preserving any photo in cell 0.
   const existingPhotoId = sp.cells?.[0]?.photoId ?? null;
   return {
     ...sp,
@@ -407,11 +410,18 @@ export const useBookStore = create((set, get) => ({
     spreads: s.spreads.map((sp) => {
       if (sp.id !== spreadId) return sp;
       const tmpl = TEMPLATES.find((t) => t.id === templateId);
+      if (!tmpl) return sp;
+      // Cover-category templates carry presets: bgColor + styled captions
+      const hasPresets = tmpl.category === 'Cover';
       return {
         ...sp,
         templateId,
         cellGeometry: tmpl.cells.map((c) => ({ ...c })),
         cells: tmpl.cells.map((tc, i) => ({ ...(sp.cells[i] || makeCell(tc)), hint: tc.hint ?? null })),
+        ...(hasPresets && tmpl.bgColor ? { bgColor: tmpl.bgColor, bgMode: 'color' } : {}),
+        ...(hasPresets && tmpl.captions ? {
+          captions: tmpl.captions.map((c) => ({ ...c, id: `cap${captionIdCounter++}` })),
+        } : {}),
       };
     }),
     selectedCellIndex: null,
