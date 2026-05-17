@@ -105,6 +105,7 @@ export default function PhotoPanel({ mobile = false }) {
 
   const imagesInputRef = useRef(null);
   const folderInputRef = useRef(null);
+  const [loadProgress, setLoadProgress] = useState(null); // { done, total } | null
 
   const ingestFiles = async (files) => {
     const images = [...files].filter((f) => f.type?.startsWith('image/'));
@@ -112,9 +113,21 @@ export default function PhotoPanel({ mobile = false }) {
     images.sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
     );
-    const loaded = await Promise.all(images.map(loadPhoto));
+    setLoadProgress({ done: 0, total: images.length });
+    // Load + tick progress one at a time so the indicator updates in real time
+    const loaded = [];
+    let done = 0;
+    for (const file of images) {
+      try {
+        const photo = await loadPhoto(file);
+        loaded.push(photo);
+      } catch { /* skip unreadable files */ }
+      done += 1;
+      setLoadProgress({ done, total: images.length });
+    }
     addPhotos(loaded);
     setSimMap(null);
+    setLoadProgress(null);
   };
 
   // Drag-and-drop only — we provide our own Images / Folder buttons below.
@@ -456,7 +469,7 @@ export default function PhotoPanel({ mobile = false }) {
         {...getRootProps()}
         style={{
           margin: '0 10px 10px',
-          border: `1px dashed ${isDragActive ? '#4f8ef7' : '#2a2a2a'}`,
+          border: `1px dashed ${loadProgress ? '#4f8ef7' : isDragActive ? '#4f8ef7' : '#2a2a2a'}`,
           borderRadius: 6,
           padding: '8px 6px',
           textAlign: 'center',
@@ -467,7 +480,29 @@ export default function PhotoPanel({ mobile = false }) {
       >
         <input ref={imagesInputRef} type="file" accept="image/*" multiple onChange={handleImagesPick} style={{ display: 'none' }} />
         <input ref={folderInputRef} type="file" webkitdirectory="" directory="" multiple onChange={handleFolderPick} style={{ display: 'none' }} />
-        {isDragActive ? (
+        {loadProgress ? (
+          <div style={{ padding: '4px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, color: '#4f8ef7', fontSize: 11,
+            }}>
+              <span style={{
+                display: 'inline-block', width: 12, height: 12,
+                border: '2px solid #1e2535', borderTopColor: '#4f8ef7',
+                borderRadius: '50%',
+                animation: 'photoSpin 0.7s linear infinite',
+              }} />
+              <span>Loading {loadProgress.done} / {loadProgress.total}</span>
+            </div>
+            <div style={{ width: '100%', height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                width: `${(loadProgress.done / Math.max(1, loadProgress.total)) * 100}%`,
+                height: '100%', background: '#4f8ef7',
+                transition: 'width 0.15s',
+              }} />
+            </div>
+            <style>{`@keyframes photoSpin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : isDragActive ? (
           <div style={{ padding: '6px 0' }}>Drop here</div>
         ) : (
           <div style={{ display: 'flex', gap: 6 }}>
