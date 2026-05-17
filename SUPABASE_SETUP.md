@@ -41,6 +41,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+
 begin
   return query
   insert into public.users (email, phone)

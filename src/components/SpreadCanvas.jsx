@@ -278,10 +278,9 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
               offsetY: cell.offsetY + (e.target.y() - imgProps.cy),
             });
           }}
-          onWheel={(e) => {
-            e.evt.preventDefault();
-            adjustCell(spreadId, cellIndex, { zoom: Math.max(0.5, Math.min(5, cell.zoom - e.evt.deltaY * 0.001)) });
-          }}
+          /* Photo zoom is handled at the canvas wheel listener, which routes
+             to the selected cell. Removed cell-local handler to prevent
+             double-zoom when both fire. */
         />
       )}
 
@@ -371,6 +370,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     splitCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
     commitResizeCell, setCellGradient, transferCell, setCellEffects,
     addCaption, updateCaption, removeCaption,
+    adjustCell,
   } = useBookStore();
 
   const cellFileInputRef = useRef(null);
@@ -382,6 +382,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const [zoom, setZoom] = useLocalStorage('canvas-zoom', 1);
   const zoomContainerRef = useRef(null);
   const pinchRef = useRef(null);
+  // Latest interaction state — lets the wheel/pinch listeners read fresh values
+  // without being re-registered every render.
+  const interactionStateRef = useRef({});
 
   // Clamp helper
   const setZoomClamped = (z) => setZoom(Math.max(0.25, Math.min(4, z)));
@@ -399,21 +402,49 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     });
   }, [zoom, spreadSizeId]);
 
-  // Wheel + pinch zoom on the canvas wrapper
+  // Wheel + pinch zoom — routes based on selection:
+  //   • Cell selected with a photo → zoom THAT cell's photo
+  //   • Cmd/Ctrl + wheel anywhere → zoom the whole canvas
+  //   • Plain wheel with no selection → standard scroll (when zoomed in)
   useEffect(() => {
     const el = zoomContainerRef.current;
     if (!el) return;
+
     const onWheel = (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      const delta = -e.deltaY * 0.0015;
-      setZoom((z) => Math.max(0.25, Math.min(4, z * (1 + delta))));
+      const { selectedCellIndex: selIdx, spread: sp, activeSpreadId: spId } = interactionStateRef.current;
+      const selectedCell = (selIdx !== null && selIdx !== undefined) ? sp?.cells[selIdx] : null;
+
+      // Selected cell with a photo → zoom the photo inside the cell
+      if (selectedCell?.photoId) {
+        e.preventDefault();
+        const currentZoom = selectedCell.zoom || 1;
+        const next = Math.max(0.5, Math.min(5, currentZoom - e.deltaY * 0.0015));
+        adjustCell(spId, selIdx, { zoom: next });
+        return;
+      }
+
+      // Cmd/Ctrl + wheel → zoom the whole canvas
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = -e.deltaY * 0.0015;
+        setZoom((z) => Math.max(0.25, Math.min(4, z * (1 + delta))));
+        return;
+      }
+      // Otherwise: let the browser scroll the canvas container normally
     };
+
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
-        pinchRef.current = { dist: Math.hypot(dx, dy), zoomAtStart: zoom };
+        const { selectedCellIndex: selIdx, spread: sp } = interactionStateRef.current;
+        const cell = (selIdx !== null && selIdx !== undefined) ? sp?.cells[selIdx] : null;
+        pinchRef.current = {
+          dist: Math.hypot(dx, dy),
+          canvasZoomStart: zoom,
+          cellZoomStart: cell?.zoom || 1,
+          targetCellIdx: cell?.photoId ? selIdx : null,
+        };
       }
     };
     const onTouchMove = (e) => {
@@ -421,12 +452,21 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
         e.preventDefault();
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const dist = Math.hypot(dx, dy);
-        const ratio = dist / pinchRef.current.dist;
-        setZoom(() => Math.max(0.25, Math.min(4, pinchRef.current.zoomAtStart * ratio)));
+        const ratio = Math.hypot(dx, dy) / pinchRef.current.dist;
+        const { activeSpreadId: spId } = interactionStateRef.current;
+
+        if (pinchRef.current.targetCellIdx !== null) {
+          // Pinch on a selected photo → zoom only that photo
+          const next = Math.max(0.5, Math.min(5, pinchRef.current.cellZoomStart * ratio));
+          adjustCell(spId, pinchRef.current.targetCellIdx, { zoom: next });
+        } else {
+          // Otherwise → zoom the whole canvas
+          setZoom(() => Math.max(0.25, Math.min(4, pinchRef.current.canvasZoomStart * ratio)));
+        }
       }
     };
     const onTouchEnd = () => { pinchRef.current = null; };
+
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -437,7 +477,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
     };
-  }, [zoom, setZoom]);
+  }, [zoom, setZoom, adjustCell]);
 
   const handlePickPhotoForCell = (cellIndex) => {
     pendingCellRef.current = cellIndex;
@@ -456,6 +496,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const cellGeometry = spread?.cellGeometry || [];
+
+  // Keep the wheel/pinch listeners' state ref fresh without re-registering them
+  interactionStateRef.current = { selectedCellIndex, spread, activeSpreadId };
 
   const { w: SPREAD_W, h: SPREAD_H } = getScreenDims(spreadSizeId, customSize);
   const [dragOver, setDragOver] = useState(null);
