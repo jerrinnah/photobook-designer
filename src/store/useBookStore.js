@@ -102,30 +102,12 @@ const pickBestPhoto = (pool, cellAspect) => {
 };
 
 // Resize a cell's geometry to exactly match a photo's aspect ratio,
-// fitting within the original bounding box and centring the result.
-// Returns the original geo unchanged if the photo already matches within 80 %.
-const fitGeoToPhoto = (geo, photoAR, sw, sh) => {
-  if (!photoAR || !isFinite(photoAR) || photoAR <= 0 || !sw || !sh) return geo;
-  const cellAR = (geo.w * sw) / (geo.h * sh);
-  if (!isFinite(cellAR) || cellAR <= 0) return geo;
-  const ratio = photoAR / cellAR;
-  if (ratio >= 0.8 && ratio <= 1.25) return geo; // already a good fit
-
-  // Fit photo AR inside the cell's pixel bounding box, then convert back
-  const maxPxW = geo.w * sw;
-  const maxPxH = geo.h * sh;
-
-  let fW = maxPxW;
-  let fH = fW / photoAR;
-  if (fH > maxPxH) { fH = maxPxH; fW = fH * photoAR; }
-
-  const newW = fW / sw;
-  const newH = fH / sh;
-  if (newW <= 0 || newH <= 0 || !isFinite(newW) || !isFinite(newH)) return geo;
-  const newX = geo.x + (geo.w - newW) / 2;
-  const newY = geo.y + (geo.h - newH) / 2;
-  return { x: round4(newX), y: round4(newY), w: round4(newW), h: round4(newH), hint: geo.hint };
-};
+// Previously this shrank the cell to match the photo's aspect ratio, which
+// produced empty gaps inside the spread when a portrait photo landed in a
+// landscape cell (and vice versa). Now it returns the cell unchanged — the
+// renderer covers (crops) the photo to fill the entire cell, leaving no
+// gaps. Users can drag the photo within the cell to adjust the crop.
+const fitGeoToPhoto = (geo) => geo;
 
 // Fraction of cells that are portrait-hinted or portrait-shaped in screen coords
 const portraitCellRatio = (tmpl, sw, sh) => {
