@@ -151,25 +151,41 @@ const pickHighDensityTemplate = (portraitDominant, sw, sh) => {
   return candidates[Math.floor(Math.random() * candidates.length)].t;
 };
 
-// Pick a template whose cell count grows with the spread index.
-// Spread 1 starts sparse (1–3 cells), each later spread allows ~2 more.
-// Skips covers / wedding / event / print-only / cover templates so we pull
-// from generic layouts only.
-const pickProgressiveTemplate = (spreadIdx, portraitDominant, sw, sh) => {
-  const target = Math.max(1, Math.min(18, spreadIdx));      // 1, 2, 3, … capped at 18
-  const minCells = Math.max(1, target - 1);
-  const maxCells = target + 2;
+// Generic editorial picker — includes Standard and Wedding templates,
+// excludes Cover, Event, Print, and the standalone full-bleed/hero ones.
+// Cell count is constrained to [minCells, maxCells].
+const pickFromPool = (portraitDominant, sw, sh, minCells, maxCells) => {
   const pool = TEMPLATES.filter((t) =>
-    !t.printSize && !t.category &&
+    !t.printSize &&
+    t.category !== 'Cover' &&
+    t.category !== 'Event' &&
     t.cells.length >= minCells && t.cells.length <= maxCells
   );
-  if (pool.length === 0) return pickHighDensityTemplate(portraitDominant, sw, sh);
+  if (pool.length === 0) return null;
   const scored = pool.map((t) => ({ t, ratio: portraitCellRatio(t, sw, sh) }));
   const suited = portraitDominant
     ? scored.filter(({ ratio }) => ratio >= 0.4)
     : scored.filter(({ ratio }) => ratio <= 0.4);
   const candidates = suited.length > 0 ? suited : scored;
   return candidates[Math.floor(Math.random() * candidates.length)].t;
+};
+
+// Spread density grows with index. Wedding + Standard editorial templates
+// are both eligible.
+const pickProgressiveTemplate = (spreadIdx, portraitDominant, sw, sh) => {
+  const target = Math.max(1, Math.min(18, spreadIdx));
+  const minCells = Math.max(1, target - 1);
+  const maxCells = target + 2;
+  return pickFromPool(portraitDominant, sw, sh, minCells, maxCells)
+    || pickHighDensityTemplate(portraitDominant, sw, sh);
+};
+
+// "Redesign" picker — targets the 3–9 cell editorial sweet spot from the
+// wedding photobook reference samples (hero + supporting photos, mosaics,
+// diptychs, etc.). Never picks super-dense layouts.
+const pickEditorialTemplate = (portraitDominant, sw, sh) => {
+  return pickFromPool(portraitDominant, sw, sh, 3, 9)
+    || pickHighDensityTemplate(portraitDominant, sw, sh);
 };
 
 // Pull autosaved state (if any) from localStorage and use it as initial state.
@@ -826,7 +842,9 @@ export const useBookStore = create((set, get) => ({
 
     const portraitCount = s.photos.filter((p) => p.height > p.width).length;
     const portraitDominant = portraitCount > s.photos.length / 2;
-    const tmpl = pickHighDensityTemplate(portraitDominant, sw, sh);
+    // Editorial wedding-style picker (3–9 cells) rather than the dense one,
+    // so single-spread Redesign produces clean hero+supporting layouts.
+    const tmpl = pickEditorialTemplate(portraitDominant, sw, sh);
 
     // Only use photos not placed anywhere in the book
     const usedEverywhere = new Set(

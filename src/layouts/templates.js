@@ -704,6 +704,83 @@ export const TEMPLATES = [
     { x:0.888, y:0.5, w:0.112, h:0.5, hint:'45' },
   ]},
 
+  // ══ EDITORIAL WEDDING / STORYBOOK PATTERNS ═════════════════════════
+  // 4–9 cell layouts modeled on classic wedding photobook spreads.
+  // No category so they're picked up by progressive / editorial pickers.
+
+  { id: 'ed-diptych-pair', name: 'Diptych Pair', cells: [
+    { x:0,    y:0,    w:0.5,  h:1     },
+    { x:0.5,  y:0,    w:0.5,  h:1     },
+  ]},
+
+  { id: 'ed-hero-trio-r', name: 'Hero + Trio R', cells: [
+    { x:0,    y:0,     w:0.5,  h:1     },
+    { x:0.5,  y:0,     w:0.5,  h:0.333 },
+    { x:0.5,  y:0.333, w:0.5,  h:0.333 },
+    { x:0.5,  y:0.666, w:0.5,  h:0.334 },
+  ]},
+
+  { id: 'ed-hero-trio-l', name: 'Hero + Trio L', cells: [
+    { x:0,    y:0,     w:0.5,  h:0.333 },
+    { x:0,    y:0.333, w:0.5,  h:0.333 },
+    { x:0,    y:0.666, w:0.5,  h:0.334 },
+    { x:0.5,  y:0,     w:0.5,  h:1     },
+  ]},
+
+  { id: 'ed-hero-strip-bot', name: 'Hero + Strip ↓', cells: [
+    { x:0,     y:0,    w:1,     h:0.7  },
+    { x:0,     y:0.7,  w:0.333, h:0.3  },
+    { x:0.333, y:0.7,  w:0.334, h:0.3  },
+    { x:0.667, y:0.7,  w:0.333, h:0.3  },
+  ]},
+
+  { id: 'ed-hero-strip-top', name: 'Strip + Hero ↑', cells: [
+    { x:0,     y:0,    w:0.333, h:0.3  },
+    { x:0.333, y:0,    w:0.334, h:0.3  },
+    { x:0.667, y:0,    w:0.333, h:0.3  },
+    { x:0,     y:0.3,  w:1,     h:0.7  },
+  ]},
+
+  { id: 'ed-quad-asym', name: 'Quad Asymmetric', cells: [
+    { x:0,    y:0,    w:0.4,  h:0.5  },
+    { x:0,    y:0.5,  w:0.4,  h:0.5  },
+    { x:0.4,  y:0,    w:0.6,  h:0.65 },
+    { x:0.4,  y:0.65, w:0.6,  h:0.35 },
+  ]},
+
+  { id: 'ed-five-corner', name: 'Five Mosaic', cells: [
+    { x:0,    y:0,    w:0.25, h:0.5  },
+    { x:0,    y:0.5,  w:0.25, h:0.5  },
+    { x:0.25, y:0,    w:0.5,  h:1    },
+    { x:0.75, y:0,    w:0.25, h:0.5  },
+    { x:0.75, y:0.5,  w:0.25, h:0.5  },
+  ]},
+
+  { id: 'ed-stack-hero', name: 'Stack + Hero', cells: [
+    { x:0,    y:0,    w:0.4,  h:0.5 },
+    { x:0,    y:0.5,  w:0.4,  h:0.5 },
+    { x:0.4,  y:0,    w:0.6,  h:1   },
+  ]},
+
+  { id: 'ed-editorial-6', name: 'Editorial Six', cells: [
+    { x:0,    y:0,    w:0.5,  h:0.5 },
+    { x:0.5,  y:0,    w:0.25, h:0.5 },
+    { x:0.75, y:0,    w:0.25, h:0.5 },
+    { x:0,    y:0.5,  w:0.25, h:0.5 },
+    { x:0.25, y:0.5,  w:0.25, h:0.5 },
+    { x:0.5,  y:0.5,  w:0.5,  h:0.5 },
+  ]},
+
+  { id: 'ed-wedding-story', name: 'Wedding Story', cells: [
+    { x:0,    y:0,    w:0.2,  h:0.5  },
+    { x:0,    y:0.5,  w:0.2,  h:0.5  },
+    { x:0.2,  y:0,    w:0.3,  h:1    },
+    { x:0.5,  y:0,    w:0.5,  h:0.5  },
+    { x:0.5,  y:0.5,  w:0.25, h:0.5  },
+    { x:0.75, y:0.5,  w:0.25, h:0.25 },
+    { x:0.75, y:0.75, w:0.25, h:0.25 },
+  ]},
+
   // ══ COVER TEMPLATES ═════════════════════════════════════════════════
   // Pre-styled covers: bgColor + cell + captions are all applied on click.
   // Every text element is editable — double-click to change text, single
