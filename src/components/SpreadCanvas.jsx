@@ -6,6 +6,7 @@ import { getScreenDims, getEffectiveExportSize } from '../layouts/spreadSizes';
 import SeamHandles from './SeamHandles';
 import useImage from '../hooks/useImage';
 import { loadPhoto as loadPhotoFile } from '../utils/photoLoader';
+import { assignPhotoWithPrompt } from '../utils/photoAssign';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Convert gradient angle + two stops to Konva linearGradient start/end points
@@ -674,7 +675,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     const rx = (e.clientX - box.left) / box.width;
     const ry = (e.clientY - box.top) / box.height;
     const hit = cellGeometry.findIndex((c) => rx >= c.x && rx <= c.x + c.w && ry >= c.y && ry <= c.y + c.h);
-    if (hit !== -1) assignPhoto(activeSpreadId, hit, photoId);
+    if (hit !== -1) assignPhotoWithPrompt(activeSpreadId, hit, photoId);
     setDragOver(null);
   };
 

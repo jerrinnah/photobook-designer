@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useBookStore } from '../store/useBookStore';
 import { loadPhoto } from '../utils/photoLoader';
+import { assignPhotoWithPrompt } from '../utils/photoAssign';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
 
@@ -162,8 +163,8 @@ export default function PhotoPanel({ mobile = false }) {
 
   const handlePhotoClick = (e, id) => {
     if (selectedCellIndex !== null) {
-      assignPhoto(activeSpreadId, selectedCellIndex, id);
-      setSelectedCell(null);
+      const placed = assignPhotoWithPrompt(activeSpreadId, selectedCellIndex, id);
+      if (placed) setSelectedCell(null);
       return;
     }
     if (e.shiftKey && selectedPhotoIds.size > 0) {

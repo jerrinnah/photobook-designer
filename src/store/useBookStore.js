@@ -450,10 +450,16 @@ export const useBookStore = create((set, get) => ({
     }),
   }))),
 
-  assignPhoto: (spreadId, cellIndex, photoId) => set(h((s) => {
+  // assignPhoto(spreadId, cellIndex, photoId, { allowDuplicate })
+  //   - allowDuplicate: false (default) → move semantics: photo is cleared
+  //     from any other cell it occupies. Use when caller doesn't care about
+  //     duplicates or has already confirmed.
+  //   - allowDuplicate: true → keep the photo in its existing cell(s) AND
+  //     place it in the new cell. Use after user confirms reuse via prompt.
+  assignPhoto: (spreadId, cellIndex, photoId, opts = {}) => set(h((s) => {
+    const { allowDuplicate = false } = opts;
     const { w: sw, h: sh } = getScreenDims(s.spreadSizeId, s.customSize);
-    // Move semantics: clear the photo from every other cell it occupies first
-    const cleared = s.spreads.map((sp) => ({
+    const base = allowDuplicate ? s.spreads : s.spreads.map((sp) => ({
       ...sp,
       cells: sp.cells.map((c, ci) =>
         c.photoId === photoId && !(sp.id === spreadId && ci === cellIndex)
@@ -462,7 +468,7 @@ export const useBookStore = create((set, get) => ({
       ),
     }));
     return {
-      spreads: cleared.map((sp) => {
+      spreads: base.map((sp) => {
         if (sp.id !== spreadId) return sp;
         const photo = s.photos.find((p) => p.id === photoId);
         const geo = sp.cellGeometry[cellIndex];
