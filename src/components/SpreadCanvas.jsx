@@ -1331,6 +1331,12 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
             { label: 'Palatino', value: '"Palatino Linotype", serif' },
             { label: 'Impact', value: 'Impact, sans-serif' },
             { label: 'Garamond', value: 'Garamond, serif' },
+            // ── Wedding ──
+            { label: '♥ Playfair', value: '"Playfair Display", Georgia, serif' },
+            { label: '♥ Cormorant', value: '"Cormorant Garamond", Georgia, serif' },
+            { label: '♥ Cinzel', value: '"Cinzel", "Trajan Pro", serif' },
+            { label: '♥ Dancing', value: '"Dancing Script", "Brush Script MT", cursive' },
+            { label: '♥ Great Vibes', value: '"Great Vibes", "Lucida Calligraphy", cursive' },
           ];
           const TEXT_PRESETS = [
             { label: 'Title',    fontSize: 42, bold: true,  italic: false, letterSpacing: 2,  color: '#ffffff', shadow: 6 },

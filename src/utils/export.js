@@ -9,7 +9,16 @@ function slug(name) {
 // pre-load the originals into the browser cache so the canvas re-renders
 // without flicker, run the callback (which captures the canvas), then
 // restore the downscaled srcs.
+// Wait for any in-flight web font loads to finish so canvas captures them
+// instead of the fallback font.
+async function waitForFonts() {
+  if (typeof document !== 'undefined' && document.fonts?.ready) {
+    try { await document.fonts.ready; } catch { /* ignore */ }
+  }
+}
+
 async function withOriginalPhotos(callback) {
+  await waitForFonts();
   const state = useBookStore.getState();
   const originalPhotos = state.photos;
   const needsSwap = originalPhotos.some((p) => p.originalSrc && p.originalSrc !== p.src);
