@@ -8,6 +8,7 @@ import useImage from '../hooks/useImage';
 import { loadPhoto as loadPhotoFile } from '../utils/photoLoader';
 import { assignPhotoWithPrompt } from '../utils/photoAssign';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import AltLayoutSuggestions from './AltLayoutSuggestions';
 
 // Convert gradient angle + two stops to Konva linearGradient start/end points
 function gradientPoints(angle, w, h) {
@@ -1612,6 +1613,15 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
         </button>
       </div>
       </div>
+      </div>
+
+      {/* Alternative layouts for this spread — anchored bottom-left */}
+      <div style={{
+        position: 'absolute', bottom: 12, left: 12,
+        zIndex: 10,
+        maxWidth: 'calc(100% - 24px)', overflowX: 'auto',
+      }}>
+        <AltLayoutSuggestions />
       </div>
 
       {/* Zoom controls — anchored to canvas viewport, NOT inside scroll area */}
