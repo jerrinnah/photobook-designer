@@ -118,8 +118,18 @@ export default function PhotoPanel({ mobile = false }) {
     noKeyboard: true,
   });
 
-  const handleInputChange = async (e) => {
+  const handleImagesPick = async (e) => {
     if (e.target.files?.length) await ingestFiles(e.target.files);
+    e.target.value = '';
+  };
+
+  // Folder pick: also force the panel sort to 'name' so the imported batch
+  // appears in alphabetical/numerical order regardless of the previous sort.
+  const handleFolderPick = async (e) => {
+    if (e.target.files?.length) {
+      await ingestFiles(e.target.files);
+      setPhotoSort('name');
+    }
     e.target.value = '';
   };
 
@@ -425,8 +435,8 @@ export default function PhotoPanel({ mobile = false }) {
           transition: 'all 0.15s',
         }}
       >
-        <input ref={imagesInputRef} type="file" accept="image/*" multiple onChange={handleInputChange} style={{ display: 'none' }} />
-        <input ref={folderInputRef} type="file" webkitdirectory="" directory="" multiple onChange={handleInputChange} style={{ display: 'none' }} />
+        <input ref={imagesInputRef} type="file" accept="image/*" multiple onChange={handleImagesPick} style={{ display: 'none' }} />
+        <input ref={folderInputRef} type="file" webkitdirectory="" directory="" multiple onChange={handleFolderPick} style={{ display: 'none' }} />
         {isDragActive ? (
           <div style={{ padding: '6px 0' }}>Drop here</div>
         ) : (
