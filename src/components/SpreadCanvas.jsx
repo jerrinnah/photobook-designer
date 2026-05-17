@@ -748,22 +748,46 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, minWidth: 0 }}>
       <div
         ref={zoomContainerRef}
+        // Click on the empty viewport area (outside the spread) → deselect.
+        // Only fires when the click target is the container itself, not the
+        // spread or anything inside it.
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setSelectedCell(null);
+            setSelectedCaptionId(null);
+            setGhostCell(null);
+            setShowFxPanel(false);
+            setShowGradPanel(false);
+          }
+        }}
         style={{
           flex: 1, overflow: 'auto',
           minHeight: 0, minWidth: 0,
         }}
       >
       {/* Wrapper grows when zoom > 1, but stays at least viewport size so the
-          flex centering keeps the canvas centered without clipping. */}
-      <div style={{
-        minWidth: '100%',
-        minHeight: '100%',
-        width: wrapperW,
-        height: wrapperH,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
+          flex centering keeps the canvas centered without clipping.
+          Clicking the padding area around the spread deselects too. */}
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setSelectedCell(null);
+            setSelectedCaptionId(null);
+            setGhostCell(null);
+            setShowFxPanel(false);
+            setShowGradPanel(false);
+          }
+        }}
+        style={{
+          minWidth: '100%',
+          minHeight: '100%',
+          width: wrapperW,
+          height: wrapperH,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
