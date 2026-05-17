@@ -247,8 +247,16 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
     const scale = Math.max(w / fitW, h / fitH) * cell.zoom;
     const iw = img.width * scale;
     const ih = img.height * scale;
-    const cx = x + w / 2 + cell.offsetX;
-    const cy = y + h / 2 + cell.offsetY;
+    // Default crop: TOP of image aligns with TOP of cell.
+    // Once the user pans/zooms (cell.manualCrop = true), respect their
+    // stored offsets instead. This makes all cells top-align by default,
+    // including legacy cells from before topAlignOffsetY was stored.
+    const cx = cell.manualCrop
+      ? x + w / 2 + cell.offsetX
+      : x + w / 2; // default: horizontally centered
+    const cy = cell.manualCrop
+      ? y + h / 2 + cell.offsetY
+      : y + ih / 2; // default: image top at cell top
     return { cx, cy, iw, ih };
   })();
 
@@ -275,9 +283,13 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
           onDragStart={() => onPhotoDragStart?.(cellIndex)}
           onDragEnd={(e) => {
             onPhotoDragEnd?.();
+            // Compute offsetX/Y directly from final image position so the
+            // photo stays where the user dropped it regardless of whether
+            // it was previously top-aligned (manualCrop=false) or centered
+            // (manualCrop=true). adjustCell sets manualCrop=true.
             adjustCell(spreadId, cellIndex, {
-              offsetX: cell.offsetX + (e.target.x() - imgProps.cx),
-              offsetY: cell.offsetY + (e.target.y() - imgProps.cy),
+              offsetX: e.target.x() - (x + w / 2),
+              offsetY: e.target.y() - (y + h / 2),
             });
           }}
           /* Photo zoom is handled at the canvas wheel listener, which routes
