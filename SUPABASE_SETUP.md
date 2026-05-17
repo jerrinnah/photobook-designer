@@ -41,7 +41,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-
+#variable_conflict use_column
 begin
   return query
   insert into public.users (email, phone)
