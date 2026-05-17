@@ -425,6 +425,45 @@ export const useBookStore = create((set, get) => ({
     }),
   }))),
 
+  // Snap a spread's cellGeometry back to its template's original cells.
+  // Use this to clear white gaps left by the legacy fitGeoToPhoto behaviour
+  // on pre-existing spreads. Photo assignments are preserved.
+  snapCellsToTemplate: (spreadId) => set(h((s) => ({
+    spreads: s.spreads.map((sp) => {
+      if (sp.id !== spreadId) return sp;
+      const tmpl = TEMPLATES.find((t) => t.id === sp.templateId);
+      if (!tmpl) return sp;
+      return {
+        ...sp,
+        cellGeometry: tmpl.cells.map((c) => ({ ...c })),
+        // Keep photos in their existing cell indices; reset crop so the
+        // photo re-fits inside the full-size cell cleanly.
+        cells: tmpl.cells.map((tc, i) => ({
+          ...(sp.cells[i] || makeCell(tc)),
+          hint: tc.hint ?? null,
+          zoom: 1, offsetX: 0, offsetY: 0,
+        })),
+      };
+    }),
+  }))),
+
+  // Same as above, applied to every spread. Useful as a one-click migration.
+  snapAllCellsToTemplate: () => set(h((s) => ({
+    spreads: s.spreads.map((sp) => {
+      const tmpl = TEMPLATES.find((t) => t.id === sp.templateId);
+      if (!tmpl) return sp;
+      return {
+        ...sp,
+        cellGeometry: tmpl.cells.map((c) => ({ ...c })),
+        cells: tmpl.cells.map((tc, i) => ({
+          ...(sp.cells[i] || makeCell(tc)),
+          hint: tc.hint ?? null,
+          zoom: 1, offsetX: 0, offsetY: 0,
+        })),
+      };
+    }),
+  }))),
+
   setTemplate: (spreadId, templateId) => set(h((s) => ({
     spreads: s.spreads.map((sp) => {
       if (sp.id !== spreadId) return sp;

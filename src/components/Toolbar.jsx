@@ -40,6 +40,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     customSize, setCustomSize,
     blendEdges, setBlendEdges,
     autoArrange, autoDesignAll, reshuffleAll, redesignSpread,
+    snapCellsToTemplate, snapAllCellsToTemplate,
     bookName, setBookName,
     gap, setGap,
     past, future, undo, redo,
@@ -259,6 +260,26 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         })}
         title="Pick a new high-density template for this spread and fill it with photos">
         {redesigned ? '✓ Redesigned' : '⟳ Redesign'}
+      </button>
+
+      {/* Snap cells to template — clears white gaps without changing the template */}
+      <button
+        onClick={() => snapCellsToTemplate(activeSpreadId)}
+        style={btnStyle({ color: '#888', padding: '5px 8px' })}
+        title="Snap cells back to template original size — removes white gaps on this spread without changing the template"
+      >
+        ⤢ Fit
+      </button>
+      <button
+        onClick={() => {
+          if (confirm('Snap all spreads back to their template-original cell sizes? This removes any white gaps left from older versions.')) {
+            snapAllCellsToTemplate();
+          }
+        }}
+        style={btnStyle({ color: '#666', fontSize: 10, padding: '5px 8px' })}
+        title="Apply snap-to-template to EVERY spread"
+      >
+        ⤢ All
       </button>
 
       {/* Auto arrange (current spread) */}
