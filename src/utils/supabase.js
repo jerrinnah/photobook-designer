@@ -31,7 +31,7 @@ export const clearStoredUser = () => {
   localStorage.removeItem(USER_KEY);
 };
 
-// Sign up — upserts by email, returns { id, email, phone }
+// Sign up — upserts by email, returns { id, email, phone, tier }
 export async function signUp({ email, phone }) {
   if (!isSupabaseConfigured) {
     throw new Error('Signup unavailable — Supabase keys not set.');
@@ -42,8 +42,23 @@ export async function signUp({ email, phone }) {
   });
   if (error) throw new Error(error.message);
   const user = Array.isArray(data) ? data[0] : data;
-  storeUser({ id: user.id, email: user.email, phone: user.phone });
+  storeUser({ id: user.id, email: user.email, phone: user.phone, tier: user.tier || 'free' });
   return user;
+}
+
+// Refresh just the tier — call on app load so an admin upgrade takes
+// effect without requiring the user to sign out and back in.
+export async function refreshUserTier() {
+  const u = getStoredUser();
+  if (!u?.id || !isSupabaseConfigured) return;
+  try {
+    const { data, error } = await supabase.rpc('get_user_tier', { p_user_id: u.id });
+    if (error) return;
+    const tier = (typeof data === 'string' ? data : data?.[0]) || 'free';
+    if (tier !== u.tier) {
+      storeUser({ ...u, tier });
+    }
+  } catch { /* network blip — ignore */ }
 }
 
 // Track usage event — 'app_use' or 'photobook_export'

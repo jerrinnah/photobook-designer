@@ -5,32 +5,47 @@ import DesignSuggestions from './DesignSuggestions';
 import SpreadBackground from './SpreadBackground';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
+import { isPremiumTemplate } from '../utils/premium';
+import { getStoredUser } from '../utils/supabase';
+import UpgradeModal from './UpgradeModal';
 
 const THUMB_W = 76;
 const THUMB_H = 38;
 
-function TemplateSVG({ tmpl, active }) {
+function TemplateSVG({ tmpl, active, locked }) {
   return (
-    <svg
-      width={THUMB_W} height={THUMB_H}
-      style={{
-        display: 'block',
-        border: active ? '2px solid #4f8ef7' : '2px solid #1e1e1e',
-        borderRadius: 4,
-        background: '#141414',
-        cursor: 'pointer',
-      }}
-    >
-      {tmpl.cells.map((c, i) => (
-        <rect
-          key={i}
-          x={c.x * THUMB_W + 1} y={c.y * THUMB_H + 1}
-          width={c.w * THUMB_W - 2} height={c.h * THUMB_H - 2}
-          fill={active ? '#2a3f6a' : '#2a2a2a'}
-          rx={1}
-        />
-      ))}
-    </svg>
+    <div style={{ position: 'relative' }}>
+      <svg
+        width={THUMB_W} height={THUMB_H}
+        style={{
+          display: 'block',
+          border: active ? '2px solid #4f8ef7' : '2px solid #1e1e1e',
+          borderRadius: 4,
+          background: '#141414',
+          cursor: 'pointer',
+          opacity: locked ? 0.55 : 1,
+        }}
+      >
+        {tmpl.cells.map((c, i) => (
+          <rect
+            key={i}
+            x={c.x * THUMB_W + 1} y={c.y * THUMB_H + 1}
+            width={c.w * THUMB_W - 2} height={c.h * THUMB_H - 2}
+            fill={active ? '#2a3f6a' : locked ? '#252525' : '#2a2a2a'}
+            rx={1}
+          />
+        ))}
+      </svg>
+      {locked && (
+        <div style={{
+          position: 'absolute', top: 3, right: 3,
+          fontSize: 9, color: '#f6c90e',
+          background: 'rgba(0,0,0,0.7)',
+          padding: '1px 4px', borderRadius: 2,
+          pointerEvents: 'none',
+        }}>🔒</div>
+      )}
+    </div>
   );
 }
 
@@ -41,6 +56,17 @@ export default function LayoutPicker({ mobile = false }) {
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const [catFilter, setCatFilter] = useState('all'); // 'all' | 'Standard' | 'Wedding' | 'Event' | 'Print'
   const [collapsed, setCollapsed] = useLocalStorage('layoutpicker-collapsed', false);
+  const [upgradeFor, setUpgradeFor] = useState(null);
+  const user = getStoredUser();
+  const isPremium = user?.tier === 'premium';
+
+  const handleTemplateClick = (tmpl) => {
+    if (isPremiumTemplate(tmpl) && !isPremium) {
+      setUpgradeFor(`"${tmpl.name}" template`);
+      return;
+    }
+    setTemplate(activeSpreadId, tmpl.id);
+  };
 
   if (!mobile && collapsed) {
     return <CollapsedRail label="Layouts" side="right" onExpand={() => setCollapsed(false)} />;
@@ -134,8 +160,8 @@ export default function LayoutPicker({ mobile = false }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
               {groups[label].map((tmpl) => (
-                <div key={tmpl.id} onClick={() => setTemplate(activeSpreadId, tmpl.id)}>
-                  <TemplateSVG tmpl={tmpl} active={spread?.templateId === tmpl.id} />
+                <div key={tmpl.id} onClick={() => handleTemplateClick(tmpl)}>
+                  <TemplateSVG tmpl={tmpl} active={spread?.templateId === tmpl.id} locked={isPremiumTemplate(tmpl) && !isPremium} />
                   <div style={{ fontSize: 9, color: '#444', marginTop: 3, textAlign: 'center', lineHeight: 1.2 }}>
                     {tmpl.name}
                   </div>
@@ -148,6 +174,7 @@ export default function LayoutPicker({ mobile = false }) {
 
       <SpreadBackground />
       <DesignSuggestions />
+      <UpgradeModal open={Boolean(upgradeFor)} blockedFeature={upgradeFor} onClose={() => setUpgradeFor(null)} />
     </aside>
   );
 }

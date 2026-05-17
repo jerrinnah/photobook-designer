@@ -1,6 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { TEMPLATES } from '../layouts/templates';
+import { isPremiumTemplate } from '../utils/premium';
+import { getStoredUser } from '../utils/supabase';
+import UpgradeModal from './UpgradeModal';
 
 const THUMB_W = 110;
 const THUMB_H = 50;
@@ -12,6 +15,8 @@ export default function AltLayoutSuggestions() {
   const { spreads, activeSpreadId, photos, setTemplate } = useBookStore();
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const activeIdx = spreads.findIndex((s) => s.id === activeSpreadId);
+  const [upgradeFor, setUpgradeFor] = useState(null);
+  const isPremium = getStoredUser()?.tier === 'premium';
 
   // Pick 2–3 alternative templates with similar cell counts (±1) so the
   // current photos still fit naturally.
@@ -49,20 +54,27 @@ export default function AltLayoutSuggestions() {
       <span style={{ fontSize: 10, color: '#666', letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
         Try
       </span>
-      {alternatives.map((tmpl) => (
-        <AltThumb key={tmpl.id} tmpl={tmpl} spread={spread} photos={photos}
-          onClick={() => setTemplate(spread.id, tmpl.id)} />
-      ))}
+      {alternatives.map((tmpl) => {
+        const locked = isPremiumTemplate(tmpl) && !isPremium;
+        return (
+          <AltThumb key={tmpl.id} tmpl={tmpl} spread={spread} photos={photos} locked={locked}
+            onClick={() => {
+              if (locked) setUpgradeFor(`"${tmpl.name}" template`);
+              else setTemplate(spread.id, tmpl.id);
+            }} />
+        );
+      })}
+      <UpgradeModal open={Boolean(upgradeFor)} blockedFeature={upgradeFor} onClose={() => setUpgradeFor(null)} />
     </div>
   );
 }
 
-function AltThumb({ tmpl, spread, photos, onClick }) {
+function AltThumb({ tmpl, spread, photos, onClick, locked }) {
   const bgColor = spread.bgColor || '#111';
   return (
     <button
       onClick={onClick}
-      title={`Try "${tmpl.name}" (${tmpl.cells.length} cell${tmpl.cells.length === 1 ? '' : 's'})`}
+      title={`${locked ? '🔒 Premium · ' : 'Try '}"${tmpl.name}" (${tmpl.cells.length} cell${tmpl.cells.length === 1 ? '' : 's'})`}
       style={{
         position: 'relative',
         padding: 2,
@@ -72,10 +84,19 @@ function AltThumb({ tmpl, spread, photos, onClick }) {
         cursor: 'pointer',
         flexShrink: 0,
         transition: 'border-color 0.15s',
+        opacity: locked ? 0.65 : 1,
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4f8ef7'; }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = locked ? '#a07a30' : '#4f8ef7'; }}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a2a2a'; }}
     >
+      {locked && (
+        <div style={{
+          position: 'absolute', top: 4, right: 4,
+          fontSize: 9, color: '#f6c90e',
+          background: 'rgba(0,0,0,0.75)', padding: '1px 4px', borderRadius: 2,
+          zIndex: 1,
+        }}>🔒</div>
+      )}
       <div style={{
         width: THUMB_W, height: THUMB_H,
         background: spread.bgMode === 'gradient' && spread.bgGradient

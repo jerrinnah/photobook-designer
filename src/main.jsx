@@ -3,10 +3,11 @@ import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import { useBookStore } from './store/useBookStore'
 import { startAutosave } from './store/autosave'
-import { trackAppUseOncePerSession } from './utils/supabase'
+import { trackAppUseOncePerSession, refreshUserTier } from './utils/supabase'
 
 startAutosave(useBookStore)
 trackAppUseOncePerSession()
+refreshUserTier()
 
 // Prevent accidental refresh / tab close from losing work.
 // Browsers show a generic "Changes you made may not be saved" dialog.

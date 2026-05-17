@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { PREMIUM_FEATURES, FREE_FEATURES } from '../utils/premium';
 
 const PW_KEY = 'admin-password-v1';
 
@@ -147,10 +148,11 @@ export default function AdminDashboard() {
       {/* Stat cards */}
       <div style={{ padding: '20px 24px 8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <StatCard label="Total signups" value={stats.total_users} accent="#4f8ef7" />
+        <StatCard label="Premium users" value={stats.total_premium} accent="#f6c90e" />
         <StatCard label="Photobooks created" value={stats.total_photobooks} accent="#6fcf97" />
         <StatCard label="App sessions" value={stats.total_app_uses} accent="#b89fff" />
-        <StatCard label="Signups · last 7 days" value={stats.signups_last_7d} accent="#f6c90e" />
-        <StatCard label="Signups · last 30 days" value={stats.signups_last_30d} accent="#d4843a" />
+        <StatCard label="Signups · 7d" value={stats.signups_last_7d} accent="#d4843a" />
+        <StatCard label="Signups · 30d" value={stats.signups_last_30d} accent="#e05c5c" />
       </div>
 
       {/* Table */}
@@ -170,6 +172,7 @@ export default function AdminDashboard() {
               <tr style={{ background: '#0c0c0c' }}>
                 {[
                   ['email', 'Email'],
+                  ['tier', 'Tier'],
                   ['phone', 'Phone'],
                   ['photobook_count', 'Photobooks'],
                   ['app_use_count', 'Sessions'],
@@ -194,13 +197,38 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {sorted.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
                   {users.length === 0 ? 'No signups yet.' : 'No matches.'}
                 </td></tr>
               )}
               {sorted.map((u) => (
                 <tr key={u.id} style={{ borderBottom: '1px solid #161616' }}>
                   <td style={cellStyle}>{u.email}</td>
+                  <td style={cellStyle}>
+                    <button
+                      onClick={async () => {
+                        const next = u.tier === 'premium' ? 'free' : 'premium';
+                        if (!confirm(`Change ${u.email} from ${u.tier} to ${next}?`)) return;
+                        try {
+                          const { error } = await supabase.rpc('set_user_tier_admin', {
+                            p_password: password, p_user_id: u.id, p_tier: next,
+                          });
+                          if (error) throw new Error(error.message);
+                          await load(password);
+                        } catch (err) { alert(err.message); }
+                      }}
+                      style={{
+                        padding: '2px 8px', fontSize: 10, fontWeight: 600,
+                        background: u.tier === 'premium' ? '#3a2a08' : '#181818',
+                        color: u.tier === 'premium' ? '#f6c90e' : '#888',
+                        border: `1px solid ${u.tier === 'premium' ? '#5a4010' : '#2a2a2a'}`,
+                        borderRadius: 3, cursor: 'pointer', letterSpacing: 0.5, textTransform: 'uppercase',
+                      }}
+                      title="Click to toggle tier"
+                    >
+                      {u.tier === 'premium' ? '✦ Premium' : 'Free'}
+                    </button>
+                  </td>
                   <td style={{ ...cellStyle, color: '#888' }}>{u.phone || '—'}</td>
                   <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#6fcf97' }}>{u.photobook_count}</td>
                   <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#b89fff' }}>{u.app_use_count}</td>
@@ -210,6 +238,42 @@ export default function AdminDashboard() {
               ))}
             </tbody>
           </table>
+
+          {/* Feature catalogue */}
+          <div style={{ marginTop: 32 }}>
+            <div style={{ fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+              Feature gating reference
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+              <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: 14 }}>
+                <div style={{ fontSize: 10, color: '#f6c90e', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                  ✦ Premium unlocks
+                </div>
+                {PREMIUM_FEATURES.map((f) => (
+                  <div key={f.key} style={{ marginBottom: 8, fontSize: 12 }}>
+                    <div style={{ color: '#ddd' }}>· {f.name}</div>
+                    <div style={{ color: '#666', fontSize: 11, marginLeft: 10 }}>{f.detail}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: 14 }}>
+                <div style={{ fontSize: 10, color: '#6fcf97', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Always free
+                </div>
+                {FREE_FEATURES.map((f) => (
+                  <div key={f.key} style={{ marginBottom: 8, fontSize: 12 }}>
+                    <div style={{ color: '#ddd' }}>· {f.name}</div>
+                    <div style={{ color: '#666', fontSize: 11, marginLeft: 10 }}>{f.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 11, color: '#555', lineHeight: 1.5 }}>
+              Per-user tier is toggled via the <b style={{ color: '#888' }}>Tier</b> column above.
+              The feature catalogue is read from <code style={{ color: '#888' }}>src/utils/premium.js</code> —
+              edit that file to add/remove items, then redeploy.
+            </div>
+          </div>
         </div>
       </div>
     </div>
