@@ -371,6 +371,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     commitResizeCell, setCellGradient, transferCell, setCellEffects,
     addCaption, updateCaption, removeCaption,
     adjustCell,
+    clearPhotoSelection,
   } = useBookStore();
 
   const cellFileInputRef = useRef(null);
@@ -744,6 +745,17 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const wrapperW = SPREAD_W * zoom + PAD * 2;
   const wrapperH = SPREAD_H * zoom + PAD * 2;
 
+  // Clears every kind of selection / open panel — used when clicking the
+  // empty area around the spread.
+  const deselectAll = () => {
+    setSelectedCell(null);
+    setSelectedCaptionId(null);
+    setGhostCell(null);
+    setShowFxPanel(false);
+    setShowGradPanel(false);
+    clearPhotoSelection();
+  };
+
   return (
     <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, minWidth: 0 }}>
       <div
@@ -752,13 +764,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
         // Only fires when the click target is the container itself, not the
         // spread or anything inside it.
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setSelectedCell(null);
-            setSelectedCaptionId(null);
-            setGhostCell(null);
-            setShowFxPanel(false);
-            setShowGradPanel(false);
-          }
+          if (e.target === e.currentTarget) deselectAll();
         }}
         style={{
           flex: 1, overflow: 'auto',
@@ -770,13 +776,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           Clicking the padding area around the spread deselects too. */}
       <div
         onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setSelectedCell(null);
-            setSelectedCaptionId(null);
-            setGhostCell(null);
-            setShowFxPanel(false);
-            setShowGradPanel(false);
-          }
+          if (e.target === e.currentTarget) deselectAll();
         }}
         style={{
           minWidth: '100%',
