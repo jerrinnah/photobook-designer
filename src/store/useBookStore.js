@@ -155,6 +155,26 @@ const portraitCellRatio = (tmpl, sw, sh) => {
 // Pick a template with at least minCells cells, oriented to match the photo pool
 const MIN_CELLS_PER_SPREAD = 18;
 
+// Soft, editorial-friendly gradient palettes used by autoDesignAll.
+// Light/warm tones suit wedding & family photobooks; one is picked
+// per Design All call and applied to every newly-templated spread for
+// a consistent book feel.
+const AUTO_DESIGN_GRADIENTS = [
+  { name: 'Chalk',     type: 'linear',   angle: 180, stops: ['#f5f2ec', '#dedad2'] },
+  { name: 'Ivory',     type: 'linear',   angle: 135, stops: ['#fdfcf8', '#e8e1d2'] },
+  { name: 'Sand',      type: 'linear',   angle: 180, stops: ['#f8f0e8', '#d9c8b6'] },
+  { name: 'Pearl',     type: 'linear',   angle: 135, stops: ['#f2eee8', '#c8cdd2'] },
+  { name: 'Mist',      type: 'linear',   angle: 180, stops: ['#eef2f3', '#c5cdd0'] },
+  { name: 'Blush',     type: 'linear',   angle: 180, stops: ['#fbeee7', '#e8c4b8'] },
+  { name: 'Sage',      type: 'linear',   angle: 180, stops: ['#eef0e6', '#cbd2bd'] },
+  { name: 'Halo',      type: 'vignette', angle: 0,   stops: ['#f5f2ec', '#1a1a1a'] },
+  { name: 'Midnight',  type: 'linear',   angle: 180, stops: ['#1e2533', '#05050f'] },
+  { name: 'Charcoal',  type: 'linear',   angle: 180, stops: ['#1a1a1a', '#050505'] },
+];
+const pickAutoGradient = () =>
+  AUTO_DESIGN_GRADIENTS[Math.floor(Math.random() * AUTO_DESIGN_GRADIENTS.length)];
+
+
 const pickHighDensityTemplate = (portraitDominant, sw, sh) => {
   const pool = TEMPLATES.filter((t) => !t.printSize && t.cells.length >= MIN_CELLS_PER_SPREAD);
   const fallback = TEMPLATES.filter((t) => !t.printSize);
@@ -874,6 +894,10 @@ export const useBookStore = create((set, get) => ({
     const portraitCount = pool.filter((p) => p.height > p.width).length;
     const portraitDominant = pool.length > 0 && portraitCount > pool.length / 2;
 
+    // One gradient palette picked per Design All call — applied to every
+    // newly-templated spread for a consistent book feel.
+    const designGradient = pickAutoGradient();
+
     // Progressive density: spread 1 = 1–3 cells, spread 2 = 2–4 cells, …
     // (cover at index 0 is untouched). Spreads the user already designed
     // (have any photos placed) are left alone.
@@ -887,6 +911,8 @@ export const useBookStore = create((set, get) => ({
           templateId: tmpl.id,
           cellGeometry: tmpl.cells.map((c) => ({ ...c })),
           cells: tmpl.cells.map((c) => makeCell(c)),
+          bgMode: 'gradient',
+          bgGradient: { ...designGradient },
         };
       }
       return sp;
@@ -900,11 +926,14 @@ export const useBookStore = create((set, get) => ({
     while (pool.length > availableCells()) {
       const newIdx = spreads.length;
       const tmpl = pickProgressiveTemplate(newIdx, portraitDominant, sw, sh);
-      spreads.push(makeSpread(++maxId, tmpl));
+      const fresh = makeSpread(++maxId, tmpl);
+      spreads.push({ ...fresh, bgMode: 'gradient', bgGradient: { ...designGradient } });
     }
 
     // Fill ONLY empty, non-locked cells — never overwrite existing placements.
     // Skip the cover spread entirely.
+    // Photos are placed in import order (pool.shift) — predictable and
+    // matches the way users list/sort their imports.
     const newSpreads = spreads.map((spread, idx) => {
       if (idx === 0) return spread;
       const newCells = [...spread.cells];
@@ -913,10 +942,7 @@ export const useBookStore = create((set, get) => ({
         if (cell.locked || cell.photoId) return;
         const geo = newGeo[i];
         if (!geo || pool.length === 0) return;
-        const cellAspect = (geo.w * sw) / (geo.h * sh);
-        const idx = pickBestPhoto(pool, cellAspect);
-        const photo = pool[idx];
-        pool = pool.filter((_, pi) => pi !== idx);
+        const photo = pool.shift();
         if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
         newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
       });
