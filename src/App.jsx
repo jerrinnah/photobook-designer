@@ -8,6 +8,7 @@ import PreviewMode from './components/PreviewMode';
 import PrintPreview from './components/PrintPreview';
 import MobileShell from './components/MobileShell';
 import RotateOverlay from './components/RotateOverlay';
+import AdminDashboard from './components/AdminDashboard';
 import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
@@ -15,6 +16,11 @@ export default function App() {
   const [previewing, setPreviewing] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
   const { isMobile, isPortrait } = useViewport();
+
+  // Admin dashboard — accessible only via ?admin=1 in the URL
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('admin')) {
+    return <AdminDashboard />;
+  }
 
   if (isMobile) {
     return (
