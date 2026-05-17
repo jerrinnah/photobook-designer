@@ -103,6 +103,20 @@ const pickBestPhoto = (pool, cellAspect) => {
 };
 
 // Resize a cell's geometry to exactly match a photo's aspect ratio,
+// Computes the cell.offsetY needed so the rendered image's TOP edge
+// aligns with the cell's top edge (instead of the default centered crop).
+// Positive return value = shift the image up, putting its top at cell top.
+// Returns 0 when the image fits exactly (no vertical overflow).
+const topAlignOffsetY = (cellGeo, photo, sw, sh) => {
+  if (!photo || !cellGeo || !sw || !sh) return 0;
+  const cellW = cellGeo.w * sw;
+  const cellH = cellGeo.h * sh;
+  if (!photo.width || !photo.height || !cellW || !cellH) return 0;
+  const scale = Math.max(cellW / photo.width, cellH / photo.height);
+  const renderedH = photo.height * scale;
+  return (renderedH - cellH) / 2;
+};
+
 // Fits the cell's geometry to the photo's aspect ratio so the whole photo
 // is visible (no cropping). Used ONLY when the cell hasn't been manually
 // modified by the user (see cell.manualCrop). Once the user zooms, pans,
@@ -585,11 +599,12 @@ export const useBookStore = create((set, get) => ({
         const newGeo = (photo && geo && !cell?.manualCrop)
           ? fitGeoToPhoto(geo, photo.width / photo.height, sw, sh)
           : geo;
+        const offsetY = topAlignOffsetY(newGeo, photo, sw, sh);
         return {
           ...sp,
           cellGeometry: sp.cellGeometry.map((g, i) => i === cellIndex ? newGeo : g),
           cells: sp.cells.map((c, i) =>
-            i === cellIndex ? { ...c, photoId, zoom: 1, offsetX: 0, offsetY: 0, rotation: 0 } : c
+            i === cellIndex ? { ...c, photoId, zoom: 1, offsetX: 0, offsetY, rotation: 0 } : c
           ),
         };
       }),
@@ -837,7 +852,7 @@ export const useBookStore = create((set, get) => ({
       const photo = pool[idx];
       pool = pool.filter((_, pi) => pi !== idx);
       if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-      newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
+      newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
     });
     return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
   })),
@@ -903,7 +918,7 @@ export const useBookStore = create((set, get) => ({
         const photo = pool[idx];
         pool = pool.filter((_, pi) => pi !== idx);
         if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
+        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
       });
       return { ...spread, cells: newCells, cellGeometry: newGeo };
     });
@@ -941,7 +956,7 @@ export const useBookStore = create((set, get) => ({
       const geo = newGeo[i];
       const photo = pool.shift(); // next available photo in name order
       newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-      newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
+      newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
     });
 
     return {
@@ -986,7 +1001,7 @@ export const useBookStore = create((set, get) => ({
         const photo = pool[idx];
         pool = pool.filter((_, pi) => pi !== idx);
         if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
+        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
       });
       return { ...spread, cells: newCells, cellGeometry: newGeo };
     });
