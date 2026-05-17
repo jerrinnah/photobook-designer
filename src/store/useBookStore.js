@@ -326,7 +326,36 @@ export const useBookStore = create((set, get) => ({
   clearPhotoSelection: () => set({ selectedPhotoIds: new Set() }),
 
   // ── Photos ─────────────────────────────────────────────────────────
-  addPhotos: (newPhotos) => set((s) => ({ photos: [...s.photos, ...newPhotos] })),
+  addPhotos: (newPhotos) => set((s) => {
+    // If the cover is still untouched (default full-bleed template with no
+    // photo assigned), pick a random Cover-category template as a starting
+    // design when the user first imports photos.
+    const cover = s.spreads[0];
+    const isUntouched = cover?.templateId === 'full-bleed' && !cover?.cells?.[0]?.photoId;
+    if (!isUntouched || newPhotos.length === 0) {
+      return { photos: [...s.photos, ...newPhotos] };
+    }
+    const coverTemplates = TEMPLATES.filter((t) => t.category === 'Cover');
+    if (coverTemplates.length === 0) {
+      return { photos: [...s.photos, ...newPhotos] };
+    }
+    const tmpl = coverTemplates[Math.floor(Math.random() * coverTemplates.length)];
+    const newCover = {
+      ...cover,
+      role: 'cover',
+      templateId: tmpl.id,
+      cellGeometry: tmpl.cells.map((c) => ({ ...c })),
+      cells: tmpl.cells.map((c) => makeCell(c)),
+      ...(tmpl.bgColor ? { bgColor: tmpl.bgColor, bgMode: 'color' } : {}),
+      ...(tmpl.captions ? {
+        captions: tmpl.captions.map((c) => ({ ...c, id: `cap${captionIdCounter++}` })),
+      } : {}),
+    };
+    return {
+      photos: [...s.photos, ...newPhotos],
+      spreads: s.spreads.map((sp, i) => i === 0 ? newCover : sp),
+    };
+  }),
 
   removePhoto: (photoId) => set(h((s) => ({
     photos: s.photos.filter((p) => p.id !== photoId),
