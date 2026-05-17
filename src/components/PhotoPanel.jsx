@@ -85,6 +85,7 @@ export default function PhotoPanel({ mobile = false }) {
     photoSort, setPhotoSort,
     photoSearch, setPhotoSearch,
     togglePhotoFavorite,
+    resetProject,
   } = useBookStore();
 
   const [simMap, setSimMap] = useState(null);   // Map photoId → {groupNum, isKeep} | null
@@ -92,9 +93,15 @@ export default function PhotoPanel({ mobile = false }) {
   const hashCache = useRef(new Map()); // photoId → hash bits
   const [collapsed, setCollapsed] = useLocalStorage('photopanel-collapsed', false);
 
-  const usedIds = new Set(
+  // All photoIds currently referenced by cells — includes orphans (refs
+  // to photos that no longer exist, e.g. after autosave dropped them).
+  const refIds = new Set(
     spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean))
   );
+  // Only count placements pointing at an actual photo in the library.
+  const livePhotoIds = new Set(photos.map((p) => String(p.id)));
+  const usedIds = new Set([...refIds].filter((id) => livePhotoIds.has(String(id))));
+  const orphanCount = refIds.size - usedIds.size;
 
   const imagesInputRef = useRef(null);
   const folderInputRef = useRef(null);
@@ -233,13 +240,36 @@ export default function PhotoPanel({ mobile = false }) {
         )}
       </div>
 
-      {/* Counters */}
-      <div style={{ padding: '0 12px 4px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {/* Counters + hard reset */}
+      <div style={{ padding: '0 12px 4px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: '#555' }}>{photos.length} total</span>
         <span style={{ fontSize: 10, color: '#3a5a3a' }}>· {usedIds.size} placed</span>
         {photos.length - usedIds.size > 0 && (
           <span style={{ fontSize: 10, color: '#5a4a1a' }}>· {photos.length - usedIds.size} unused</span>
         )}
+        {orphanCount > 0 && (
+          <span style={{ fontSize: 10, color: '#7a3a3a' }} title="Cells reference photos that are no longer in the library (often after a reload that dropped large photos). Click ↺ Reset to clear them.">
+            · ⚠ {orphanCount} orphan
+          </span>
+        )}
+        <button
+          onClick={() => {
+            const msg = orphanCount > 0
+              ? `Reset everything? This clears ALL spreads, photos, and the autosave (including ${orphanCount} orphan reference${orphanCount === 1 ? '' : 's'}).`
+              : 'Reset everything? This clears ALL spreads, photos, and the autosave.';
+            if (confirm(msg)) resetProject();
+          }}
+          title="Hard reset — wipe all spreads, photos, and autosave"
+          style={{
+            marginLeft: 'auto',
+            fontSize: 9, padding: '2px 7px',
+            background: orphanCount > 0 ? '#2a0808' : '#181818',
+            border: `1px solid ${orphanCount > 0 ? '#5a1a1a' : '#252525'}`,
+            color: orphanCount > 0 ? '#e05c5c' : '#666',
+            borderRadius: 3, cursor: 'pointer',
+            letterSpacing: 0.3,
+          }}
+        >↺ Reset</button>
       </div>
 
       {/* Search */}
