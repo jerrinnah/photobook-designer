@@ -26,6 +26,7 @@ const randomTemplate = () => TEMPLATES[Math.floor(Math.random() * TEMPLATES.leng
 // Carry the template cell's hint (aspect family) into the live cell data
 const makeCell = (tplCell) => ({
   photoId: null, zoom: 1, offsetX: 0, offsetY: 0, rotation: 0, locked: false,
+  manualCrop: false,  // true once user zooms / pans / resizes — stops auto-fit
   hint: tplCell?.hint ?? null,
   gradient: null,  // { type, color, opacity } — overlay rendered on top of photo
   effects: null,   // { bw, sepia, blur, brightness, contrast, vignette }
@@ -102,12 +103,31 @@ const pickBestPhoto = (pool, cellAspect) => {
 };
 
 // Resize a cell's geometry to exactly match a photo's aspect ratio,
-// Previously this shrank the cell to match the photo's aspect ratio, which
-// produced empty gaps inside the spread when a portrait photo landed in a
-// landscape cell (and vice versa). Now it returns the cell unchanged — the
-// renderer covers (crops) the photo to fill the entire cell, leaving no
-// gaps. Users can drag the photo within the cell to adjust the crop.
-const fitGeoToPhoto = (geo) => geo;
+// Fits the cell's geometry to the photo's aspect ratio so the whole photo
+// is visible (no cropping). Used ONLY when the cell hasn't been manually
+// modified by the user (see cell.manualCrop). Once the user zooms, pans,
+// or resizes a cell, manualCrop becomes true and we stop reshaping it,
+// preserving the user's intended layout.
+const fitGeoToPhoto = (geo, photoAR, sw, sh) => {
+  if (!photoAR || !isFinite(photoAR) || photoAR <= 0 || !sw || !sh) return geo;
+  const cellAR = (geo.w * sw) / (geo.h * sh);
+  if (!isFinite(cellAR) || cellAR <= 0) return geo;
+  const ratio = photoAR / cellAR;
+  if (ratio >= 0.85 && ratio <= 1.18) return geo; // already a good fit
+
+  const maxPxW = geo.w * sw;
+  const maxPxH = geo.h * sh;
+  let fW = maxPxW;
+  let fH = fW / photoAR;
+  if (fH > maxPxH) { fH = maxPxH; fW = fH * photoAR; }
+
+  const newW = fW / sw;
+  const newH = fH / sh;
+  if (newW <= 0 || newH <= 0 || !isFinite(newW) || !isFinite(newH)) return geo;
+  const newX = geo.x + (geo.w - newW) / 2;
+  const newY = geo.y + (geo.h - newH) / 2;
+  return { x: round4(newX), y: round4(newY), w: round4(newW), h: round4(newH), hint: geo.hint };
+};
 
 // Fraction of cells that are portrait-hinted or portrait-shaped in screen coords
 const portraitCellRatio = (tmpl, sw, sh) => {
@@ -441,7 +461,7 @@ export const useBookStore = create((set, get) => ({
         cells: tmpl.cells.map((tc, i) => ({
           ...(sp.cells[i] || makeCell(tc)),
           hint: tc.hint ?? null,
-          zoom: 1, offsetX: 0, offsetY: 0,
+          zoom: 1, offsetX: 0, offsetY: 0, manualCrop: false,
         })),
       };
     }),
@@ -458,7 +478,7 @@ export const useBookStore = create((set, get) => ({
         cells: tmpl.cells.map((tc, i) => ({
           ...(sp.cells[i] || makeCell(tc)),
           hint: tc.hint ?? null,
-          zoom: 1, offsetX: 0, offsetY: 0,
+          zoom: 1, offsetX: 0, offsetY: 0, manualCrop: false,
         })),
       };
     }),
@@ -529,8 +549,11 @@ export const useBookStore = create((set, get) => ({
       spreads: base.map((sp) => {
         if (sp.id !== spreadId) return sp;
         const photo = s.photos.find((p) => p.id === photoId);
+        const cell = sp.cells[cellIndex];
         const geo = sp.cellGeometry[cellIndex];
-        const newGeo = (photo && geo)
+        // Only auto-fit the cell to the photo when the user hasn't manually
+        // adjusted the cell. Once manualCrop=true, keep the user's shape.
+        const newGeo = (photo && geo && !cell?.manualCrop)
           ? fitGeoToPhoto(geo, photo.width / photo.height, sw, sh)
           : geo;
         return {
@@ -585,7 +608,9 @@ export const useBookStore = create((set, get) => ({
     };
   })),
 
-  // Resize a single cell's geometry and save to undo history
+  // Resize a single cell's geometry and save to undo history.
+  // Also flags the cell as manualCrop so future photo placements won't
+  // reshape it back to fit the photo's aspect.
   commitResizeCell: (spreadId, cellIndex, geo) => set(h((s) => {
     const MIN = 0.04;
     return {
@@ -604,16 +629,19 @@ export const useBookStore = create((set, get) => ({
               hint: g.hint,
             };
           }),
+          cells: sp.cells.map((c, i) => i === cellIndex ? { ...c, manualCrop: true } : c),
         };
       }),
     };
   })),
 
-  // Not in history — called continuously during pan/zoom
+  // Not in history — called continuously during pan/zoom.
+  // Also flags the cell as manualCrop so future photo placements keep
+  // the user's chosen crop instead of re-fitting to the new photo.
   adjustCell: (spreadId, cellIndex, patch) => set((s) => ({
     spreads: s.spreads.map((sp) => {
       if (sp.id !== spreadId) return sp;
-      return { ...sp, cells: sp.cells.map((c, i) => i === cellIndex ? { ...c, ...patch } : c) };
+      return { ...sp, cells: sp.cells.map((c, i) => i === cellIndex ? { ...c, ...patch, manualCrop: true } : c) };
     }),
   })),
 
@@ -779,7 +807,7 @@ export const useBookStore = create((set, get) => ({
       const idx = pickBestPhoto(pool, (geo.w * sw) / (geo.h * sh));
       const photo = pool[idx];
       pool = pool.filter((_, pi) => pi !== idx);
-      newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+      if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
       newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
     });
     return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
@@ -845,7 +873,7 @@ export const useBookStore = create((set, get) => ({
         const idx = pickBestPhoto(pool, cellAspect);
         const photo = pool[idx];
         pool = pool.filter((_, pi) => pi !== idx);
-        newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+        if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
         newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
       });
       return { ...spread, cells: newCells, cellGeometry: newGeo };
@@ -872,7 +900,9 @@ export const useBookStore = create((set, get) => ({
       s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean))
     );
 
-    let pool = shuffle(s.photos.filter((p) => !usedEverywhere.has(p.id)));
+    // Take photos in natural sort order (e.g. IMG_001, IMG_002, …) instead
+    // of shuffling. Predictable, repeatable.
+    let pool = naturalSort(s.photos.filter((p) => !usedEverywhere.has(p.id)));
 
     const newGeo = tmpl.cells.map((c) => ({ ...c }));
     const newCells = tmpl.cells.map((c) => makeCell(c));
@@ -880,10 +910,7 @@ export const useBookStore = create((set, get) => ({
     newCells.forEach((cell, i) => {
       if (pool.length === 0) return;
       const geo = newGeo[i];
-      const cellAspect = (geo.w * sw) / (geo.h * sh);
-      const idx = pickBestPhoto(pool, cellAspect);
-      const photo = pool[idx];
-      pool = pool.filter((_, pi) => pi !== idx);
+      const photo = pool.shift(); // next available photo in name order
       newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
       newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
     });
@@ -929,7 +956,7 @@ export const useBookStore = create((set, get) => ({
         const idx = pickBestPhoto(pool, cellAspect);
         const photo = pool[idx];
         pool = pool.filter((_, pi) => pi !== idx);
-        newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+        if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
         newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: 0 };
       });
       return { ...spread, cells: newCells, cellGeometry: newGeo };
