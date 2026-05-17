@@ -96,17 +96,32 @@ export default function PhotoPanel({ mobile = false }) {
     spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean))
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const imagesInputRef = useRef(null);
+  const folderInputRef = useRef(null);
+
+  const ingestFiles = async (files) => {
+    const images = [...files].filter((f) => f.type?.startsWith('image/'));
+    if (images.length === 0) return;
+    images.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+    const loaded = await Promise.all(images.map(loadPhoto));
+    addPhotos(loaded);
+    setSimMap(null);
+  };
+
+  // Drag-and-drop only — we provide our own Images / Folder buttons below.
+  const { getRootProps, isDragActive } = useDropzone({
     accept: { 'image/*': [] },
-    onDrop: async (files) => {
-      const dropped = [...files].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-      );
-      const loaded = await Promise.all(dropped.map(loadPhoto));
-      addPhotos(loaded);
-      setSimMap(null);
-    },
+    onDrop: ingestFiles,
+    noClick: true,
+    noKeyboard: true,
   });
+
+  const handleInputChange = async (e) => {
+    if (e.target.files?.length) await ingestFiles(e.target.files);
+    e.target.value = '';
+  };
 
   // Sort base list
   const baseSorted = (() => {
@@ -403,16 +418,27 @@ export default function PhotoPanel({ mobile = false }) {
           margin: '0 10px 10px',
           border: `1px dashed ${isDragActive ? '#4f8ef7' : '#2a2a2a'}`,
           borderRadius: 6,
-          padding: '10px 6px',
+          padding: '8px 6px',
           textAlign: 'center',
           fontSize: 11,
           color: isDragActive ? '#4f8ef7' : '#555',
-          cursor: 'pointer',
           transition: 'all 0.15s',
         }}
       >
-        <input {...getInputProps()} />
-        {isDragActive ? 'Drop here' : '+ Add Photos'}
+        <input ref={imagesInputRef} type="file" accept="image/*" multiple onChange={handleInputChange} style={{ display: 'none' }} />
+        <input ref={folderInputRef} type="file" webkitdirectory="" directory="" multiple onChange={handleInputChange} style={{ display: 'none' }} />
+        {isDragActive ? (
+          <div style={{ padding: '6px 0' }}>Drop here</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={() => imagesInputRef.current?.click()} style={importBtnStyle} title="Pick individual image files">
+              🖼 Images
+            </button>
+            <button type="button" onClick={() => folderInputRef.current?.click()} style={importBtnStyle} title="Pick an entire folder — all images inside are imported">
+              📁 Folder
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}>
@@ -583,3 +609,14 @@ export default function PhotoPanel({ mobile = false }) {
     </aside>
   );
 }
+
+const importBtnStyle = {
+  flex: 1,
+  padding: '6px 4px',
+  background: '#181818',
+  border: '1px solid #2a2a2a',
+  borderRadius: 4,
+  color: '#aaa',
+  fontSize: 11,
+  cursor: 'pointer',
+};
