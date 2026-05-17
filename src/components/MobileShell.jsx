@@ -123,6 +123,16 @@ export default function MobileShell({ stageRef }) {
         <button onClick={redo} disabled={future.length === 0} style={topBtn(future.length === 0)} aria-label="Redo">↪</button>
       </div>
 
+      {/* Subtle © badge — visible attribution */}
+      <div style={{
+        fontSize: 9, color: '#2a2a2a', textAlign: 'center',
+        padding: '2px 0', background: '#0a0a0a',
+        borderBottom: '1px solid #1a1a1a', flexShrink: 0,
+        letterSpacing: 0.5,
+      }}>
+        © NEJ · AutoBook v1.0.0
+      </div>
+
       {/* Desktop banner */}
       {showDesktopBanner && (
         <div style={{

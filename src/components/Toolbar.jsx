@@ -333,6 +333,13 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         {spreads.length} spread{spreads.length !== 1 ? 's' : ''}
       </span>
 
+      <span
+        title="AutoBook by NEJ · Proprietary software · All rights reserved"
+        style={{ fontSize: 9, color: '#2a2a2a', flexShrink: 0, fontVariantNumeric: 'tabular-nums', userSelect: 'none' }}
+      >
+        © NEJ v1.0.0
+      </span>
+
       {/* Preview */}
       <button onClick={onPreview}
         style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}

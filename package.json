@@ -1,7 +1,11 @@
 {
   "name": "photobook-designer",
-  "productName": "Photobook Designer",
+  "productName": "AutoBook by NEJ",
   "version": "1.0.0",
+  "description": "AI-assisted photobook designer with editorial templates, autosave, and print-ready export.",
+  "author": "Jerry Nnah <devjerrynnah@gmail.com>",
+  "license": "UNLICENSED",
+  "homepage": "https://autobookbynej.online",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
