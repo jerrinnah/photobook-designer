@@ -25,8 +25,9 @@ export const SPREAD_SIZES = [
   { id: 'pt-11x14', label: 'Portrait 11×14"  (Luxury / Fashion)', exportW: inToPx(22),  exportH: inToPx(14),  group: 'Portrait' },
 
   // ── Panoramic / Custom ───────────────────────────────────────────
-  { id: 'pano-12x30', label: 'Panoramic 12×30"', exportW: inToPx(60),  exportH: inToPx(12),  group: 'Panoramic' },
-  { id: 'custom',     label: 'Custom…',          exportW: null,        exportH: null,        group: 'Custom' },
+  { id: 'pano-30x12',  label: 'Panoramic 30×12"  (landscape strip)', exportW: inToPx(60),  exportH: inToPx(12),  group: 'Panoramic' },
+  { id: 'pano-12x30',  label: 'Panoramic 12×30"  (portrait tower)',  exportW: inToPx(24),  exportH: inToPx(30),  group: 'Panoramic' },
+  { id: 'custom',      label: 'Custom…',                              exportW: null,        exportH: null,        group: 'Custom' },
 ];
 
 const MAX_W = 1050;

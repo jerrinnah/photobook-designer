@@ -51,5 +51,14 @@ export async function loadPhoto(file) {
   const img = await loadImage(originalSrc);
   const { src, width, height } = await downscaleIfNeeded(originalSrc, img);
   const id = useBookStore.getState().nextPhotoId();
-  return { id, name: file.name, src, width, height };
+  // We keep BOTH versions so the canvas renders fast with the downscaled
+  // `src` but exports can swap in `originalSrc` for full quality.
+  // When src === originalSrc (small photo, didn't downscale) we still set
+  // both so export logic doesn't need a special case.
+  return {
+    id, name: file.name, src, width, height,
+    originalSrc,
+    origWidth: img.width,
+    origHeight: img.height,
+  };
 }
