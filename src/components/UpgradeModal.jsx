@@ -1,7 +1,33 @@
+import { useState } from 'react';
 import { PREMIUM_FEATURES, FREE_FEATURES } from '../utils/premium';
+import { openPaystackCheckout, claimPremium, isPaystackConfigured, formatPrice } from '../utils/paystack';
+import { getStoredUser } from '../utils/supabase';
 
 export default function UpgradeModal({ open, onClose, blockedFeature }) {
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
   if (!open) return null;
+
+  const user = getStoredUser();
+  const canPay = isPaystackConfigured() && user?.email;
+
+  const handlePay = async () => {
+    if (!canPay || paying) return;
+    setError(null);
+    setPaying(true);
+    try {
+      const reference = await openPaystackCheckout({ email: user.email });
+      await claimPremium(reference);
+      setSuccess(true);
+      // Brief celebration, then refresh so locked thumbnails unlock everywhere
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      setError(err.message || 'Payment failed. Try again.');
+    } finally {
+      setPaying(false);
+    }
+  };
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 200,
@@ -48,14 +74,51 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
           ))}
         </div>
 
+        {success && (
+          <div style={{
+            padding: '10px 12px', marginBottom: 12,
+            background: '#0e1a10', border: '1px solid #2a4a2a',
+            color: '#6fcf97', fontSize: 12, borderRadius: 5,
+          }}>
+            ✓ Premium activated. Refreshing…
+          </div>
+        )}
+        {error && (
+          <div style={{
+            padding: '8px 10px', marginBottom: 12,
+            background: '#1a0808', border: '1px solid #5a1a1a',
+            color: '#e05c5c', fontSize: 11, borderRadius: 5,
+          }}>{error}</div>
+        )}
+        {!canPay && !success && (
+          <div style={{
+            padding: '8px 10px', marginBottom: 12,
+            background: '#1a1408', border: '1px solid #3a2a10',
+            color: '#f6c90e', fontSize: 11, borderRadius: 5,
+          }}>
+            {!user?.email
+              ? 'Sign up first (Save or Export a photobook) to unlock the Pay button.'
+              : '⚠ Paystack not configured. Owner: set VITE_PAYSTACK_PUBLIC_KEY.'}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={btnGhost}>Not now</button>
-          <a
-            href="mailto:devjerrynnah@gmail.com?subject=Premium%20upgrade%20—%20AutoBook&body=Hi,%20I%27d%20like%20to%20upgrade%20to%20Premium."
-            style={{ ...btnPrimary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+          <button onClick={onClose} disabled={paying} style={btnGhost}>Not now</button>
+          <button
+            onClick={handlePay}
+            disabled={!canPay || paying || success}
+            style={{
+              ...btnPrimary,
+              opacity: (!canPay || paying || success) ? 0.5 : 1,
+              cursor: (!canPay || paying || success) ? 'not-allowed' : 'pointer',
+            }}
           >
-            ✉ Contact for upgrade
-          </a>
+            {success
+              ? '✓ Activated'
+              : paying
+                ? 'Opening Paystack…'
+                : `✦ Upgrade · ${formatPrice()}`}
+          </button>
         </div>
       </div>
     </div>
