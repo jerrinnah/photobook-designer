@@ -7,6 +7,12 @@ alter table public.users
   add column if not exists tier text not null default 'free'
   check (tier in ('free', 'premium'));
 
+-- Postgres won't let CREATE OR REPLACE change a function's return type, so
+-- drop the old versions first. Safe — they're immediately recreated below.
+drop function if exists public.signup_user(text, text);
+drop function if exists public.get_users_admin(text);
+drop function if exists public.get_stats_admin(text);
+
 -- ── signup_user (updated) ───────────────────────────────────────────
 -- Now returns tier too. Replace the previous version.
 create or replace function public.signup_user(p_email text, p_phone text)
