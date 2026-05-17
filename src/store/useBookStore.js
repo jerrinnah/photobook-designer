@@ -151,6 +151,27 @@ const pickHighDensityTemplate = (portraitDominant, sw, sh) => {
   return candidates[Math.floor(Math.random() * candidates.length)].t;
 };
 
+// Pick a template whose cell count grows with the spread index.
+// Spread 1 starts sparse (1–3 cells), each later spread allows ~2 more.
+// Skips covers / wedding / event / print-only / cover templates so we pull
+// from generic layouts only.
+const pickProgressiveTemplate = (spreadIdx, portraitDominant, sw, sh) => {
+  const target = Math.max(1, Math.min(18, spreadIdx));      // 1, 2, 3, … capped at 18
+  const minCells = Math.max(1, target - 1);
+  const maxCells = target + 2;
+  const pool = TEMPLATES.filter((t) =>
+    !t.printSize && !t.category &&
+    t.cells.length >= minCells && t.cells.length <= maxCells
+  );
+  if (pool.length === 0) return pickHighDensityTemplate(portraitDominant, sw, sh);
+  const scored = pool.map((t) => ({ t, ratio: portraitCellRatio(t, sw, sh) }));
+  const suited = portraitDominant
+    ? scored.filter(({ ratio }) => ratio >= 0.4)
+    : scored.filter(({ ratio }) => ratio <= 0.4);
+  const candidates = suited.length > 0 ? suited : scored;
+  return candidates[Math.floor(Math.random() * candidates.length)].t;
+};
+
 // Pull autosaved state (if any) from localStorage and use it as initial state.
 // Photo IDs are deduped here too — same defensive normalization as loadProject.
 // Helper: make sure spreads[0] always has role:'cover'.
@@ -744,15 +765,14 @@ export const useBookStore = create((set, get) => ({
     const portraitCount = pool.filter((p) => p.height > p.width).length;
     const portraitDominant = pool.length > 0 && portraitCount > pool.length / 2;
 
-    // Only upgrade UNTOUCHED spreads (no photos placed) with low cell counts.
-    // Spreads the user already designed are left alone. Cover (index 0) is
-    // ALWAYS preserved — never reshuffled or re-templated by Design All.
+    // Progressive density: spread 1 = 1–3 cells, spread 2 = 2–4 cells, …
+    // (cover at index 0 is untouched). Spreads the user already designed
+    // (have any photos placed) are left alone.
     let spreads = s.spreads.map((sp, idx) => {
       if (idx === 0) return sp; // cover protected
       const hasAnyPhoto = sp.cells.some((c) => c.photoId);
-      const editableCells = sp.cells.filter((c) => !c.locked).length;
-      if (!hasAnyPhoto && editableCells < MIN_CELLS_PER_SPREAD) {
-        const tmpl = pickHighDensityTemplate(portraitDominant, sw, sh);
+      if (!hasAnyPhoto) {
+        const tmpl = pickProgressiveTemplate(idx, portraitDominant, sw, sh);
         return {
           ...sp,
           templateId: tmpl.id,
@@ -763,12 +783,14 @@ export const useBookStore = create((set, get) => ({
       return sp;
     });
 
-    // Add more spreads until all unplaced photos have a cell
+    // Add more spreads until all unplaced photos have a cell. New spreads
+    // keep the progressive density curve so we don't suddenly jump to dense.
     const availableCells = () => spreads.reduce((acc, sp) =>
       acc + sp.cells.filter((c) => !c.locked && !c.photoId).length, 0);
     let maxId = Math.max(...spreads.map((sp) => sp.id));
     while (pool.length > availableCells()) {
-      const tmpl = pickHighDensityTemplate(portraitDominant, sw, sh);
+      const newIdx = spreads.length;
+      const tmpl = pickProgressiveTemplate(newIdx, portraitDominant, sw, sh);
       spreads.push(makeSpread(++maxId, tmpl));
     }
 
@@ -792,7 +814,8 @@ export const useBookStore = create((set, get) => ({
       return { ...spread, cells: newCells, cellGeometry: newGeo };
     });
 
-    return { spreads: newSpreads, selectedPhotoIds: new Set() };
+    // Tight pack: zero gap between cells when auto-designing
+    return { spreads: newSpreads, selectedPhotoIds: new Set(), gap: 0 };
   })),
 
   // ── Redesign a single spread with a new high-density template ────
