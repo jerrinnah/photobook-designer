@@ -510,6 +510,31 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const [showFxPanel, setShowFxPanel] = useState(false);
   const [cropGuideCell, setCropGuideCell] = useState(null);
 
+  // Delete / Backspace removes the selected caption or cell.
+  // Ignored while typing in inputs/textareas/contenteditable so it doesn't
+  // hijack text editing (book name, search, caption inline edit, etc.).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const t = e.target;
+      const tag = t?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return;
+
+      if (selectedCaptionId) {
+        e.preventDefault();
+        removeCaption(activeSpreadId, selectedCaptionId);
+        setSelectedCaptionId(null);
+        return;
+      }
+      if (selectedCellIndex !== null && selectedCellIndex !== undefined) {
+        e.preventDefault();
+        removeCell(activeSpreadId, selectedCellIndex);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedCaptionId, selectedCellIndex, activeSpreadId, removeCaption, removeCell]);
+
   // Preset sizes (cw/ch for default 12×6 spread, i.e. spreadRatio=2)
   const PRESETS = {
     '916': { label: '9:16', hint: '916', cw: 0.197, ch: 0.7  },
