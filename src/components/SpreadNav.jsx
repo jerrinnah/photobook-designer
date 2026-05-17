@@ -8,7 +8,7 @@ const THUMB_H = 56;
 
 const ROLE_COLORS = { cover: '#f6c90e', back: '#888' };
 
-function SpreadThumb({ spread, active, onDragStart, onDragOver, onDrop, isDragTarget }) {
+function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDrop, isDragTarget }) {
   const { photos, setActiveSpread, removeSpread, duplicateSpread, setSpreadRole, setSpreadBgColor } = useBookStore();
   const geo = spread.cellGeometry || [];
   const colorInputRef = useRef(null);
@@ -77,7 +77,9 @@ function SpreadThumb({ spread, active, onDragStart, onDragOver, onDrop, isDragTa
         )}
       </svg>
 
-      <div style={{ fontSize: 10, color: '#3a3a3a', marginTop: 3 }}>Spread {spread.id}</div>
+      <div style={{ fontSize: 10, color: '#3a3a3a', marginTop: 3 }}>
+        {displayNum === 1 ? 'Cover' : `Spread ${displayNum}`}
+      </div>
 
       {/* Per-spread controls row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}
@@ -187,10 +189,11 @@ export default function SpreadNav({ mobile = false }) {
         )}
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {spreads.map((sp) => (
+        {spreads.map((sp, idx) => (
           <SpreadThumb
             key={sp.id}
             spread={sp}
+            displayNum={idx + 1}
             active={sp.id === activeSpreadId}
             isDragTarget={dragTargetId === sp.id && draggedId !== sp.id}
             onDragStart={(e) => {
