@@ -1,8 +1,79 @@
 import { getScreenDims, getExportPixelRatio } from '../layouts/spreadSizes';
 import { useBookStore } from '../store/useBookStore';
+import { getStoredUser } from './supabase';
 
 function slug(name) {
   return name.replace(/[^a-z0-9]/gi, '-').toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, '') || 'photobook';
+}
+
+// Returns true if the signed-in user is NOT premium (or not signed in).
+// Used to decide whether to stamp a watermark on exports.
+function isFreeTier() {
+  const u = getStoredUser();
+  return !u || u.tier !== 'premium';
+}
+
+// Draw a tiled "AutoBook by NEJ" watermark across the image, plus a small
+// solid badge in the bottom-right corner. Returns a new data URL.
+async function applyWatermark(dataURL) {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      // Tiled diagonal watermark — subtle but visible enough to discourage
+      // commercial use of the free export.
+      const baseFontSize = Math.max(16, Math.round(img.width / 60));
+      ctx.font = `${baseFontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.10)';
+      ctx.textBaseline = 'middle';
+      ctx.save();
+      ctx.translate(img.width / 2, img.height / 2);
+      ctx.rotate(-Math.PI / 6); // ~-30°
+      const text = '  AUTOBOOK BY NEJ  ·  AUTOBOOK BY NEJ  ·  ';
+      const w = ctx.measureText(text).width;
+      const rowSpacing = baseFontSize * 4;
+      const rows = Math.ceil(img.height / rowSpacing) + 4;
+      for (let r = -rows; r < rows; r++) {
+        ctx.fillText(text, -w / 2 - ((r * 80) % w), r * rowSpacing);
+      }
+      ctx.restore();
+
+      // Solid corner badge
+      const padding = Math.round(img.width / 100);
+      const badgeFont = Math.max(12, Math.round(img.width / 80));
+      ctx.font = `bold ${badgeFont}px system-ui, -apple-system, sans-serif`;
+      const badgeText = 'AutoBook by NEJ · autobookbynej.online';
+      const badgeWidth = ctx.measureText(badgeText).width + padding * 2;
+      const badgeHeight = badgeFont * 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(
+        img.width - badgeWidth - padding,
+        img.height - badgeHeight - padding,
+        badgeWidth, badgeHeight
+      );
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(
+        badgeText,
+        img.width - badgeWidth - padding + padding,
+        img.height - padding - badgeHeight / 2
+      );
+
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
+    };
+    img.onerror = () => resolve(dataURL); // on error, fall back to original
+    img.src = dataURL;
+  });
+}
+
+async function maybeWatermark(dataURL) {
+  if (!isFreeTier()) return dataURL;
+  return applyWatermark(dataURL);
 }
 
 // Swap each photo's src for its originalSrc (full-resolution version),
@@ -66,7 +137,8 @@ async function captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, sp
   for (let i = 0; i < spreads.length; i++) {
     setActiveSpread(spreads[i].id);
     await new Promise((r) => setTimeout(r, 220));
-    const dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
+    let dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
+    dataURL = await maybeWatermark(dataURL);
     frames.push({ idx: i + 1, dataURL, role: spreads[i].role });
   }
 
@@ -126,8 +198,9 @@ export async function exportToFolder(stageRef, spreads, activeSpreadId, setActiv
 export async function exportCurrentSpread(stageRef, spreadId, spreadSizeId, customSize, bookName) {
   const { w: screenW } = getScreenDims(spreadSizeId, customSize);
   const pixelRatio = getExportPixelRatio(spreadSizeId, screenW, customSize);
-  await withOriginalPhotos(() => {
-    const dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
+  await withOriginalPhotos(async () => {
+    let dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
+    dataURL = await maybeWatermark(dataURL);
     const a = document.createElement('a');
     a.href = dataURL;
     a.download = `${slug(bookName)}-spread-${String(spreadId).padStart(2, '0')}.jpg`;

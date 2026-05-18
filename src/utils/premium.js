@@ -27,6 +27,8 @@ export function isPremiumTemplate(tmpl) {
 // admin UI; toggling actually-free vs paid behavior happens in the rule
 // function above.
 export const PREMIUM_FEATURES = [
+  { key: 'no-watermark',    name: 'Exports without watermark',
+    detail: 'Free exports carry an "AutoBook by NEJ" diagonal watermark + corner badge' },
   { key: 'cover-premium',   name: 'Premium cover designs (4 of 6)',
     detail: 'Bold Letterspace, Side Editorial, Grand Script, Date Card' },
   { key: 'wedding-tpl',     name: 'Wedding-category templates',
