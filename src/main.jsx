@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import { preloadAutosave, startAutosave } from './store/autosave'
-import { trackAppUseOncePerSession, refreshUserTier } from './utils/supabase'
+import { trackAppUseOncePerSession, refreshUserTier, onAuthStateChange } from './utils/supabase'
 
 async function boot() {
   // Hydrate the IndexedDB cache before importing the store so its
@@ -13,6 +13,12 @@ async function boot() {
   startAutosave(useBookStore);
   trackAppUseOncePerSession();
   refreshUserTier();
+
+  // Subscribe to Supabase auth state changes globally — when a magic-link
+  // sign-in happens (the user returns from clicking the email link), this
+  // fires SIGNED_IN and syncs their profile to localStorage so the rest
+  // of the app picks it up. Toolbar already listens too for re-render.
+  onAuthStateChange(() => { /* profile cache is updated inside the listener */ });
 
   createRoot(document.getElementById('root')).render(
     <StrictMode>

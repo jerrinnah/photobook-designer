@@ -3,8 +3,8 @@ import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportCurrentSpread, exportToFolder, exportAsPDF } from '../utils/export';
 import { subscribeAutosaveStatus } from '../store/autosave';
-import { getStoredUser, trackEvent } from '../utils/supabase';
-import SignupModal from './SignupModal';
+import { getStoredUser, trackEvent, signOut, onAuthStateChange } from '../utils/supabase';
+import AuthModal from './AuthModal';
 import ProjectPicker from './ProjectPicker';
 import BrandingSettings from './BrandingSettings';
 import ShareModal from './ShareModal';
@@ -59,18 +59,32 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [reshuffled, setReshuffled] = useState(false);
   const [redesigned, setRedesigned] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState({ status: 'idle', meta: null });
-  const [signup, setSignup] = useState(null); // { action: 'save'|'export', onComplete: fn } | null
+  const [signup, setSignup] = useState(null); // { action: 'save'|'export' } | null
   const [showProjects, setShowProjects] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [authUser, setAuthUser] = useState(getStoredUser());
+  const [profileOpen, setProfileOpen] = useState(false);
   const fileInputRef = useRef(null);
 
-  const user = getStoredUser();
-  const brand = user?.brand || {};
+  const brand = authUser?.brand || {};
 
   useEffect(() => subscribeAutosaveStatus((status, meta) =>
     setAutosaveStatus({ status, meta })
   ), []);
+
+  // Re-render whenever the Supabase auth state changes (sign-in via magic
+  // link, sign-out, token refresh)
+  useEffect(() => onAuthStateChange((profile) => {
+    setAuthUser(profile || null);
+    if (profile) setSignup(null); // close any open auth modal once signed in
+  }), []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setAuthUser(null);
+    setProfileOpen(false);
+  };
 
   const handleNew = () => {
     if (confirm('Start a new project? Current autosaved work will be cleared.')) {
@@ -78,22 +92,17 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     }
   };
 
-  // Soft gate: if no stored user yet, show signup before running the action.
-  // After signup (or skip), proceed and track the event.
-  const withSignupGate = (action, fn) => () => {
+  // Soft gate: if no stored user yet, show the magic-link sign-in modal.
+  // Once the user clicks the link in their email and returns, they're
+  // signed in automatically — they just have to click Save / Export again.
+  const withSignupGate = (action, fn) => async () => {
     const user = getStoredUser();
-    const proceed = async () => {
+    if (user) {
       if (action === 'export' || action === 'save') trackEvent('photobook_export');
       await fn();
-    };
-    if (user) {
-      proceed();
-    } else {
-      setSignup({
-        action,
-        onComplete: () => { setSignup(null); proceed(); },
-      });
+      return;
     }
+    setSignup({ action });
   };
 
   // Keyboard undo / redo
@@ -363,6 +372,87 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       <div style={{ flex: 1, minWidth: 4 }} />
 
+      {/* Profile / sign-in */}
+      {authUser?.email ? (
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setProfileOpen((v) => !v)}
+            style={{
+              ...btnStyle({ padding: '4px 9px' }),
+              display: 'flex', alignItems: 'center', gap: 6,
+              maxWidth: 180,
+            }}
+            title={`${authUser.email}${authUser.tier === 'premium' ? ' · Premium' : ''}`}
+          >
+            <span style={{
+              width: 18, height: 18, borderRadius: '50%',
+              background: authUser.tier === 'premium' ? '#3a2a08' : '#1a3580',
+              color: authUser.tier === 'premium' ? '#f6c90e' : '#fff',
+              fontSize: 9, fontWeight: 700, display: 'inline-flex',
+              alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              {(authUser.email || '?').slice(0, 1).toUpperCase()}
+            </span>
+            <span style={{
+              fontSize: 10, color: '#aaa', whiteSpace: 'nowrap',
+              overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130,
+            }}>
+              {authUser.email}
+            </span>
+          </button>
+          {profileOpen && (
+            <>
+              <div
+                onClick={() => setProfileOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
+              />
+              <div style={{
+                position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+                zIndex: 31,
+                background: '#0e0e0e', border: '1px solid #1f1f1f',
+                borderRadius: 6, padding: 6, minWidth: 200,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+              }}>
+                <div style={{ padding: '8px 10px', fontSize: 10, color: '#555' }}>
+                  Signed in as
+                  <div style={{ color: '#ddd', fontSize: 12, marginTop: 2, fontWeight: 500 }}>
+                    {authUser.email}
+                  </div>
+                  {authUser.tier === 'premium' && (
+                    <div style={{ color: '#f6c90e', fontSize: 9, marginTop: 3, letterSpacing: 0.5 }}>
+                      ✦ PREMIUM
+                    </div>
+                  )}
+                </div>
+                <div style={{ borderTop: '1px solid #1a1a1a', marginTop: 4, paddingTop: 4 }}>
+                  <button
+                    onClick={() => { setShowBrand(true); setProfileOpen(false); }}
+                    style={menuItemStyle}
+                  >
+                    Brand settings
+                  </button>
+                  <button
+                    onClick={handleSignOut}
+                    style={{ ...menuItemStyle, color: '#e05c5c' }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <button
+          onClick={() => setSignup({ action: 'signin' })}
+          style={btnStyle({ color: '#aaa', padding: '4px 12px' })}
+          title="Sign in or sign up"
+        >
+          Sign in
+        </button>
+      )}
+
       {/* Autosave status */}
       <AutosaveBadge status={autosaveStatus.status} meta={autosaveStatus.meta} />
 
@@ -452,11 +542,10 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         {exportingPDF ? 'Preparing…' : 'Print PDF'}
       </button>
 
-      <SignupModal
+      <AuthModal
         open={Boolean(signup)}
         action={signup?.action}
         onClose={() => setSignup(null)}
-        onComplete={signup?.onComplete}
       />
       <ProjectPicker open={showProjects} onClose={() => setShowProjects(false)} />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
@@ -492,3 +581,16 @@ function AutosaveBadge({ status, meta }) {
     >{s.label}</span>
   );
 }
+
+const menuItemStyle = {
+  display: 'block',
+  width: '100%',
+  textAlign: 'left',
+  padding: '7px 10px',
+  background: 'none',
+  border: 'none',
+  color: '#bbb',
+  fontSize: 11,
+  cursor: 'pointer',
+  borderRadius: 3,
+};
