@@ -1044,40 +1044,53 @@ export const useBookStore = create((set, get) => ({
   })),
 
   // ── Reshuffle all spreads with random ordering ────────────────────
-  reshuffleAll: () => set(h((s) => {
+  // Reshuffle ONLY the current spread.
+  //   - If any non-locked cell is empty → fill the empty cells with the
+  //     next unplaced photos from the library in arrangement order
+  //     (sequential, no aspect-best picking, no random).
+  //   - Otherwise (all non-locked cells already have photos) → shuffle
+  //     the photo IDs among those cells.
+  // Locked cells are never touched. Other spreads are never touched.
+  reshuffleSpread: (spreadId) => set(h((s) => {
+    const spread = s.spreads.find((sp) => sp.id === spreadId);
+    if (!spread) return s;
     const { w: sw, h: sh } = getScreenDims(s.spreadSizeId, s.customSize);
-    const useSelected = s.selectedPhotoIds.size > 0;
-    let pool = shuffle(
-      useSelected ? s.photos.filter((p) => s.selectedPhotoIds.has(p.id)) : s.photos
-    );
 
-    const poolIds = new Set(pool.map((p) => p.id));
-    const newSpreads = s.spreads.map((spread, idx) => {
-      if (idx === 0) return spread; // cover spread is protected from reshuffle
-      // First pass: clear pool-photo assignments for non-locked cells
-      const cleared = spread.cells.map((cell) =>
-        (!cell.locked && cell.photoId && poolIds.has(cell.photoId))
-          ? { ...cell, photoId: null }
-          : cell
-      );
-      // Second pass: fill non-locked empty cells, reshaping geometry to fit each photo
-      const newCells = [...cleared];
-      const newGeo = [...spread.cellGeometry];
-      cleared.forEach((cell, i) => {
-        if (cell.locked || cell.photoId || pool.length === 0) return;
+    const editable = spread.cells.map((cell, i) => ({ cell, i })).filter(({ cell }) => !cell.locked);
+    const emptyOnes = editable.filter(({ cell }) => !cell.photoId);
+
+    const newCells = [...spread.cells];
+    const newGeo = [...spread.cellGeometry];
+
+    if (emptyOnes.length > 0) {
+      // Photos already placed somewhere — skip them so each appears once
+      const usedIds = new Set(s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean)));
+      const pool = s.photos.filter((p) => !usedIds.has(p.id));
+      let cursor = 0;
+      for (const { i } of emptyOnes) {
+        if (cursor >= pool.length) break;
+        const photo = pool[cursor++];
+        const geo = newGeo[i];
+        if (!geo) continue;
+        if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+        newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+      }
+    } else {
+      // All non-locked cells are filled — shuffle their photo IDs in place
+      const filledIds = editable.map(({ cell }) => cell.photoId);
+      const shuffled = shuffle(filledIds);
+      editable.forEach(({ i }, k) => {
+        const photoId = shuffled[k];
+        const photo = s.photos.find((p) => p.id === photoId);
+        if (!photo) return;
         const geo = newGeo[i];
         if (!geo) return;
-        const cellAspect = (geo.w * sw) / (geo.h * sh);
-        const idx = pickBestPhoto(pool, cellAspect);
-        const photo = pool[idx];
-        pool = pool.filter((_, pi) => pi !== idx);
-        if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+        if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+        newCells[i] = { ...newCells[i], photoId, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
       });
-      return { ...spread, cells: newCells, cellGeometry: newGeo };
-    });
+    }
 
-    return { spreads: newSpreads };
+    return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
   })),
 
   // ── Save / Load project ────────────────────────────────────────────

@@ -26,7 +26,7 @@ export default function MobileShell({ stageRef }) {
     spreads, activeSpreadId,
     past, future, undo, redo,
     spreadSizeId, setSpreadSize, customSize,
-    autoArrange, autoDesignAll, reshuffleAll, redesignSpread,
+    autoArrange, autoDesignAll, reshuffleSpread, redesignSpread,
     saveProject, dedupePhotos, repeatedPhotoIds, setRepeatedPhotoIds, resetProject,
   } = useBookStore();
 
@@ -240,7 +240,7 @@ export default function MobileShell({ stageRef }) {
             <MenuBtn onClick={() => { autoArrange(activeSpreadId); setActiveSheet(null); }}>⟐ Arrange</MenuBtn>
             <MenuBtn onClick={() => { redesignSpread(activeSpreadId); setActiveSheet(null); }}>⟳ Redesign</MenuBtn>
             <MenuBtn onClick={() => { autoDesignAll(); setActiveSheet(null); }}>⚡ Design All</MenuBtn>
-            <MenuBtn onClick={() => { reshuffleAll(); setActiveSheet(null); }}>⇄ Reshuffle</MenuBtn>
+            <MenuBtn onClick={() => { reshuffleSpread(activeSpreadId); setActiveSheet(null); }}>⇄ Reshuffle</MenuBtn>
             <MenuBtn onClick={handleRepeated} highlight={repeatedPhotoIds.size > 0}>
               {repeatedPhotoIds.size > 0 ? `⚠ ${repeatedPhotoIds.size} Repeated` : '⚠ Find Repeats'}
             </MenuBtn>

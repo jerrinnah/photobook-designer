@@ -43,7 +43,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     spreadSizeId, setSpreadSize,
     customSize, setCustomSize,
     blendEdges, setBlendEdges,
-    autoArrange, autoDesignAll, reshuffleAll, redesignSpread,
+    autoArrange, autoDesignAll, reshuffleSpread, redesignSpread,
     bookName, setBookName,
     gap, setGap,
     past, future, undo, redo,
@@ -132,7 +132,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   };
 
   const handleReshuffle = () => {
-    reshuffleAll();
+    reshuffleSpread(activeSpreadId);
     setReshuffled(true);
     setTimeout(() => setReshuffled(false), 1400);
   };
@@ -304,7 +304,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
           color: reshuffled ? '#6fcf97' : '#888',
           border: `1px solid ${reshuffled ? '#2a4a2a' : '#252525'}`,
         })}
-        title="Randomly reshuffle photo assignments">
+        title="Reshuffle current spread — fills empty cells with the next unplaced photos, otherwise shuffles photos already on this spread">
         {reshuffled ? '✓ Shuffled' : '⇄ Reshuffle'}
       </button>
 
