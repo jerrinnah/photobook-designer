@@ -77,6 +77,46 @@ async function maybeWatermark(dataURL) {
   return applyWatermark(dataURL);
 }
 
+// Standard photobook bleed = 0.125 inch on every side.
+const BLEED_INCHES = 0.125;
+
+// Extends a captured spread by `bleedPx` on every side using edge-pixel
+// replication. This is the classic press technique — the printer trims
+// the bleed off so even slight cutting drift doesn't expose white.
+async function extendForBleed(dataURL, bleedPx) {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const W = img.width;
+      const H = img.height;
+      const newW = W + 2 * bleedPx;
+      const newH = H + 2 * bleedPx;
+      const canvas = document.createElement('canvas');
+      canvas.width = newW;
+      canvas.height = newH;
+      const ctx = canvas.getContext('2d');
+
+      // Corners — stretch each corner pixel to fill its bleed quadrant
+      ctx.drawImage(img, 0,   0,   1, 1, 0,           0,           bleedPx, bleedPx);
+      ctx.drawImage(img, W-1, 0,   1, 1, W + bleedPx, 0,           bleedPx, bleedPx);
+      ctx.drawImage(img, 0,   H-1, 1, 1, 0,           H + bleedPx, bleedPx, bleedPx);
+      ctx.drawImage(img, W-1, H-1, 1, 1, W + bleedPx, H + bleedPx, bleedPx, bleedPx);
+      // Top + bottom strips — repeat the first / last row
+      ctx.drawImage(img, 0, 0,   W, 1, bleedPx, 0,           W, bleedPx);
+      ctx.drawImage(img, 0, H-1, W, 1, bleedPx, H + bleedPx, W, bleedPx);
+      // Left + right strips — repeat first / last column
+      ctx.drawImage(img, 0,   0, 1, H, 0,           bleedPx, bleedPx, H);
+      ctx.drawImage(img, W-1, 0, 1, H, W + bleedPx, bleedPx, bleedPx, H);
+      // Original image in the center
+      ctx.drawImage(img, bleedPx, bleedPx, W, H);
+
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
+    };
+    img.onerror = () => resolve(dataURL);
+    img.src = dataURL;
+  });
+}
+
 // Swap each photo's src for its originalSrc (full-resolution version),
 // pre-load the originals into the browser cache so the canvas re-renders
 // without flicker, run the callback (which captures the canvas), then
@@ -209,10 +249,12 @@ export async function exportCurrentSpread(stageRef, spreadId, spreadSizeId, cust
   });
 }
 
-// Real print-ready PDF using jsPDF.
-// Each spread becomes a single page sized to the exact export dimensions
-// at 72 DPI (PDF point unit). Optional crop marks help the printer trim.
-// First page is a spec sheet with project metadata.
+// Real print-ready PDF using jsPDF with proper bleed area.
+// - Trim size = the spread's chosen dimensions (e.g. 20×10")
+// - Page size in PDF = trim + 0.125" bleed on each side (e.g. 20.25×10.25")
+// - Each spread image is extended into the bleed via edge-pixel replication
+// - Crop marks sit AT the trim line so the printer's guillotine knows where to cut
+// - First page is a spec sheet with project metadata
 export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName) {
   const frames = await withOriginalPhotos(() =>
     captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize)
@@ -220,17 +262,24 @@ export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSp
   if (frames.length === 0) return;
 
   // Compute physical page size from the export-resolution pixels at 300 DPI.
-  // PDF unit is 1pt = 1/72 inch, so multiply inches by 72 to get pt.
   const { exportW: pxW, exportH: pxH } = getEffectiveExportSize(spreadSizeId, customSize);
   const inchesW = pxW / 300;
   const inchesH = pxH / 300;
-  const ptW = inchesW * 72;
-  const ptH = inchesH * 72;
+
+  // pt math: 1pt = 1/72 inch
+  const trimPtW = inchesW * 72;
+  const trimPtH = inchesH * 72;
+  const bleedPt = BLEED_INCHES * 72;
+  const pagePtW = trimPtW + 2 * bleedPt;
+  const pagePtH = trimPtH + 2 * bleedPt;
+
+  // Bleed in source-image pixels (matches the capture resolution = 300 DPI)
+  const bleedPx = Math.round(BLEED_INCHES * 300);
 
   const pdf = new jsPDF({
-    orientation: ptW >= ptH ? 'landscape' : 'portrait',
+    orientation: pagePtW >= pagePtH ? 'landscape' : 'portrait',
     unit: 'pt',
-    format: [ptW, ptH],
+    format: [pagePtW, pagePtH],
     compress: true,
   });
 
@@ -240,18 +289,24 @@ export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSp
     pageCount: frames.length,
     inchesW, inchesH,
     pxW, pxH,
+    bleedInches: BLEED_INCHES,
     isFree: isFreeTier(),
   });
 
-  // ── Each spread becomes one page ──────────────────────────────────
+  // ── Each spread becomes one page WITH bleed extension ─────────────
   for (let i = 0; i < frames.length; i++) {
-    pdf.addPage([ptW, ptH], ptW >= ptH ? 'landscape' : 'portrait');
-    pdf.addImage(frames[i].dataURL, 'JPEG', 0, 0, ptW, ptH, undefined, 'FAST');
-    drawCropMarks(pdf, ptW, ptH);
-    // Page number on the back of crop marks
-    pdf.setFontSize(8);
+    // Extend the captured spread image with bleed
+    const bleededImage = await extendForBleed(frames[i].dataURL, bleedPx);
+
+    pdf.addPage([pagePtW, pagePtH], pagePtW >= pagePtH ? 'landscape' : 'portrait');
+    // The bled image fills the whole page (including bleed)
+    pdf.addImage(bleededImage, 'JPEG', 0, 0, pagePtW, pagePtH, undefined, 'FAST');
+    // Crop marks sit AT the trim edge — the printer cuts here
+    drawCropMarks(pdf, pagePtW, pagePtH, bleedPt);
+    // Page number — placed in the bleed area so it gets trimmed off
+    pdf.setFontSize(7);
     pdf.setTextColor(120);
-    pdf.text(`${i + 1} / ${frames.length}`, ptW / 2, ptH - 6, { align: 'center' });
+    pdf.text(`${i + 1} / ${frames.length}`, pagePtW / 2, pagePtH - 2, { align: 'center' });
   }
 
   pdf.save(`${slug(bookName)}-print-ready.pdf`);
@@ -272,13 +327,17 @@ function drawSpecSheet(pdf, info) {
   pdf.setTextColor(80);
   pdf.text('Print specification — AutoBook by NEJ', 40, 90);
 
+  const bleed = info.bleedInches || 0.125;
+  const pageInchesW = info.inchesW + 2 * bleed;
+  const pageInchesH = info.inchesH + 2 * bleed;
   const lines = [
     ['Spreads', `${info.pageCount}`],
-    ['Spread size', `${info.inchesW.toFixed(2)}" × ${info.inchesH.toFixed(2)}"`],
-    ['Pixel resolution', `${info.pxW} × ${info.pxH} px @ 300 DPI`],
-    ['Page size in PDF', `${(info.inchesW * 72).toFixed(0)} × ${(info.inchesH * 72).toFixed(0)} pt`],
+    ['Trim size (after cut)', `${info.inchesW.toFixed(2)}" × ${info.inchesH.toFixed(2)}"`],
+    ['Page size (incl. bleed)', `${pageInchesW.toFixed(3)}" × ${pageInchesH.toFixed(3)}"`],
+    ['Bleed applied', `${bleed.toFixed(3)}" (${(bleed * 25.4).toFixed(1)} mm) on every side`],
+    ['Trim resolution', `${info.pxW} × ${info.pxH} px @ 300 DPI`],
+    ['Crop marks', 'At trim line — printer cuts here'],
     ['Color space', 'RGB (convert to CMYK at press for offset)'],
-    ['Recommended bleed', '0.125" (3 mm) — add at press'],
     ['Safe zone', '0.25" (6 mm) inside trim'],
     ['Generated', new Date().toLocaleString()],
   ];
@@ -306,20 +365,26 @@ function drawSpecSheet(pdf, info) {
   pdf.text('autobookbynej.online', 40, pdf.internal.pageSize.getHeight() - 24);
 }
 
-// Crop marks at each corner — 12pt long, 8pt offset from page edge.
-function drawCropMarks(pdf, ptW, ptH) {
+// Crop marks at the TRIM line (inset by the bleed amount from each page edge).
+// Each corner gets two short black lines extending from the trim into the
+// bleed area, so the printer's guillotine knows exactly where to cut.
+function drawCropMarks(pdf, pagePtW, pagePtH, bleedPt = 0) {
   pdf.setDrawColor(0);
   pdf.setLineWidth(0.5);
-  const L = 12;   // mark length
-  const G = 8;    // gap from page edge
-  // top-left
-  pdf.line(0, G, L, G);          pdf.line(G, 0, G, L);
-  // top-right
-  pdf.line(ptW - L, G, ptW, G);  pdf.line(ptW - G, 0, ptW - G, L);
-  // bottom-left
-  pdf.line(0, ptH - G, L, ptH - G);                  pdf.line(G, ptH - L, G, ptH);
-  // bottom-right
-  pdf.line(ptW - L, ptH - G, ptW, ptH - G);          pdf.line(ptW - G, ptH - L, ptW - G, ptH);
+  const L = 12;       // mark length
+  // Trim coordinates (page edges minus bleed on each side)
+  const x1 = bleedPt;
+  const y1 = bleedPt;
+  const x2 = pagePtW - bleedPt;
+  const y2 = pagePtH - bleedPt;
+  // Top-left corner: mark extends from trim outward into bleed
+  pdf.line(x1 - L, y1, 0, y1);     pdf.line(x1, y1 - L, x1, 0);
+  // Top-right
+  pdf.line(x2, y1, x2 + L, y1);    pdf.line(x2, y1 - L, x2, 0);
+  // Bottom-left
+  pdf.line(x1 - L, y2, 0, y2);     pdf.line(x1, y2, x1, y2 + L);
+  // Bottom-right
+  pdf.line(x2, y2, x2 + L, y2);    pdf.line(x2, y2, x2, y2 + L);
 }
 
 // Kept for any legacy callers
