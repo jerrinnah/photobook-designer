@@ -16,11 +16,11 @@ import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 import { getEffectiveTier } from './premium';
 
 const BUCKET = 'share-previews';
-const PIXEL_RATIO = 1.5;          // good for retina screen viewing
-const SHARE_QUALITY = 0.78;
+const MAX_SPREAD_LONG_EDGE = 1800; // hard cap so a 12×24 spread doesn't blow up
+const SHARE_QUALITY = 0.72;
 const UPLOAD_CONCURRENCY = 4;
-const UPLOAD_TIMEOUT_MS = 60_000;
-const CAPTURE_SETTLE_MS = 220;    // time for Konva stage to repaint after spread switch
+const UPLOAD_TIMEOUT_MS = 180_000; // 3 min per spread — generous for slow uploads
+const CAPTURE_SETTLE_MS = 220;     // time for Konva stage to repaint after spread switch
 
 const _webpProbe = (() => {
   try {
@@ -49,11 +49,16 @@ async function captureSpreadsForShare({
     if (!stage) throw new Error('Editor stage disappeared mid-capture.');
     const w = stage.width();
     const h = stage.height();
-    const canvas = stage.toCanvas({ pixelRatio: PIXEL_RATIO });
+    // Cap the long edge so big square/portfolio spreads don't produce
+    // multi-MB WebPs that take forever to upload.
+    const longEdge = Math.max(w, h);
+    const pixelRatio = longEdge > MAX_SPREAD_LONG_EDGE ? MAX_SPREAD_LONG_EDGE / longEdge : 1;
+    const canvas = stage.toCanvas({ pixelRatio });
     const blob = await new Promise((resolve) => {
       canvas.toBlob((b) => resolve(b), SHARE_MIME, SHARE_QUALITY);
     });
     if (!blob) throw new Error(`Couldn't capture spread ${i + 1}`);
+    console.info(`[Share] captured spread ${i + 1} — ${(blob.size / 1024).toFixed(0)} KB (${canvas.width}×${canvas.height})`);
     captured.push({ id: sp.id, role: sp.role, w, h, blob });
     onProgress?.({ stage: 'capture', done: i + 1, total: spreads.length });
   }
@@ -64,6 +69,8 @@ async function captureSpreadsForShare({
 // ── Upload: push one captured spread blob ───────────────────────────
 async function uploadOneSpread(shareKey, spreadIdx, captured, onProgress) {
   const path = `${shareKey}/spread-${spreadIdx + 1}.${SHARE_EXT}`;
+  const startedAt = Date.now();
+  console.info(`[Share] uploading spread ${spreadIdx + 1} → ${path} (${(captured.blob.size / 1024).toFixed(0)} KB)…`);
   const { error } = await withTimeout(
     supabase.storage.from(BUCKET).upload(path, captured.blob, {
       contentType: captured.blob.type,
@@ -74,6 +81,7 @@ async function uploadOneSpread(shareKey, spreadIdx, captured, onProgress) {
     `Upload of spread ${spreadIdx + 1}`,
   );
   if (error) throw new Error(`Upload failed for spread ${spreadIdx + 1}: ${error.message}`);
+  console.info(`[Share] spread ${spreadIdx + 1} uploaded in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
   onProgress?.(captured.blob.size);
   return {
