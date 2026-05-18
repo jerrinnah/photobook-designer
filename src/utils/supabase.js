@@ -29,13 +29,25 @@ export const getStoredUser = () => {
   } catch { return null; }
 };
 
+// Pub/sub for cache changes — every useAuthUser() hook subscribes here so
+// when refreshUserTier (or any other code path) writes a fresh profile to
+// localStorage, all UI components re-render with the latest tier without
+// needing a page reload.
+const cacheListeners = new Set();
+const notifyCacheListeners = () => {
+  const u = getStoredUser();
+  cacheListeners.forEach((fn) => { try { fn(u); } catch { /* ignore */ } });
+};
+
 const storeUser = (user) => {
   try { localStorage.setItem(USER_KEY, JSON.stringify(user)); }
   catch { /* quota exceeded — ignore */ }
+  notifyCacheListeners();
 };
 
 export const clearStoredUser = () => {
   localStorage.removeItem(USER_KEY);
+  notifyCacheListeners();
 };
 
 // Sign up — upserts by email, returns the full profile incl. brand.
@@ -169,7 +181,19 @@ export function onAuthStateChange(callback) {
       const profile = await syncProfileAfterAuth();
       // If sync failed (network, RPC blip), keep the cached profile —
       // DO NOT pass null and accidentally sign the user out.
-      callback(profile || getStoredUser());
+      const final = profile || getStoredUser();
+      if (final?.email) {
+        const fromSession = final._fromSession ? ' (session-only — DB sync failed, retrying)' : '';
+        console.info(`[Auth] Signed in as ${final.email} — tier: ${final.tier || 'free'}${fromSession}`);
+      }
+      callback(final);
+      // Defensive second-chance refresh: if the session-only fallback was
+      // used (or even if not), confirm the tier from the DB after a moment.
+      // This catches the case where ensure_my_user failed transiently and
+      // the user is actually on a paid tier.
+      if (event === 'SIGNED_IN' || final?._fromSession) {
+        setTimeout(() => refreshUserTier(), 1500);
+      }
     }
   });
   return () => subscription?.unsubscribe();
@@ -179,15 +203,23 @@ export function onAuthStateChange(callback) {
 // upgrades and any branding changes take effect without re-signin.
 // Prefers the auth-aware RPC when a Supabase session exists; falls back
 // to the user-id-based RPC for legacy users who haven't migrated to auth yet.
+//
+// Writing to localStorage triggers cacheListeners, so every useAuthUser()
+// hook re-renders with the latest tier — locked templates unlock as soon
+// as the paid tier is confirmed.
 export async function refreshUserTier() {
   if (!isSupabaseConfigured) return;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       const { data, error } = await supabase.rpc('get_my_profile');
-      if (error) return;
+      if (error) { console.warn('[Auth] get_my_profile failed:', error.message); return; }
       const fresh = Array.isArray(data) ? data[0] : data;
-      if (fresh) storeUser(profileToCache(fresh));
+      if (fresh) {
+        const cached = profileToCache(fresh);
+        storeUser(cached);
+        console.info(`[Auth] Tier refreshed for ${cached.email} → ${cached.tier}`);
+      }
       return;
     }
   } catch { /* fall back to legacy path */ }
@@ -259,11 +291,20 @@ export async function trackAppUseOncePerSession() {
 }
 
 // ── useAuthUser — reactive hook shared by every UI component that needs
-//                 to know whether the visitor is signed in. Single
-//                 subscription point so all components stay in sync
-//                 when a magic-link sign-in completes mid-session.
+//                 to know whether the visitor is signed in. Subscribes
+//                 to BOTH Supabase auth events (sign-in/sign-out) and
+//                 cache writes (refreshUserTier, claimPlan upgrade) so
+//                 every UI piece reflects the latest tier without a
+//                 page reload.
 export function useAuthUser() {
   const [user, setUser] = useState(() => getStoredUser());
-  useEffect(() => onAuthStateChange((profile) => setUser(profile || null)), []);
+  useEffect(() => {
+    const unsubAuth = onAuthStateChange((profile) => setUser(profile || null));
+    cacheListeners.add(setUser);
+    return () => {
+      unsubAuth();
+      cacheListeners.delete(setUser);
+    };
+  }, []);
   return user;
 }
