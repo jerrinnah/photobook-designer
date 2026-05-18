@@ -5,6 +5,7 @@ import { exportCurrentSpread, exportToFolder, exportAsPDF } from '../utils/expor
 import { subscribeAutosaveStatus } from '../store/autosave';
 import { getStoredUser, trackEvent } from '../utils/supabase';
 import SignupModal from './SignupModal';
+import ProjectPicker from './ProjectPicker';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -57,6 +58,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [redesigned, setRedesigned] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState({ status: 'idle', meta: null });
   const [signup, setSignup] = useState(null); // { action: 'save'|'export', onComplete: fn } | null
+  const [showProjects, setShowProjects] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => subscribeAutosaveStatus((status, meta) =>
@@ -376,11 +378,11 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       <Divider />
 
-      {/* New project (clears autosave) */}
-      <button onClick={handleNew}
-        style={btnStyle({ color: '#888', border: '1px solid #2a2a2a' })}
-        title="Start a new blank project (clears autosaved work)">
-        + New
+      {/* My Projects — switch / create / duplicate / delete */}
+      <button onClick={() => setShowProjects(true)}
+        style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
+        title="Switch between projects · create new · duplicate · delete">
+        📁 Projects
       </button>
 
       {/* Save / Load project */}
@@ -436,6 +438,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onClose={() => setSignup(null)}
         onComplete={signup?.onComplete}
       />
+      <ProjectPicker open={showProjects} onClose={() => setShowProjects(false)} />
     </header>
   );
 }

@@ -7,6 +7,10 @@
 // to IndexedDB going forward.
 
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
+import {
+  getActiveProjectId, saveProject as saveProjectBlob,
+  upsertIndexEntry, migrateLegacyAutosave, loadProject as loadProjectBlob,
+} from './projects';
 
 const KEY = 'photobook-autosave-v2';
 const META_KEY = 'photobook-autosave-meta-v2';
@@ -46,7 +50,21 @@ const buildSnapshot = (state) => ({
 const writeIDB = async (state) => {
   const snap = buildSnapshot(state);
   try {
-    await idbSet(KEY, snap);
+    const activeId = getActiveProjectId();
+    if (activeId) {
+      // Multi-project mode: save to the per-project blob + update index
+      await saveProjectBlob(activeId, snap);
+      await upsertIndexEntry({
+        id: activeId,
+        name: snap.bookName || 'Untitled',
+        savedAt: snap.savedAt,
+        photoCount: (snap.photos || []).length,
+        spreadCount: (snap.spreads || []).length,
+      });
+    } else {
+      // Legacy single-project mode
+      await idbSet(KEY, snap);
+    }
     const bytes = estimateBytes(snap);
     const meta = { savedAt: snap.savedAt, bytes };
     await idbSet(META_KEY, meta);
@@ -116,30 +134,51 @@ export const loadAutosave = () => _cachedRestore;
 let _cachedRestore = null;
 
 // Called once on app startup before the store initializes. Loads from
-// IndexedDB (or migrates from legacy localStorage on first run).
+// IndexedDB. Performs the legacy-localStorage migration on first run and
+// the legacy-single-project → multi-project migration on first run.
 export async function preloadAutosave() {
   try {
+    // 1) Pull legacy localStorage data into IDB if present
     let data = await idbGet(KEY);
     if (!data) {
-      // First run after migration — pull from old localStorage if present
       const legacy = localStorage.getItem(LEGACY_KEY);
       if (legacy) {
         try {
           data = JSON.parse(legacy);
-          await idbSet(KEY, data);  // copy into IDB for next time
+          await idbSet(KEY, data);
           localStorage.removeItem(LEGACY_KEY);
           localStorage.removeItem(LEGACY_META);
-        } catch { /* corrupt legacy data — ignore */ }
+        } catch { /* corrupt legacy — ignore */ }
       }
     }
-    _cachedRestore = data || null;
-    if (data) {
+
+    // 2) Migrate single-project IDB into multi-project structure
+    await migrateLegacyAutosave();
+
+    // 3) Load whichever project is active (multi-project mode), or the
+    //    legacy single-project blob if the user hasn't picked one yet.
+    const activeId = getActiveProjectId();
+    if (activeId) {
+      _cachedRestore = await loadProjectBlob(activeId);
+    } else {
+      _cachedRestore = data || null;
+    }
+
+    if (_cachedRestore) {
       const meta = await idbGet(META_KEY);
       if (meta) lastMeta = meta;
     }
   } catch {
     _cachedRestore = null;
   }
+}
+
+// Switch the active project — call from the project picker. Causes a
+// full app reload so the store re-initializes with the new project's data.
+export async function switchToProject(projectId) {
+  const { setActiveProjectId } = await import('./projects');
+  setActiveProjectId(projectId);
+  window.location.reload();
 }
 
 export const clearAutosave = async () => {
