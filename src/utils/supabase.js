@@ -111,15 +111,34 @@ export async function syncProfileAfterAuth() {
 
 // Subscribes to Supabase auth events. Calls onChange(profile|null)
 // whenever the user signs in or out so React UI can react.
+//
+// Important: this listener is conservative about signing the user out.
+// It only emits `null` on an explicit SIGNED_OUT. Network blips, missing
+// sessions, or RPC failures fall back to the locally cached profile so
+// a refresh never randomly logs the user out.
 export function onAuthStateChange(callback) {
-  if (!isSupabaseConfigured) return () => {};
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-      const profile = await syncProfileAfterAuth();
-      callback(profile);
-    } else if (event === 'SIGNED_OUT') {
+  if (!isSupabaseConfigured) {
+    queueMicrotask(() => callback(getStoredUser()));
+    return () => {};
+  }
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT') {
       clearStoredUser();
       callback(null);
+      return;
+    }
+    // INITIAL_SESSION fires on every page load. If there is no Supabase
+    // session at all, surface whatever we have cached (handles legacy users
+    // who signed up before magic-link auth was enabled).
+    if (event === 'INITIAL_SESSION' && !session) {
+      callback(getStoredUser());
+      return;
+    }
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      const profile = await syncProfileAfterAuth();
+      // If sync failed (network, RPC blip), keep the cached profile —
+      // DO NOT pass null and accidentally sign the user out.
+      callback(profile || getStoredUser());
     }
   });
   return () => subscription?.unsubscribe();

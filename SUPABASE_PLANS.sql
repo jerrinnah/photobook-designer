@@ -7,11 +7,14 @@
 --
 -- Existing 'premium' users are migrated to 'pro' since they paid full price.
 
--- 1. Migrate existing 'premium' rows to 'pro' BEFORE changing the constraint
+-- 1. Drop the old constraint first — it only allows 'free' | 'premium',
+--    so we can't write 'pro' until it's gone.
+alter table public.users drop constraint if exists users_tier_check;
+
+-- 2. Migrate existing 'premium' rows to 'pro' (they paid full price)
 update public.users set tier = 'pro' where tier = 'premium';
 
--- 2. Update the tier check to allow free | starter | pro
-alter table public.users drop constraint if exists users_tier_check;
+-- 3. Add the new constraint allowing free | starter | pro
 alter table public.users add constraint users_tier_check
   check (tier in ('free', 'starter', 'pro'));
 
