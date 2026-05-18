@@ -7,9 +7,9 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
   const [paying, setPaying] = useState(false); // 'starter' | 'pro' | false
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const user = useAuthUser();
   if (!open) return null;
 
-  const user = useAuthUser();
   const canPay = isPaystackConfigured() && user?.email;
 
   const handlePay = async (plan) => {
