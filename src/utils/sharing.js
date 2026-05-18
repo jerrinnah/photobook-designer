@@ -11,7 +11,9 @@ import { getEffectiveTier } from './premium';
 const BUCKET = 'share-previews';
 const SHARE_PHOTO_MAX_DIM = 1000; // long-edge downscale for share previews
 const SHARE_QUALITY = 0.78;
-const UPLOAD_CONCURRENCY = 10;    // parallelism when pushing photos to Storage
+const UPLOAD_CONCURRENCY = 3;     // low to avoid OOM on 24MP photos in memory
+const DOWNSCALE_TIMEOUT_MS = 45_000; // give up on a single photo after 45s
+const UPLOAD_TIMEOUT_MS = 60_000;    // give up on a single upload after 60s
 
 // Detect WebP support once at module load — every modern browser we
 // ship to encodes WebP (Chrome 23+, Edge, Safari 14+, FF 65+), but
@@ -29,37 +31,76 @@ const SHARE_EXT  = _webpProbe ? 'webp' : 'jpg';
 // Resize a data URL down to SHARE_PHOTO_MAX_DIM on the longest edge.
 // Returns a Blob (which Supabase Storage uploads directly without
 // the overhead of re-encoding through fetch()).
+//
+// Wrapped in a timeout because some images (corrupt EXIF, unsupported
+// codecs) cause Image to fire neither onload nor onerror — without the
+// timeout the whole share hangs forever waiting on that one photo.
 function downscaleForShare(dataURL) {
   return new Promise((resolve) => {
+    if (!dataURL || typeof dataURL !== 'string') return resolve(null);
+    let settled = false;
+    const settle = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const timer = setTimeout(() => {
+      console.warn('[Share] downscale timed out, skipping photo');
+      settle(null);
+    }, DOWNSCALE_TIMEOUT_MS);
+
     const img = new window.Image();
     img.onload = () => {
-      const maxSide = Math.max(img.width, img.height);
-      const scale = maxSide > SHARE_PHOTO_MAX_DIM ? SHARE_PHOTO_MAX_DIM / maxSide : 1;
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob((blob) => resolve(blob), SHARE_MIME, SHARE_QUALITY);
+      try {
+        const maxSide = Math.max(img.width, img.height);
+        const scale = maxSide > SHARE_PHOTO_MAX_DIM ? SHARE_PHOTO_MAX_DIM / maxSide : 1;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => { clearTimeout(timer); settle(blob); },
+          SHARE_MIME,
+          SHARE_QUALITY,
+        );
+      } catch (err) {
+        clearTimeout(timer);
+        console.warn('[Share] canvas error:', err.message);
+        settle(null);
+      }
     };
-    img.onerror = () => resolve(null);
+    img.onerror = () => { clearTimeout(timer); settle(null); };
     img.src = dataURL;
+  });
+}
+
+// Promise wrapper with a timeout — if `promise` doesn't settle in
+// `ms` milliseconds, reject with an error so the share doesn't hang.
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
   });
 }
 
 // Upload one photo to the share-previews bucket, return its public URL.
 async function uploadOne(shareKey, photo, onProgress) {
+  console.info(`[Share] processing "${photo.name || photo.id}"…`);
   const blob = await downscaleForShare(photo.src);
-  if (!blob) throw new Error(`Couldn't process photo "${photo.name}"`);
+  if (!blob) throw new Error(`Couldn't process photo "${photo.name || photo.id}" (image decode failed)`);
   const path = `${shareKey}/${photo.id}.${SHARE_EXT}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
-    contentType: blob.type,
-    upsert: true,
-    cacheControl: '604800', // 7 days CDN cache
-  });
+  const { error } = await withTimeout(
+    supabase.storage.from(BUCKET).upload(path, blob, {
+      contentType: blob.type,
+      upsert: true,
+      cacheControl: '604800',
+    }),
+    UPLOAD_TIMEOUT_MS,
+    `Upload of "${photo.name || photo.id}"`,
+  );
   if (error) throw new Error(`Upload failed for "${photo.name}": ${error.message}`);
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
   onProgress?.(blob.size);
