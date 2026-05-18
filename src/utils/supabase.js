@@ -31,7 +31,7 @@ export const clearStoredUser = () => {
   localStorage.removeItem(USER_KEY);
 };
 
-// Sign up — upserts by email, returns { id, email, phone, tier }
+// Sign up — upserts by email, returns the full profile incl. brand
 export async function signUp({ email, phone }) {
   if (!isSupabaseConfigured) {
     throw new Error('Signup unavailable — Supabase keys not set.');
@@ -42,23 +42,51 @@ export async function signUp({ email, phone }) {
   });
   if (error) throw new Error(error.message);
   const user = Array.isArray(data) ? data[0] : data;
-  storeUser({ id: user.id, email: user.email, phone: user.phone, tier: user.tier || 'free' });
+  storeUser(profileToCache(user));
   return user;
 }
 
-// Refresh just the tier — call on app load so an admin upgrade takes
-// effect without requiring the user to sign out and back in.
+// Refresh the entire profile (tier + brand) — call on app load so admin
+// upgrades and any branding changes take effect without re-signin.
 export async function refreshUserTier() {
   const u = getStoredUser();
   if (!u?.id || !isSupabaseConfigured) return;
   try {
-    const { data, error } = await supabase.rpc('get_user_tier', { p_user_id: u.id });
+    const { data, error } = await supabase.rpc('get_user_profile', { p_user_id: u.id });
     if (error) return;
-    const tier = (typeof data === 'string' ? data : data?.[0]) || 'free';
-    if (tier !== u.tier) {
-      storeUser({ ...u, tier });
-    }
+    const fresh = Array.isArray(data) ? data[0] : data;
+    if (fresh) storeUser(profileToCache(fresh));
   } catch { /* network blip — ignore */ }
+}
+
+const profileToCache = (p) => ({
+  id: p.id,
+  email: p.email,
+  phone: p.phone,
+  tier: p.tier || 'free',
+  brand: {
+    name: p.brand_name || null,
+    color: p.brand_color || null,
+    logoUrl: p.brand_logo_url || null,
+    siteUrl: p.brand_site_url || null,
+  },
+});
+
+// Premium-only — saves brand on the user's row + refreshes local cache.
+export async function updateBrand({ name, color, logoUrl, siteUrl }) {
+  const u = getStoredUser();
+  if (!u?.id) throw new Error('Sign in first.');
+  if (u.tier !== 'premium') throw new Error('Premium required to customize branding.');
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  const { error } = await supabase.rpc('update_brand', {
+    p_user_id: u.id,
+    p_name: (name || '').trim() || null,
+    p_color: (color || '').trim() || null,
+    p_logo_url: (logoUrl || '').trim() || null,
+    p_site_url: (siteUrl || '').trim() || null,
+  });
+  if (error) throw new Error(error.message);
+  storeUser({ ...u, brand: { name, color, logoUrl, siteUrl } });
 }
 
 // Track usage event — 'app_use' or 'photobook_export'

@@ -29,6 +29,8 @@ export function isPremiumTemplate(tmpl) {
 export const PREMIUM_FEATURES = [
   { key: 'no-watermark',    name: 'Exports without watermark',
     detail: 'Free exports carry an "AutoBook by NEJ" diagonal watermark + corner badge' },
+  { key: 'branding',        name: 'White-label branding',
+    detail: 'Replace the AutoBook logo + PDF spec sheet with your own brand name, color, and logo' },
   { key: 'cover-premium',   name: 'Premium cover designs (4 of 6)',
     detail: 'Bold Letterspace, Side Editorial, Grand Script, Date Card' },
   { key: 'wedding-tpl',     name: 'Wedding-category templates',

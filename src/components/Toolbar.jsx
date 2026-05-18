@@ -6,6 +6,7 @@ import { subscribeAutosaveStatus } from '../store/autosave';
 import { getStoredUser, trackEvent } from '../utils/supabase';
 import SignupModal from './SignupModal';
 import ProjectPicker from './ProjectPicker';
+import BrandingSettings from './BrandingSettings';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -59,7 +60,11 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [autosaveStatus, setAutosaveStatus] = useState({ status: 'idle', meta: null });
   const [signup, setSignup] = useState(null); // { action: 'save'|'export', onComplete: fn } | null
   const [showProjects, setShowProjects] = useState(false);
+  const [showBrand, setShowBrand] = useState(false);
   const fileInputRef = useRef(null);
+
+  const user = getStoredUser();
+  const brand = user?.brand || {};
 
   useEffect(() => subscribeAutosaveStatus((status, meta) =>
     setAutosaveStatus({ status, meta })
@@ -180,11 +185,18 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       overflowX: 'auto',
       overflowY: 'hidden',
     }}>
-      {/* Studio logo */}
+      {/* Studio logo — overridden by user's brand logo if premium has set one */}
       <img
-        src="./logo.png"
-        alt="NEJ"
-        style={{ height: 30, width: 30, objectFit: 'contain', borderRadius: '50%', flexShrink: 0 }}
+        src={brand.logoUrl || './logo.png'}
+        alt={brand.name || 'NEJ'}
+        title={brand.name ? `${brand.name} — click to edit brand` : 'Brand settings (Premium)'}
+        onClick={() => setShowBrand(true)}
+        onError={(e) => { e.currentTarget.src = './logo.png'; }}
+        style={{
+          height: 30, width: 30, objectFit: 'contain', borderRadius: '50%',
+          flexShrink: 0, cursor: 'pointer',
+          background: '#181818',
+        }}
       />
 
       {/* Book name */}
@@ -439,6 +451,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onComplete={signup?.onComplete}
       />
       <ProjectPicker open={showProjects} onClose={() => setShowProjects(false)} />
+      <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
     </header>
   );
 }

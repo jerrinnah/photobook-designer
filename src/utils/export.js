@@ -14,6 +14,18 @@ function isFreeTier() {
   return !u || u.tier !== 'premium';
 }
 
+// Brand info — premium users may have customized. Falls back to AutoBook.
+function getBrand() {
+  const u = getStoredUser();
+  const b = u?.brand || {};
+  return {
+    name: b.name || 'AutoBook by NEJ',
+    siteUrl: b.siteUrl || 'autobookbynej.online',
+    color: b.color || null,
+    logoUrl: b.logoUrl || null,
+  };
+}
+
 // Draw a tiled "AutoBook by NEJ" watermark across the image, plus a small
 // solid badge in the bottom-right corner. Returns a new data URL.
 async function applyWatermark(dataURL) {
@@ -291,6 +303,7 @@ export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSp
     pxW, pxH,
     bleedInches: BLEED_INCHES,
     isFree: isFreeTier(),
+    brand: getBrand(),
   });
 
   // ── Each spread becomes one page WITH bleed extension ─────────────
@@ -325,7 +338,7 @@ function drawSpecSheet(pdf, info) {
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(11);
   pdf.setTextColor(80);
-  pdf.text('Print specification — AutoBook by NEJ', 40, 90);
+  pdf.text(`Print specification — ${info.brand?.name || 'AutoBook by NEJ'}`, 40, 90);
 
   const bleed = info.bleedInches || 0.125;
   const pageInchesW = info.inchesW + 2 * bleed;
@@ -362,7 +375,8 @@ function drawSpecSheet(pdf, info) {
 
   pdf.setFontSize(8);
   pdf.setTextColor(140);
-  pdf.text('autobookbynej.online', 40, pdf.internal.pageSize.getHeight() - 24);
+  const footer = info.brand?.siteUrl || 'autobookbynej.online';
+  pdf.text(footer, 40, pdf.internal.pageSize.getHeight() - 24);
 }
 
 // Crop marks at the TRIM line (inset by the bleed amount from each page edge).
