@@ -3,6 +3,7 @@
 // uploading the snapshot to Supabase.
 
 import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
+import { getEffectiveTier } from './premium';
 
 const SHARE_PHOTO_MAX_DIM = 1400; // downscale aggressively for share previews
 const SHARE_JPEG_QUALITY = 0.85;
@@ -64,7 +65,7 @@ async function buildShareSnapshot(state) {
 export async function createShare(state) {
   const user = getStoredUser();
   if (!user?.id) throw new Error('Sign in first.');
-  if (user.tier !== 'premium') throw new Error('Premium required to share for review.');
+  if (getEffectiveTier(user) === 'free') throw new Error('Premium or active trial required to share for review.');
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
 
   const { snapshot, bytes } = await buildShareSnapshot(state);

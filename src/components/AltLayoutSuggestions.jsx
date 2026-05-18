@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { TEMPLATES } from '../layouts/templates';
-import { isPremiumTemplate } from '../utils/premium';
+import { isPremiumTemplate, getEffectiveTier } from '../utils/premium';
 import { getStoredUser } from '../utils/supabase';
 import UpgradeModal from './UpgradeModal';
 
@@ -16,7 +16,7 @@ export default function AltLayoutSuggestions() {
   const spread = spreads.find((s) => s.id === activeSpreadId);
   const activeIdx = spreads.findIndex((s) => s.id === activeSpreadId);
   const [upgradeFor, setUpgradeFor] = useState(null);
-  const isPremium = getStoredUser()?.tier === 'premium';
+  const effectiveTier = getEffectiveTier(getStoredUser());
 
   // Pick 2–3 alternative templates with similar cell counts (±1) so the
   // current photos still fit naturally.
@@ -55,7 +55,7 @@ export default function AltLayoutSuggestions() {
         Try
       </span>
       {alternatives.map((tmpl) => {
-        const locked = isPremiumTemplate(tmpl) && !isPremium;
+        const locked = isPremiumTemplate(tmpl, effectiveTier);
         return (
           <AltThumb key={tmpl.id} tmpl={tmpl} spread={spread} photos={photos} locked={locked}
             onClick={() => {

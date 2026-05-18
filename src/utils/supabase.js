@@ -153,6 +153,8 @@ const profileToCache = (p) => ({
   email: p.email,
   phone: p.phone,
   tier: p.tier || 'free',
+  photobookCount: p.photobook_count ?? 0,
+  createdAt: p.created_at || null,
   brand: {
     name: p.brand_name || null,
     color: p.brand_color || null,
@@ -161,11 +163,13 @@ const profileToCache = (p) => ({
   },
 });
 
-// Premium-only — saves brand on the user's row + refreshes local cache.
+// Premium / trial only — saves brand on the user's row + refreshes local cache.
 export async function updateBrand({ name, color, logoUrl, siteUrl }) {
   const u = getStoredUser();
   if (!u?.id) throw new Error('Sign in first.');
-  if (u.tier !== 'premium') throw new Error('Premium required to customize branding.');
+  // Lazy import to avoid a circular dep
+  const { getEffectiveTier } = await import('./premium');
+  if (getEffectiveTier(u) === 'free') throw new Error('Premium or active trial required to customize branding.');
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
   const { error } = await supabase.rpc('update_brand', {
     p_user_id: u.id,

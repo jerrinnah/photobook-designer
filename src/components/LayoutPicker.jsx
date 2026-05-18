@@ -5,7 +5,7 @@ import DesignSuggestions from './DesignSuggestions';
 import SpreadBackground from './SpreadBackground';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
-import { isPremiumTemplate } from '../utils/premium';
+import { isPremiumTemplate, getEffectiveTier } from '../utils/premium';
 import { getStoredUser } from '../utils/supabase';
 import UpgradeModal from './UpgradeModal';
 
@@ -58,10 +58,10 @@ export default function LayoutPicker({ mobile = false }) {
   const [collapsed, setCollapsed] = useLocalStorage('layoutpicker-collapsed', false);
   const [upgradeFor, setUpgradeFor] = useState(null);
   const user = getStoredUser();
-  const isPremium = user?.tier === 'premium';
+  const effectiveTier = getEffectiveTier(user);
 
   const handleTemplateClick = (tmpl) => {
-    if (isPremiumTemplate(tmpl) && !isPremium) {
+    if (isPremiumTemplate(tmpl, effectiveTier)) {
       setUpgradeFor(`"${tmpl.name}" template`);
       return;
     }
@@ -161,7 +161,7 @@ export default function LayoutPicker({ mobile = false }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
               {groups[label].map((tmpl) => (
                 <div key={tmpl.id} onClick={() => handleTemplateClick(tmpl)}>
-                  <TemplateSVG tmpl={tmpl} active={spread?.templateId === tmpl.id} locked={isPremiumTemplate(tmpl) && !isPremium} />
+                  <TemplateSVG tmpl={tmpl} active={spread?.templateId === tmpl.id} locked={isPremiumTemplate(tmpl, effectiveTier)} />
                   <div style={{ fontSize: 9, color: '#444', marginTop: 3, textAlign: 'center', lineHeight: 1.2 }}>
                     {tmpl.name}
                   </div>

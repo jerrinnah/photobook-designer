@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getStoredUser, updateBrand } from '../utils/supabase';
+import { getEffectiveTier } from '../utils/premium';
 
 export default function BrandingSettings({ open, onClose }) {
   const [name, setName] = useState('');
@@ -11,7 +12,7 @@ export default function BrandingSettings({ open, onClose }) {
   const [saved, setSaved] = useState(false);
 
   const user = getStoredUser();
-  const isPremium = user?.tier === 'premium';
+  const isPremium = getEffectiveTier(user) !== 'free';
 
   useEffect(() => {
     if (!open) return;

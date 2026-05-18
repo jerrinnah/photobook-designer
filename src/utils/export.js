@@ -2,16 +2,17 @@ import { jsPDF } from 'jspdf';
 import { getScreenDims, getExportPixelRatio, getEffectiveExportSize } from '../layouts/spreadSizes';
 import { useBookStore } from '../store/useBookStore';
 import { getStoredUser } from './supabase';
+import { getEffectiveTier } from './premium';
 
 function slug(name) {
   return name.replace(/[^a-z0-9]/gi, '-').toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, '') || 'photobook';
 }
 
-// Returns true if the signed-in user is NOT premium (or not signed in).
-// Used to decide whether to stamp a watermark on exports.
+// Returns true if the user is in the free (post-trial) state — used to
+// decide whether to stamp a watermark on exports. Trial users get clean
+// exports too, since the whole point of trial is to demo full Premium.
 function isFreeTier() {
-  const u = getStoredUser();
-  return !u || u.tier !== 'premium';
+  return getEffectiveTier(getStoredUser()) === 'free';
 }
 
 // Brand info — premium users may have customized. Falls back to AutoBook.
