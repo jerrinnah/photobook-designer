@@ -7,6 +7,7 @@ import { getStoredUser, trackEvent } from '../utils/supabase';
 import SignupModal from './SignupModal';
 import ProjectPicker from './ProjectPicker';
 import BrandingSettings from './BrandingSettings';
+import ShareModal from './ShareModal';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -61,6 +62,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [signup, setSignup] = useState(null); // { action: 'save'|'export', onComplete: fn } | null
   const [showProjects, setShowProjects] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const fileInputRef = useRef(null);
 
   const user = getStoredUser();
@@ -388,6 +390,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         ⬡ Print
       </button>
 
+      <button onClick={() => setShowShare(true)}
+        style={btnStyle({ color: '#9fb88b', border: '1px solid #2a3a20', background: '#0e1408' })}
+        title="Share a read-only preview link with your client (Premium)">
+        ✦ Share
+      </button>
+
       <Divider />
 
       {/* My Projects — switch / create / duplicate / delete */}
@@ -452,6 +460,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
       <ProjectPicker open={showProjects} onClose={() => setShowProjects(false)} />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
+      <ShareModal open={showShare} onClose={() => setShowShare(false)} />
     </header>
   );
 }

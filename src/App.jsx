@@ -9,6 +9,7 @@ import PrintPreview from './components/PrintPreview';
 import MobileShell from './components/MobileShell';
 import RotateOverlay from './components/RotateOverlay';
 import AdminDashboard from './components/AdminDashboard';
+import ClientProofingView from './components/ClientProofingView';
 import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
@@ -17,9 +18,14 @@ export default function App() {
   const [printPreviewing, setPrintPreviewing] = useState(false);
   const { isMobile, isPortrait } = useViewport();
 
-  // Admin dashboard — accessible only via ?admin=1 in the URL
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('admin')) {
-    return <AdminDashboard />;
+  // Routes (URL-based)
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    // Client proofing portal — anyone with the share token gets a read-only viewer
+    const shareToken = params.get('share');
+    if (shareToken) return <ClientProofingView token={shareToken} />;
+    // Admin dashboard
+    if (params.has('admin')) return <AdminDashboard />;
   }
 
   if (isMobile) {
