@@ -1,13 +1,26 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
-import { useBookStore } from './store/useBookStore'
-import { startAutosave } from './store/autosave'
+import { preloadAutosave, startAutosave } from './store/autosave'
 import { trackAppUseOncePerSession, refreshUserTier } from './utils/supabase'
 
-startAutosave(useBookStore)
-trackAppUseOncePerSession()
-refreshUserTier()
+async function boot() {
+  // Hydrate the IndexedDB cache before importing the store so its
+  // initial-state factory can read it synchronously.
+  await preloadAutosave();
+  const { useBookStore } = await import('./store/useBookStore');
+
+  startAutosave(useBookStore);
+  trackAppUseOncePerSession();
+  refreshUserTier();
+
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+boot();
 
 // Prevent accidental refresh / tab close from losing work.
 // Browsers show a generic "Changes you made may not be saved" dialog.

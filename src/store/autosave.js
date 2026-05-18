@@ -1,29 +1,38 @@
-// Autosave to localStorage with debounce. Survives tab refresh / accidental close.
-// Photos are stored as base64 in state, so we guard for QuotaExceededError and
-// fall back to saving the spread structure only when the full project is too large.
+// Autosave to IndexedDB with debounce. Survives tab refresh / accidental close.
+// IndexedDB has a quota of ~50% of available disk space (vs localStorage's 5 MB)
+// so the entire project — spreads + photos including originalSrc — fits.
+//
+// To migrate users seamlessly from the old localStorage-based autosave,
+// loadAutosave() falls back to localStorage on first run, then writes
+// to IndexedDB going forward.
 
-const KEY = 'photobook-autosave-v1';
-const META_KEY = 'photobook-autosave-meta-v1';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
+
+const KEY = 'photobook-autosave-v2';
+const META_KEY = 'photobook-autosave-meta-v2';
+const LEGACY_KEY = 'photobook-autosave-v1';
+const LEGACY_META = 'photobook-autosave-meta-v1';
 const DEBOUNCE_MS = 1500;
-const MAX_BYTES = 4_500_000; // ~4.5 MB — most browsers cap localStorage at 5–10 MB
 
 let timer = null;
-let lastStatus = 'idle'; // 'idle' | 'saving' | 'saved' | 'error' | 'too-large'
+let lastStatus = 'idle'; // 'idle' | 'saving' | 'saved' | 'error'
 let listeners = new Set();
+let lastMeta = null;
 
 const notify = (status, extra) => {
   lastStatus = status;
-  for (const l of listeners) l(status, extra);
+  if (extra) lastMeta = extra;
+  for (const l of listeners) l(status, extra || lastMeta);
 };
 
 export const subscribeAutosaveStatus = (fn) => {
   listeners.add(fn);
-  fn(lastStatus, null);
+  fn(lastStatus, lastMeta);
   return () => listeners.delete(fn);
 };
 
-const serialize = (state) => JSON.stringify({
-  v: 1,
+const buildSnapshot = (state) => ({
+  v: 2,
   savedAt: Date.now(),
   bookName: state.bookName,
   spreadSizeId: state.spreadSizeId,
@@ -34,33 +43,30 @@ const serialize = (state) => JSON.stringify({
   photos: state.photos,
 });
 
-const writeOrFallback = (state) => {
-  const full = serialize(state);
+const writeIDB = async (state) => {
+  const snap = buildSnapshot(state);
   try {
-    if (full.length > MAX_BYTES) throw new Error('too-large');
-    localStorage.setItem(KEY, full);
-    localStorage.setItem(META_KEY, JSON.stringify({ savedAt: Date.now(), bytes: full.length, partial: false }));
-    notify('saved', { savedAt: Date.now(), bytes: full.length, partial: false });
-  } catch {
-    // Quota exceeded or too big — save structure only (no photo base64)
-    try {
-      const partial = JSON.stringify({
-        v: 1,
-        savedAt: Date.now(),
-        bookName: state.bookName,
-        spreadSizeId: state.spreadSizeId,
-        customSize: state.customSize,
-        gap: state.gap,
-        blendEdges: state.blendEdges,
-        spreads: state.spreads,
-        photos: [], // dropped — too large
-      });
-      localStorage.setItem(KEY, partial);
-      localStorage.setItem(META_KEY, JSON.stringify({ savedAt: Date.now(), bytes: partial.length, partial: true }));
-      notify('too-large', { savedAt: Date.now(), bytes: partial.length, partial: true });
-    } catch (e2) {
-      notify('error', { message: e2?.message || 'autosave failed' });
+    await idbSet(KEY, snap);
+    const bytes = estimateBytes(snap);
+    const meta = { savedAt: snap.savedAt, bytes };
+    await idbSet(META_KEY, meta);
+    notify('saved', meta);
+  } catch (e) {
+    notify('error', { message: e?.message || 'autosave failed' });
+  }
+};
+
+// Rough byte estimate without serializing twice (IDB stores native objects,
+// but base64 photo strings still dominate so length × 2 is a fine heuristic).
+const estimateBytes = (obj) => {
+  try {
+    let n = 0;
+    for (const p of obj.photos || []) {
+      n += (p.src?.length || 0) + (p.originalSrc?.length || 0);
     }
+    return n;
+  } catch {
+    return 0;
   }
 };
 
@@ -69,7 +75,7 @@ export const startAutosave = (store) => {
     if (timer) clearTimeout(timer);
     notify('saving');
     timer = setTimeout(() => {
-      writeOrFallback(store.getState());
+      writeIDB(store.getState());
       timer = null;
     }, DEBOUNCE_MS);
   };
@@ -87,11 +93,11 @@ export const startAutosave = (store) => {
     ) trigger();
   });
 
-  // Flush on tab close
+  // Flush on tab close — best-effort, browsers may not wait on async writes.
   const flush = () => {
     if (timer) {
       clearTimeout(timer);
-      writeOrFallback(store.getState());
+      writeIDB(store.getState());
     }
   };
   window.addEventListener('beforeunload', flush);
@@ -102,27 +108,48 @@ export const startAutosave = (store) => {
   };
 };
 
-export const loadAutosave = () => {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
+// ── Loading ─────────────────────────────────────────────────────────
+// SYNCHRONOUS — called from useBookStore's initial state factory before
+// the IndexedDB read can complete. Returns whatever was last cached in
+// memory or null. The async restore (below) hydrates the store on mount.
+export const loadAutosave = () => _cachedRestore;
+let _cachedRestore = null;
 
-export const clearAutosave = () => {
-  localStorage.removeItem(KEY);
-  localStorage.removeItem(META_KEY);
+// Called once on app startup before the store initializes. Loads from
+// IndexedDB (or migrates from legacy localStorage on first run).
+export async function preloadAutosave() {
+  try {
+    let data = await idbGet(KEY);
+    if (!data) {
+      // First run after migration — pull from old localStorage if present
+      const legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy) {
+        try {
+          data = JSON.parse(legacy);
+          await idbSet(KEY, data);  // copy into IDB for next time
+          localStorage.removeItem(LEGACY_KEY);
+          localStorage.removeItem(LEGACY_META);
+        } catch { /* corrupt legacy data — ignore */ }
+      }
+    }
+    _cachedRestore = data || null;
+    if (data) {
+      const meta = await idbGet(META_KEY);
+      if (meta) lastMeta = meta;
+    }
+  } catch {
+    _cachedRestore = null;
+  }
+}
+
+export const clearAutosave = async () => {
+  try {
+    await idbDel(KEY);
+    await idbDel(META_KEY);
+  } catch { /* ignore */ }
+  _cachedRestore = null;
+  lastMeta = null;
   notify('idle');
 };
 
-export const getAutosaveMeta = () => {
-  try {
-    const raw = localStorage.getItem(META_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
+export const getAutosaveMeta = () => lastMeta;
