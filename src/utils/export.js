@@ -1,4 +1,5 @@
-import { getScreenDims, getExportPixelRatio } from '../layouts/spreadSizes';
+import { jsPDF } from 'jspdf';
+import { getScreenDims, getExportPixelRatio, getEffectiveExportSize } from '../layouts/spreadSizes';
 import { useBookStore } from '../store/useBookStore';
 import { getStoredUser } from './supabase';
 
@@ -208,50 +209,117 @@ export async function exportCurrentSpread(stageRef, spreadId, spreadSizeId, cust
   });
 }
 
-// Export all spreads as a print-ready PDF via the browser print dialog
+// Real print-ready PDF using jsPDF.
+// Each spread becomes a single page sized to the exact export dimensions
+// at 72 DPI (PDF point unit). Optional crop marks help the printer trim.
+// First page is a spec sheet with project metadata.
 export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName) {
   const frames = await withOriginalPhotos(() =>
     captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize)
   );
+  if (frames.length === 0) return;
 
-  const win = window.open('', '_blank');
-  if (!win) {
-    alert('Pop-up blocked. Please allow pop-ups for this app to use PDF export.');
-    return;
+  // Compute physical page size from the export-resolution pixels at 300 DPI.
+  // PDF unit is 1pt = 1/72 inch, so multiply inches by 72 to get pt.
+  const { exportW: pxW, exportH: pxH } = getEffectiveExportSize(spreadSizeId, customSize);
+  const inchesW = pxW / 300;
+  const inchesH = pxH / 300;
+  const ptW = inchesW * 72;
+  const ptH = inchesH * 72;
+
+  const pdf = new jsPDF({
+    orientation: ptW >= ptH ? 'landscape' : 'portrait',
+    unit: 'pt',
+    format: [ptW, ptH],
+    compress: true,
+  });
+
+  // ── Spec sheet first ──────────────────────────────────────────────
+  drawSpecSheet(pdf, {
+    bookName,
+    pageCount: frames.length,
+    inchesW, inchesH,
+    pxW, pxH,
+    isFree: isFreeTier(),
+  });
+
+  // ── Each spread becomes one page ──────────────────────────────────
+  for (let i = 0; i < frames.length; i++) {
+    pdf.addPage([ptW, ptH], ptW >= ptH ? 'landscape' : 'portrait');
+    pdf.addImage(frames[i].dataURL, 'JPEG', 0, 0, ptW, ptH, undefined, 'FAST');
+    drawCropMarks(pdf, ptW, ptH);
+    // Page number on the back of crop marks
+    pdf.setFontSize(8);
+    pdf.setTextColor(120);
+    pdf.text(`${i + 1} / ${frames.length}`, ptW / 2, ptH - 6, { align: 'center' });
   }
 
-  const pages = frames.map(({ idx, dataURL, role }) => `
-    <div class="page">
-      <img src="${dataURL}" alt="Spread ${idx}">
-      ${role ? `<div class="badge">${role.toUpperCase()}</div>` : ''}
-    </div>
-  `).join('');
+  pdf.save(`${slug(bookName)}-print-ready.pdf`);
+}
 
-  win.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${bookName} — Print</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    @page { margin: 0; }
-    .page {
-      position: relative; width: 100vw; height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      background: #000; page-break-after: always; break-after: page;
-    }
-    .page img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .badge {
-      position: absolute; top: 12px; left: 12px;
-      font-family: sans-serif; font-size: 10px; font-weight: bold;
-      letter-spacing: 1.5px; color: #f6c90e;
-    }
-  </style>
-</head>
-<body>${pages}</body>
-</html>`);
-  win.document.close();
-  setTimeout(() => win.print(), 600);
+// Draws a metadata cover page with project specs — useful for the printer.
+function drawSpecSheet(pdf, info) {
+  pdf.setFillColor(245, 242, 236);
+  pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(28);
+  pdf.setTextColor(40);
+  pdf.text(info.bookName || 'Photobook', 40, 70);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(11);
+  pdf.setTextColor(80);
+  pdf.text('Print specification — AutoBook by NEJ', 40, 90);
+
+  const lines = [
+    ['Spreads', `${info.pageCount}`],
+    ['Spread size', `${info.inchesW.toFixed(2)}" × ${info.inchesH.toFixed(2)}"`],
+    ['Pixel resolution', `${info.pxW} × ${info.pxH} px @ 300 DPI`],
+    ['Page size in PDF', `${(info.inchesW * 72).toFixed(0)} × ${(info.inchesH * 72).toFixed(0)} pt`],
+    ['Color space', 'RGB (convert to CMYK at press for offset)'],
+    ['Recommended bleed', '0.125" (3 mm) — add at press'],
+    ['Safe zone', '0.25" (6 mm) inside trim'],
+    ['Generated', new Date().toLocaleString()],
+  ];
+
+  pdf.setFontSize(10);
+  let y = 130;
+  for (const [label, value] of lines) {
+    pdf.setTextColor(120);
+    pdf.text(label, 40, y);
+    pdf.setTextColor(40);
+    pdf.text(value, 180, y);
+    y += 18;
+  }
+
+  if (info.isFree) {
+    y += 16;
+    pdf.setFontSize(9);
+    pdf.setTextColor(200, 100, 50);
+    pdf.text('Free tier: spread pages carry an AutoBook by NEJ watermark.', 40, y);
+    pdf.text('Upgrade to Premium at autobookbynej.online to remove.', 40, y + 14);
+  }
+
+  pdf.setFontSize(8);
+  pdf.setTextColor(140);
+  pdf.text('autobookbynej.online', 40, pdf.internal.pageSize.getHeight() - 24);
+}
+
+// Crop marks at each corner — 12pt long, 8pt offset from page edge.
+function drawCropMarks(pdf, ptW, ptH) {
+  pdf.setDrawColor(0);
+  pdf.setLineWidth(0.5);
+  const L = 12;   // mark length
+  const G = 8;    // gap from page edge
+  // top-left
+  pdf.line(0, G, L, G);          pdf.line(G, 0, G, L);
+  // top-right
+  pdf.line(ptW - L, G, ptW, G);  pdf.line(ptW - G, 0, ptW - G, L);
+  // bottom-left
+  pdf.line(0, ptH - G, L, ptH - G);                  pdf.line(G, ptH - L, G, ptH);
+  // bottom-right
+  pdf.line(ptW - L, ptH - G, ptW, ptH - G);          pdf.line(ptW - G, ptH - L, ptW - G, ptH);
 }
 
 // Kept for any legacy callers
