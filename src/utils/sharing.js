@@ -1,23 +1,27 @@
 // Client proofing / share-for-review utilities.
 //
-// Photos are uploaded to the public `share-previews` Supabase Storage
-// bucket; the DB row only carries the URLs. This means a share works
-// for projects of any size — the snapshot stays a few KB regardless of
-// how many photos.
+// Each spread is rendered to a WebP screenshot (reusing the existing
+// Konva stage that the editor already uses for PDF / JPG export), then
+// uploaded to the public `share-previews` Supabase Storage bucket.
+//
+// Compared to the old "send every photo" approach this is ~10× smaller
+// because:
+//   - One image per spread instead of one per source photo (a 20-spread
+//     wedding book might pull from 184 source photos)
+//   - Screen-size WebP instead of high-res JPEG
+//   - The viewer just renders <img src={spread.imageUrl}> — no template
+//     reconstruction, no per-cell math, no font / gradient state.
 
 import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 import { getEffectiveTier } from './premium';
 
 const BUCKET = 'share-previews';
-const SHARE_PHOTO_MAX_DIM = 1000; // long-edge downscale for share previews
+const PIXEL_RATIO = 1.5;          // good for retina screen viewing
 const SHARE_QUALITY = 0.78;
-const UPLOAD_CONCURRENCY = 3;     // low to avoid OOM on 24MP photos in memory
-const DOWNSCALE_TIMEOUT_MS = 45_000; // give up on a single photo after 45s
-const UPLOAD_TIMEOUT_MS = 60_000;    // give up on a single upload after 60s
+const UPLOAD_CONCURRENCY = 4;
+const UPLOAD_TIMEOUT_MS = 60_000;
+const CAPTURE_SETTLE_MS = 220;    // time for Konva stage to repaint after spread switch
 
-// Detect WebP support once at module load — every modern browser we
-// ship to encodes WebP (Chrome 23+, Edge, Safari 14+, FF 65+), but
-// fall back to JPEG just in case.
 const _webpProbe = (() => {
   try {
     const c = document.createElement('canvas');
@@ -28,54 +32,78 @@ const _webpProbe = (() => {
 const SHARE_MIME = _webpProbe ? 'image/webp' : 'image/jpeg';
 const SHARE_EXT  = _webpProbe ? 'webp' : 'jpg';
 
-// Resize a data URL down to SHARE_PHOTO_MAX_DIM on the longest edge.
-// Returns a Blob (which Supabase Storage uploads directly without
-// the overhead of re-encoding through fetch()).
-//
-// Wrapped in a timeout because some images (corrupt EXIF, unsupported
-// codecs) cause Image to fire neither onload nor onerror — without the
-// timeout the whole share hangs forever waiting on that one photo.
-function downscaleForShare(dataURL) {
-  return new Promise((resolve) => {
-    if (!dataURL || typeof dataURL !== 'string') return resolve(null);
-    let settled = false;
-    const settle = (v) => { if (!settled) { settled = true; resolve(v); } };
-    const timer = setTimeout(() => {
-      console.warn('[Share] downscale timed out, skipping photo');
-      settle(null);
-    }, DOWNSCALE_TIMEOUT_MS);
+// ── Capture: render every spread to a WebP Blob ─────────────────────
+// stageRef.current is the Konva Stage. We flip activeSpreadId one
+// at a time, wait for the editor to repaint, then snapshot.
+async function captureSpreadsForShare({
+  stageRef, spreads, setActiveSpread, originalActiveId, onProgress,
+}) {
+  if (!stageRef?.current) throw new Error('Editor stage not ready — close the share dialog and try again.');
+  const captured = [];
+  for (let i = 0; i < spreads.length; i++) {
+    const sp = spreads[i];
+    setActiveSpread(sp.id);
+    await new Promise((r) => setTimeout(r, CAPTURE_SETTLE_MS));
 
-    const img = new window.Image();
-    img.onload = () => {
-      try {
-        const maxSide = Math.max(img.width, img.height);
-        const scale = maxSide > SHARE_PHOTO_MAX_DIM ? SHARE_PHOTO_MAX_DIM / maxSide : 1;
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(
-          (blob) => { clearTimeout(timer); settle(blob); },
-          SHARE_MIME,
-          SHARE_QUALITY,
-        );
-      } catch (err) {
-        clearTimeout(timer);
-        console.warn('[Share] canvas error:', err.message);
-        settle(null);
-      }
-    };
-    img.onerror = () => { clearTimeout(timer); settle(null); };
-    img.src = dataURL;
-  });
+    const stage = stageRef.current;
+    if (!stage) throw new Error('Editor stage disappeared mid-capture.');
+    const w = stage.width();
+    const h = stage.height();
+    const canvas = stage.toCanvas({ pixelRatio: PIXEL_RATIO });
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob((b) => resolve(b), SHARE_MIME, SHARE_QUALITY);
+    });
+    if (!blob) throw new Error(`Couldn't capture spread ${i + 1}`);
+    captured.push({ id: sp.id, role: sp.role, w, h, blob });
+    onProgress?.({ stage: 'capture', done: i + 1, total: spreads.length });
+  }
+  setActiveSpread(originalActiveId);
+  return captured;
+}
+
+// ── Upload: push one captured spread blob ───────────────────────────
+async function uploadOneSpread(shareKey, spreadIdx, captured, onProgress) {
+  const path = `${shareKey}/spread-${spreadIdx + 1}.${SHARE_EXT}`;
+  const { error } = await withTimeout(
+    supabase.storage.from(BUCKET).upload(path, captured.blob, {
+      contentType: captured.blob.type,
+      upsert: true,
+      cacheControl: '604800',
+    }),
+    UPLOAD_TIMEOUT_MS,
+    `Upload of spread ${spreadIdx + 1}`,
+  );
+  if (error) throw new Error(`Upload failed for spread ${spreadIdx + 1}: ${error.message}`);
+  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  onProgress?.(captured.blob.size);
+  return {
+    id: captured.id,
+    role: captured.role,
+    w: captured.w,
+    h: captured.h,
+    imageUrl: publicUrl,
+  };
+}
+
+async function uploadSpreadsInBatches(shareKey, capturedAll, onProgress) {
+  const results = new Array(capturedAll.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < capturedAll.length) {
+      const i = cursor++;
+      results[i] = await uploadOneSpread(shareKey, i, capturedAll[i], onProgress);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, capturedAll.length) }, worker));
+  return results;
+}
+
+function newShareKey() {
+  return (window.crypto?.randomUUID?.() || `s_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 }
 
 // Promise wrapper with a timeout — if `promise` doesn't settle in
-// `ms` milliseconds, reject with an error so the share doesn't hang.
+// `ms` milliseconds, reject so the share doesn't hang forever.
 function withTimeout(promise, ms, label) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
@@ -86,96 +114,55 @@ function withTimeout(promise, ms, label) {
   });
 }
 
-// Upload one photo to the share-previews bucket, return its public URL.
-async function uploadOne(shareKey, photo, onProgress) {
-  console.info(`[Share] processing "${photo.name || photo.id}"…`);
-  const blob = await downscaleForShare(photo.src);
-  if (!blob) throw new Error(`Couldn't process photo "${photo.name || photo.id}" (image decode failed)`);
-  const path = `${shareKey}/${photo.id}.${SHARE_EXT}`;
-  const { error } = await withTimeout(
-    supabase.storage.from(BUCKET).upload(path, blob, {
-      contentType: blob.type,
-      upsert: true,
-      cacheControl: '604800',
-    }),
-    UPLOAD_TIMEOUT_MS,
-    `Upload of "${photo.name || photo.id}"`,
-  );
-  if (error) throw new Error(`Upload failed for "${photo.name}": ${error.message}`);
-  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  onProgress?.(blob.size);
-  return { id: photo.id, name: photo.name, width: photo.width, height: photo.height, src: publicUrl };
-}
-
-// Upload photos in small parallel batches.
-async function uploadPhotosInBatches(shareKey, photos, onProgress) {
-  const results = new Array(photos.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < photos.length) {
-      const i = cursor++;
-      results[i] = await uploadOne(shareKey, photos[i], onProgress);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, photos.length) }, worker));
-  return results;
-}
-
-// Generate an unguessable folder name for this share's photos.
-// crypto.randomUUID is available in every browser we ship to.
-function newShareKey() {
-  return (window.crypto?.randomUUID?.() || `s_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-}
-
-export async function createShare(state, onProgress) {
+// ── Main entry: createShare ─────────────────────────────────────────
+// state: the relevant slice of useBookStore state (bookName, etc).
+// stage: { stageRef, setActiveSpread, originalActiveId } — capture deps.
+// onProgress: ({stage:'capture'|'upload', done, total, bytes}) => void
+export async function createShare(state, stage, onProgress) {
   const user = getStoredUser();
   if (!user?.id) throw new Error('Sign in first.');
   if (getEffectiveTier(user) === 'free') throw new Error('Paid plan or active trial required to share for review.');
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
 
-  // Only upload photos actually placed on a spread — unused library
-  // photos would never render in the share viewer.
-  const placedIds = new Set(
-    (state.spreads || []).flatMap((sp) => (sp.cells || []).map((c) => c.photoId).filter(Boolean))
-  );
-  const photos = (state.photos || []).filter((p) => placedIds.has(p.id));
-  if (photos.length === 0) {
-    throw new Error('No photos placed on any spread yet — add some photos before sharing.');
-  }
+  const spreads = state.spreads || [];
+  if (spreads.length === 0) throw new Error('Nothing to share — add a spread first.');
 
   const shareKey = newShareKey();
 
-  // 1) Upload every photo to Storage and collect the URLs.
-  let done = 0;
-  let bytes = 0;
-  const total = photos.length;
-  const uploadedPhotos = await uploadPhotosInBatches(shareKey, photos, (size) => {
-    done++;
-    bytes += size || 0;
-    onProgress?.({ done, total, bytes });
+  // 1. Render every spread to a Blob in the editor stage.
+  const captured = await captureSpreadsForShare({
+    stageRef: stage.stageRef,
+    spreads,
+    setActiveSpread: stage.setActiveSpread,
+    originalActiveId: stage.originalActiveId,
+    onProgress,
   });
 
-  // 2) Build a lightweight snapshot — URLs, not base64.
+  // 2. Push the blobs to Storage in parallel.
+  let bytes = 0;
+  let done = 0;
+  const uploaded = await uploadSpreadsInBatches(shareKey, captured, (size) => {
+    done++;
+    bytes += size || 0;
+    onProgress?.({ stage: 'upload', done, total: captured.length, bytes });
+  });
+
+  // 3. Build the lightweight snapshot. No photos, no template state —
+  //    the viewer only needs the spread images and book-level meta.
   const snapshot = {
     bookName: state.bookName,
     spreadSizeId: state.spreadSizeId,
     customSize: state.customSize,
-    gap: state.gap,
-    blendEdges: state.blendEdges,
-    spreads: state.spreads,
-    photos: uploadedPhotos,
+    spreads: uploaded,
   };
 
-  // 3) Create the DB row referencing this shareKey folder.
-  // RPC uses auth.uid() to find the public.users row (so it works even
-  // when the cached profile carries the session-fallback UUID).
+  // 4. Insert the row.
   const { data, error } = await supabase.rpc('create_share', {
     p_project_name: state.bookName || 'Untitled',
     p_share_key: shareKey,
     p_snapshot: snapshot,
   });
   if (error) {
-    // RPC failed — try to clean up the orphan bucket folder so we don't leak Storage
     try { await purgeShareFolder(shareKey); } catch { /* ignore */ }
     throw new Error(error.message);
   }

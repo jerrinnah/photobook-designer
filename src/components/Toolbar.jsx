@@ -515,7 +515,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onLoadBackup={loadProject}
       />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
-      <ShareModal open={showShare} onClose={() => setShowShare(false)} />
+      <ShareModal open={showShare} onClose={() => setShowShare(false)} stageRef={stageRef} />
     </header>
   );
 }

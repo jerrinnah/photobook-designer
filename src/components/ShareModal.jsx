@@ -11,8 +11,9 @@ const STATUS_STYLES = {
   changes_requested:  { color: '#e05c5c',  label: 'Changes requested' },
 };
 
-export default function ShareModal({ open, onClose }) {
+export default function ShareModal({ open, onClose, stageRef }) {
   const state = useBookStore();
+  const setActiveSpread = useBookStore((s) => s.setActiveSpread);
   const user = useAuthUser();
   const isPremium = getEffectiveTier(user) !== 'free';
   const [creating, setCreating] = useState(false);
@@ -43,9 +44,10 @@ export default function ShareModal({ open, onClose }) {
 
   const handleCreate = async () => {
     if (!isPremium) { setShowUpgrade(true); return; }
+    if (!stageRef?.current) { setError('Editor not ready. Try again in a moment.'); return; }
     setCreating(true);
     setError(null);
-    setProgress({ done: 0, total: state.photos?.length || 0 });
+    setProgress({ stage: 'capture', done: 0, total: state.spreads?.length || 0 });
     try {
       const token = await createShare(
         {
@@ -55,14 +57,17 @@ export default function ShareModal({ open, onClose }) {
           gap: state.gap,
           blendEdges: state.blendEdges,
           spreads: state.spreads,
-          photos: state.photos,
+        },
+        {
+          stageRef,
+          setActiveSpread,
+          originalActiveId: state.activeSpreadId,
         },
         (p) => setProgress(p),
       );
       const url = buildShareUrl(token);
       setLastLink(url);
       await refresh();
-      // Try clipboard copy immediately
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);
@@ -128,7 +133,9 @@ export default function ShareModal({ open, onClose }) {
         }}>
           {creating
             ? (progress && progress.total > 0
-                ? `Uploading… ${progress.done} / ${progress.total}${progress.bytes ? ` · ${(progress.bytes / 1_000_000).toFixed(1)} MB` : ''}`
+                ? (progress.stage === 'capture'
+                    ? `Capturing spreads… ${progress.done} / ${progress.total}`
+                    : `Uploading… ${progress.done} / ${progress.total}${progress.bytes ? ` · ${(progress.bytes / 1_000_000).toFixed(1)} MB` : ''}`)
                 : 'Generating link…')
             : '✦ Generate share link'}
         </button>

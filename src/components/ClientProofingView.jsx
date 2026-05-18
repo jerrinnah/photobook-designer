@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Stage, Layer, Rect, Image as KImage, Group, Text as KText } from 'react-konva';
 import { loadShare, setShareStatus } from '../utils/sharing';
 import { getScreenDims } from '../layouts/spreadSizes';
-import useImage from '../hooks/useImage';
 
 // Standalone viewer — what the client opens when they receive the link.
 // No editing, no login. Just a clean walkthrough of every spread plus
 // Approve / Request changes buttons that report status back to the
 // photographer.
+//
+// Each spread is a pre-rendered screenshot — the viewer just shows the
+// image. No template reconstruction, no per-cell math, no fonts.
 export default function ClientProofingView({ token }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,7 +35,8 @@ export default function ClientProofingView({ token }) {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') setIdx((i) => Math.min(i + 1, (share?.snapshot?.spreads?.length || 1) - 1));
+      const total = share?.snapshot?.spreads?.length || 1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') setIdx((i) => Math.min(i + 1, total - 1));
       if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   setIdx((i) => Math.max(i - 1, 0));
     };
     window.addEventListener('keydown', onKey);
@@ -56,11 +58,18 @@ export default function ClientProofingView({ token }) {
 
   const snap = share.snapshot;
   const spreads = snap.spreads || [];
-  const photos = snap.photos || [];
-  const { w: exportW, h: exportH } = getScreenDims(snap.spreadSizeId, snap.customSize);
-  const previewW = Math.min(window.innerWidth * 0.86, 1200);
-  const previewH = Math.round(previewW * exportH / exportW);
+  if (spreads.length === 0) return <Screen msg="This share has no spreads." error />;
+
+  // Each captured spread carries its own aspect from when it was rendered.
+  // Fall back to spreadSize defaults if missing.
   const spread = spreads[idx];
+  const aspectFallback = (() => {
+    try {
+      const { w, h } = getScreenDims(snap.spreadSizeId, snap.customSize);
+      return w / h;
+    } catch { return 2; }
+  })();
+  const aspect = spread?.w && spread?.h ? spread.w / spread.h : aspectFallback;
 
   return (
     <div style={{
@@ -97,19 +106,7 @@ export default function ClientProofingView({ token }) {
 
       {/* Preview area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
-        <div style={{
-          boxShadow: '0 12px 60px rgba(0,0,0,0.7)', borderRadius: 2,
-          background: spread?.bgColor || '#111',
-        }}>
-          {spread && (
-            <ProofingStage
-              spread={spread} photos={photos}
-              gap={snap.gap ?? 3}
-              width={previewW} height={previewH}
-              exportW={exportW} exportH={exportH}
-            />
-          )}
-        </div>
+        <SpreadImage spread={spread} aspect={aspect} />
 
         {/* Nav */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 18 }}>
@@ -143,78 +140,38 @@ export default function ClientProofingView({ token }) {
         </div>
 
         <div style={{ fontSize: 10, color: '#444', marginTop: 16, textAlign: 'center' }}>
-          Use ← → arrows to navigate · {share.brand_name ? `Hosted on AutoBook by NEJ` : 'Powered by AutoBook by NEJ'}
+          Use ← → arrows to navigate · Powered by AutoBook by NEJ
         </div>
       </div>
     </div>
   );
 }
 
-// Konva preview of one spread — clipped cells with images + captions.
-function ProofingStage({ spread, photos, gap, width, height, exportW, exportH }) {
+// Single spread display — pure image render, no canvas.
+function SpreadImage({ spread, aspect }) {
+  const previewW = Math.min(window.innerWidth * 0.86, 1400);
+  const previewH = Math.round(previewW / aspect);
   return (
-    <Stage width={width} height={height}>
-      <Layer>
-        <Rect x={0} y={0} width={width} height={height} fill={spread.bgColor || '#111'} />
-        {(spread.cellGeometry || []).map((geo, i) => {
-          const cell = spread.cells?.[i];
-          return (
-            <ProofingCell key={i}
-              geo={geo} cell={cell} photos={photos}
-              spreadW={width} spreadH={height} gap={gap} bgColor={spread.bgColor || '#111'}
-            />
-          );
-        })}
-        {/* Spine */}
-        <Rect x={width/2 - 0.5} y={0} width={1} height={height} fill="rgba(0,0,0,0.25)" />
-        {(spread.captions || []).map((cap) => (
-          <KText key={cap.id || cap.text}
-            x={cap.x * width} y={cap.y * height} width={cap.w * width}
-            text={cap.text || ''}
-            fontSize={(cap.fontSize || 18) * (width / exportW)}
-            fontFamily={cap.fontFamily || 'system-ui'}
-            fontStyle={[cap.italic ? 'italic' : '', cap.bold ? 'bold' : ''].filter(Boolean).join(' ') || 'normal'}
-            fill={cap.color || '#fff'}
-            align={cap.align || 'left'}
-            listening={false}
-          />
-        ))}
-      </Layer>
-    </Stage>
-  );
-}
-
-function ProofingCell({ geo, cell, photos, spreadW, spreadH, gap, bgColor }) {
-  const photo = cell?.photoId ? photos.find((p) => String(p.id) === String(cell.photoId)) : null;
-  const [img] = useImage(photo?.src);
-  const x = geo.x * spreadW + gap / 2;
-  const y = geo.y * spreadH + gap / 2;
-  const w = Math.max(1, geo.w * spreadW - gap);
-  const h = Math.max(1, geo.h * spreadH - gap);
-  let imgProps = null;
-  if (img) {
-    const scale = Math.max(w / img.width, h / img.height) * (cell?.zoom || 1);
-    const iw = img.width * scale;
-    const ih = img.height * scale;
-    const cx = cell?.manualCrop
-      ? x + w / 2 + (cell.offsetX || 0)
-      : x + w / 2;
-    const cy = cell?.manualCrop
-      ? y + h / 2 + (cell.offsetY || 0)
-      : y + ih / 2; // top-align default
-    imgProps = { cx, cy, iw, ih };
-  }
-  return (
-    <Group clipX={x} clipY={y} clipWidth={w} clipHeight={h}>
-      <Rect x={x} y={y} width={w} height={h} fill={bgColor} />
-      {img && imgProps && (
-        <KImage image={img} x={imgProps.cx} y={imgProps.cy}
-          width={imgProps.iw} height={imgProps.ih}
-          offsetX={imgProps.iw / 2} offsetY={imgProps.ih / 2}
-          rotation={cell?.rotation || 0} listening={false}
+    <div style={{
+      width: previewW, height: previewH,
+      background: '#111',
+      boxShadow: '0 12px 60px rgba(0,0,0,0.7)',
+      borderRadius: 2,
+      overflow: 'hidden',
+    }}>
+      {spread?.imageUrl ? (
+        <img
+          src={spread.imageUrl}
+          alt={`Spread ${spread.id}`}
+          style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
+          draggable={false}
         />
+      ) : (
+        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: 11 }}>
+          (no image)
+        </div>
       )}
-    </Group>
+    </div>
   );
 }
 
