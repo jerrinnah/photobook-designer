@@ -1045,11 +1045,14 @@ export const useBookStore = create((set, get) => ({
 
   // ── Reshuffle all spreads with random ordering ────────────────────
   // Reshuffle ONLY the current spread.
-  //   - If any non-locked cell is empty → fill the empty cells with the
-  //     next unplaced photos from the library in arrangement order
-  //     (sequential, no aspect-best picking, no random).
-  //   - Otherwise (all non-locked cells already have photos) → shuffle
-  //     the photo IDs among those cells.
+  //
+  // Logic:
+  //   1. If there are empty non-locked cells AND there are unplaced photos
+  //      in the library → fill the empty cells with the next unplaced
+  //      photos in arrangement order (sequential, deterministic).
+  //   2. Otherwise (no empty cells, or all photos already placed elsewhere)
+  //      → shuffle the photos already on this spread into different cells.
+  //
   // Locked cells are never touched. Other spreads are never touched.
   reshuffleSpread: (spreadId) => set(h((s) => {
     const spread = s.spreads.find((sp) => sp.id === spreadId);
@@ -1062,34 +1065,43 @@ export const useBookStore = create((set, get) => ({
     const newCells = [...spread.cells];
     const newGeo = [...spread.cellGeometry];
 
+    // Path 1: empty cells + a pool of unplaced photos → sequential fill.
     if (emptyOnes.length > 0) {
-      // Photos already placed somewhere — skip them so each appears once
       const usedIds = new Set(s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean)));
       const pool = s.photos.filter((p) => !usedIds.has(p.id));
-      let cursor = 0;
-      for (const { i } of emptyOnes) {
-        if (cursor >= pool.length) break;
-        const photo = pool[cursor++];
-        const geo = newGeo[i];
-        if (!geo) continue;
-        if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-        newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+      if (pool.length > 0) {
+        let cursor = 0;
+        for (const { i } of emptyOnes) {
+          if (cursor >= pool.length) break;
+          const photo = pool[cursor++];
+          const geo = newGeo[i];
+          if (!geo) continue;
+          if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+          newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+        }
+        return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
       }
-    } else {
-      // All non-locked cells are filled — shuffle their photo IDs in place
-      const filledIds = editable.map(({ cell }) => cell.photoId);
-      const shuffled = shuffle(filledIds);
-      editable.forEach(({ i }, k) => {
-        const photoId = shuffled[k];
-        const photo = s.photos.find((p) => p.id === photoId);
-        if (!photo) return;
-        const geo = newGeo[i];
-        if (!geo) return;
-        if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-        newCells[i] = { ...newCells[i], photoId, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
-      });
     }
 
+    // Path 2: shuffle existing photos within this spread. Re-randomize
+    // until the order actually differs (or we've tried enough times) so
+    // the user sees something visibly change.
+    const filledList = editable.filter(({ cell }) => cell.photoId);
+    if (filledList.length < 2) return s; // nothing meaningful to shuffle
+    const originalIds = filledList.map(({ cell }) => cell.photoId);
+    let shuffled = shuffle(originalIds);
+    for (let attempt = 0; attempt < 6 && shuffled.every((id, k) => id === originalIds[k]); attempt++) {
+      shuffled = shuffle(originalIds);
+    }
+    filledList.forEach(({ i }, k) => {
+      const photoId = shuffled[k];
+      const photo = s.photos.find((p) => p.id === photoId);
+      if (!photo) return;
+      const geo = newGeo[i];
+      if (!geo) return;
+      if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
+      newCells[i] = { ...newCells[i], photoId, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+    });
     return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
   })),
 

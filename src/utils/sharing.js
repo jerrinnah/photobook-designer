@@ -11,7 +11,7 @@ import { getEffectiveTier } from './premium';
 const BUCKET = 'share-previews';
 const SHARE_PHOTO_MAX_DIM = 1400; // long-edge downscale for share previews
 const SHARE_JPEG_QUALITY = 0.85;
-const UPLOAD_CONCURRENCY = 4;     // parallelism when pushing photos to Storage
+const UPLOAD_CONCURRENCY = 8;     // parallelism when pushing photos to Storage
 
 // Resize a data URL down to SHARE_PHOTO_MAX_DIM on the longest edge.
 // Returns a Blob (which Supabase Storage uploads directly without
@@ -109,8 +109,9 @@ export async function createShare(state, onProgress) {
   };
 
   // 3) Create the DB row referencing this shareKey folder.
+  // RPC uses auth.uid() to find the public.users row (so it works even
+  // when the cached profile carries the session-fallback UUID).
   const { data, error } = await supabase.rpc('create_share', {
-    p_user_id: user.id,
     p_project_name: state.bookName || 'Untitled',
     p_share_key: shareKey,
     p_snapshot: snapshot,
@@ -143,21 +144,16 @@ export async function setShareStatus(token, status) {
 }
 
 export async function getMyShares() {
-  const user = getStoredUser();
-  if (!user?.id || !isSupabaseConfigured) return [];
-  const { data, error } = await supabase.rpc('get_my_shares', { p_user_id: user.id });
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.rpc('get_my_shares');
   if (error) return [];
   return Array.isArray(data) ? data : [];
 }
 
 // Delete the DB row AND the bucket folder so the share is fully revoked.
 export async function deleteShare(token) {
-  const user = getStoredUser();
-  if (!user?.id || !isSupabaseConfigured) return;
-  const { data, error } = await supabase.rpc('delete_share', {
-    p_user_id: user.id,
-    p_token: token,
-  });
+  if (!isSupabaseConfigured) return;
+  const { data, error } = await supabase.rpc('delete_share', { p_token: token });
   if (error) throw new Error(error.message);
   const shareKey = typeof data === 'string' ? data : data?.[0];
   if (shareKey) {

@@ -68,11 +68,15 @@ alter table public.shared_projects
 create index if not exists shared_projects_share_key_idx
   on public.shared_projects(share_key);
 
--- ── 4. Rewrite create_share — paid/trial tier check + share_key ────
+-- ── 4. Rewrite create_share — auth.uid() based, no p_user_id needed
+-- The JWT identifies the caller, so we look up public.users by auth_id
+-- (with a fallback to email match for legacy users). This avoids the
+-- "Unknown user" failure that hit any user whose cached profile carried
+-- the auth UUID instead of the public.users.id (session-fallback case).
 drop function if exists public.create_share(uuid, text, jsonb);
 drop function if exists public.create_share(uuid, text, text, jsonb);
+drop function if exists public.create_share(text, text, jsonb);
 create or replace function public.create_share(
-  p_user_id uuid,
   p_project_name text,
   p_share_key text,
   p_snapshot jsonb
@@ -83,6 +87,9 @@ security definer
 set search_path = public
 as $$
 declare
+  v_auth_id uuid := auth.uid();
+  v_email text;
+  v_user_id uuid;
   v_tier text;
   v_count integer;
   v_created timestamptz;
@@ -91,10 +98,21 @@ declare
   v_brand_logo text;
   v_in_trial boolean;
 begin
-  select tier, photobook_count, created_at, brand_name, brand_logo_url
-    into v_tier, v_count, v_created, v_brand_name, v_brand_logo
-    from public.users where id = p_user_id;
-  if v_tier is null then raise exception 'Unknown user'; end if;
+  if v_auth_id is null then raise exception 'Not signed in'; end if;
+
+  -- Look up by auth_id first, then fall back to email match
+  select id, tier, photobook_count, created_at, brand_name, brand_logo_url
+    into v_user_id, v_tier, v_count, v_created, v_brand_name, v_brand_logo
+    from public.users where auth_id = v_auth_id;
+
+  if v_user_id is null then
+    select au.email into v_email from auth.users au where au.id = v_auth_id;
+    select id, tier, photobook_count, created_at, brand_name, brand_logo_url
+      into v_user_id, v_tier, v_count, v_created, v_brand_name, v_brand_logo
+      from public.users where lower(email) = lower(trim(v_email)) limit 1;
+  end if;
+
+  if v_user_id is null then raise exception 'No matching account — please sign out and sign back in'; end if;
 
   v_in_trial := coalesce(v_count, 0) < 5
             and coalesce(v_created, now()) > now() - interval '30 days';
@@ -103,37 +121,75 @@ begin
     raise exception 'Paid plan or active trial required to share for review';
   end if;
 
-  -- Unguessable 24-char URL token (separate from the bucket share_key)
   v_token := encode(gen_random_bytes(18), 'base64');
   v_token := replace(replace(replace(v_token, '/', '_'), '+', '-'), '=', '');
 
   insert into public.shared_projects
     (token, user_id, project_name, snapshot, brand_name, brand_logo_url, share_key)
   values
-    (v_token, p_user_id, p_project_name, p_snapshot, v_brand_name, v_brand_logo, p_share_key);
+    (v_token, v_user_id, p_project_name, p_snapshot, v_brand_name, v_brand_logo, p_share_key);
 
   return v_token;
 end;
 $$;
 
-grant execute on function public.create_share(uuid, text, text, jsonb) to anon, authenticated;
+grant execute on function public.create_share(text, text, jsonb) to anon, authenticated;
 
--- ── 5. delete_share returns the share_key so client can purge bucket
+-- ── 5. delete_share also moves to auth.uid() lookup
 drop function if exists public.delete_share(uuid, text);
-create or replace function public.delete_share(p_user_id uuid, p_token text)
+drop function if exists public.delete_share(text);
+create or replace function public.delete_share(p_token text)
 returns text
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
+  v_auth_id uuid := auth.uid();
+  v_user_id uuid;
   v_share_key text;
 begin
+  if v_auth_id is null then raise exception 'Not signed in'; end if;
+  select id into v_user_id from public.users where auth_id = v_auth_id;
+  if v_user_id is null then return null; end if;
+
   delete from public.shared_projects
-    where token = p_token and user_id = p_user_id
+    where token = p_token and user_id = v_user_id
     returning share_key into v_share_key;
   return v_share_key;
 end;
 $$;
 
-grant execute on function public.delete_share(uuid, text) to anon, authenticated;
+grant execute on function public.delete_share(text) to anon, authenticated;
+
+-- ── 6. get_my_shares too (auth.uid() based)
+drop function if exists public.get_my_shares(uuid);
+drop function if exists public.get_my_shares();
+create or replace function public.get_my_shares()
+returns table (
+  token text,
+  project_name text,
+  status text,
+  view_count integer,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_auth_id uuid := auth.uid();
+  v_user_id uuid;
+begin
+  if v_auth_id is null then return; end if;
+  select id into v_user_id from public.users where auth_id = v_auth_id;
+  if v_user_id is null then return; end if;
+  return query
+  select sp.token, sp.project_name, sp.status, sp.view_count, sp.created_at
+  from public.shared_projects sp
+  where sp.user_id = v_user_id
+  order by sp.created_at desc;
+end;
+$$;
+
+grant execute on function public.get_my_shares() to anon, authenticated;
