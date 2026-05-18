@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
 
 // Frontend Supabase client. Uses the public ANON key (safe to expose).
 // All writes go through Postgres RPC functions guarded by SECURITY DEFINER
@@ -88,6 +89,11 @@ export async function signOut() {
 // After a magic-link redirect, the auth state-change listener fires
 // SIGNED_IN. We then call ensure_my_user to find or create the public.users
 // row matching the auth session and cache the profile.
+//
+// If the RPC fails (network blip, function not yet deployed, etc.), we
+// still return a minimal "session-only" profile derived from the JWT so
+// the UI can flip out of signed-out state. The cache stores this fallback
+// flagged with `_fromSession: true` so other code paths can re-sync later.
 export async function syncProfileAfterAuth() {
   if (!isSupabaseConfigured) return null;
   const { data: { session } } = await supabase.auth.getSession();
@@ -101,12 +107,37 @@ export async function syncProfileAfterAuth() {
     p_phone: pendingPhone || null,
   });
   if (error) {
-    console.error('ensure_my_user failed:', error.message);
-    return null;
+    console.error('ensure_my_user failed — using session-only profile:', error.message);
+    const fallback = sessionFallbackProfile(session);
+    storeUser(fallback);
+    return fallback;
   }
   const profile = Array.isArray(data) ? data[0] : data;
-  if (profile) storeUser(profileToCache(profile));
-  return profile;
+  if (profile) {
+    storeUser(profileToCache(profile));
+    return profileToCache(profile);
+  }
+  // RPC returned no row (shouldn't happen, but be defensive)
+  const fallback = sessionFallbackProfile(session);
+  storeUser(fallback);
+  return fallback;
+}
+
+// Minimal profile shape we can build from just the Supabase auth session.
+// Used as a fallback when ensure_my_user can't return a public.users row.
+// Marked _fromSession so refreshUserTier can try to upgrade it later.
+function sessionFallbackProfile(session) {
+  const cached = getStoredUser();
+  return {
+    id: cached?.id || session.user.id,
+    email: session.user.email,
+    phone: cached?.phone || null,
+    tier: cached?.tier || 'free',
+    photobookCount: cached?.photobookCount ?? 0,
+    createdAt: cached?.createdAt || session.user.created_at || null,
+    brand: cached?.brand || { name: null, color: null, logoUrl: null, siteUrl: null },
+    _fromSession: true,
+  };
 }
 
 // Subscribes to Supabase auth events. Calls onChange(profile|null)
@@ -225,4 +256,14 @@ export async function trackAppUseOncePerSession() {
   if (sessionStorage.getItem(flag)) return;
   sessionStorage.setItem(flag, '1');
   await trackEvent('app_use');
+}
+
+// ── useAuthUser — reactive hook shared by every UI component that needs
+//                 to know whether the visitor is signed in. Single
+//                 subscription point so all components stay in sync
+//                 when a magic-link sign-in completes mid-session.
+export function useAuthUser() {
+  const [user, setUser] = useState(() => getStoredUser());
+  useEffect(() => onAuthStateChange((profile) => setUser(profile || null)), []);
+  return user;
 }

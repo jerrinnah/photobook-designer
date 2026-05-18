@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { STARTER_FEATURES, PRO_FEATURES, FREE_FEATURES } from '../utils/premium';
 import { openPaystackCheckout, claimPlan, isPaystackConfigured, formatPrice } from '../utils/paystack';
-import { getStoredUser } from '../utils/supabase';
+import { useAuthUser } from '../utils/supabase';
 
 export default function UpgradeModal({ open, onClose, blockedFeature }) {
   const [paying, setPaying] = useState(false); // 'starter' | 'pro' | false
@@ -9,7 +9,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
   const [success, setSuccess] = useState(false);
   if (!open) return null;
 
-  const user = getStoredUser();
+  const user = useAuthUser();
   const canPay = isPaystackConfigured() && user?.email;
 
   const handlePay = async (plan) => {

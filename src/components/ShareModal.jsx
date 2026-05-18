@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore';
-import { getStoredUser } from '../utils/supabase';
+import { useAuthUser } from '../utils/supabase';
 import { getEffectiveTier } from '../utils/premium';
 import { createShare, getMyShares, deleteShare, buildShareUrl } from '../utils/sharing';
 import UpgradeModal from './UpgradeModal';
@@ -13,7 +13,7 @@ const STATUS_STYLES = {
 
 export default function ShareModal({ open, onClose }) {
   const state = useBookStore();
-  const user = getStoredUser();
+  const user = useAuthUser();
   const isPremium = getEffectiveTier(user) !== 'free';
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);

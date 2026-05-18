@@ -6,7 +6,7 @@ import SpreadBackground from './SpreadBackground';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
 import { isPremiumTemplate, getEffectiveTier } from '../utils/premium';
-import { getStoredUser } from '../utils/supabase';
+import { useAuthUser } from '../utils/supabase';
 import UpgradeModal from './UpgradeModal';
 
 const THUMB_W = 76;
@@ -57,7 +57,7 @@ export default function LayoutPicker({ mobile = false }) {
   const [catFilter, setCatFilter] = useState('all'); // 'all' | 'Standard' | 'Wedding' | 'Event' | 'Print'
   const [collapsed, setCollapsed] = useLocalStorage('layoutpicker-collapsed', false);
   const [upgradeFor, setUpgradeFor] = useState(null);
-  const user = getStoredUser();
+  const user = useAuthUser();
   const effectiveTier = getEffectiveTier(user);
 
   const handleTemplateClick = (tmpl) => {
