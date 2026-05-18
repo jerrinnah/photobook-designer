@@ -733,6 +733,51 @@ export const useBookStore = create((set, get) => ({
     }),
   }))),
 
+  // Clones a cell inside the same spread. The copy is offset slightly so
+  // it's visible (not stacked exactly on top), and all photo/effect/crop
+  // state is preserved. Cell is clamped to stay inside the spread.
+  duplicateCell: (spreadId, cellIndex) => set(h((s) => {
+    const spread = s.spreads.find((sp) => sp.id === spreadId);
+    if (!spread) return s;
+    const geo = spread.cellGeometry[cellIndex];
+    const cell = spread.cells[cellIndex];
+    if (!geo || !cell) return s;
+    const OFFSET = 0.04;
+    let nx = round4(Math.min(1 - geo.w, geo.x + OFFSET));
+    let ny = round4(Math.min(1 - geo.h, geo.y + OFFSET));
+    // If the offset would push the copy off-edge, place it at top-left
+    if (nx >= 1 - geo.w) nx = 0;
+    if (ny >= 1 - geo.h) ny = 0;
+    const newGeo = { ...geo, x: nx, y: ny };
+    const newCell = { ...cell, manualCrop: true }; // duplicate keeps user crop
+    return {
+      spreads: s.spreads.map((sp) => sp.id === spreadId ? {
+        ...sp,
+        cellGeometry: [...sp.cellGeometry, newGeo],
+        cells: [...sp.cells, newCell],
+      } : sp),
+      selectedCellIndex: spread.cells.length, // select the new copy
+    };
+  })),
+
+  // Clones a caption inside the same spread. Offset slightly + new id.
+  duplicateCaption: (spreadId, captionId) => set(h((s) => {
+    const spread = s.spreads.find((sp) => sp.id === spreadId);
+    if (!spread) return s;
+    const cap = spread.captions.find((c) => c.id === captionId);
+    if (!cap) return s;
+    const OFFSET = 0.03;
+    const nx = round4(Math.min(1 - (cap.w || 0.3), (cap.x || 0) + OFFSET));
+    const ny = round4(Math.min(1 - 0.05, (cap.y || 0) + OFFSET));
+    const newCap = { ...cap, id: `cap${captionIdCounter++}`, x: nx, y: ny };
+    return {
+      spreads: s.spreads.map((sp) => sp.id === spreadId ? {
+        ...sp,
+        captions: [...sp.captions, newCap],
+      } : sp),
+    };
+  })),
+
   splitCell: (spreadId, cellIndex, direction) => set(h((s) => {
     const spread = s.spreads.find((sp) => sp.id === spreadId);
     if (!spread) return s;

@@ -381,9 +381,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     spreads, activeSpreadId, assignPhoto, addPhotos, addCellAt,
     spreadSizeId, customSize, blendEdges, gap,
     selectedCellIndex, setSelectedCell,
-    splitCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
+    splitCell, duplicateCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
     commitResizeCell, setCellGradient, transferCell, setCellEffects,
-    addCaption, updateCaption, removeCaption,
+    addCaption, updateCaption, removeCaption, duplicateCaption,
     adjustCell,
     clearPhotoSelection,
   } = useBookStore();
@@ -1117,6 +1117,11 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 <span style={{ letterSpacing: -1 }}>⬚</span> Split —
               </button>
 
+              <button style={cellBtnStyle()} title="Duplicate this cell with its photo"
+                onClick={() => duplicateCell(activeSpreadId, selectedCellIndex)}>
+                ⊞ Duplicate
+              </button>
+
               <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
 
               {selectedCell.photoId && (
@@ -1419,6 +1424,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
                 <button style={cellBtnStyle()} title="Edit text"
                   onClick={() => setEditingCaption({ ...selCap })}>✎ Edit</button>
+
+                <button style={cellBtnStyle()} title="Duplicate text with all styling"
+                  onClick={() => duplicateCaption(activeSpreadId, selCap.id)}>⊞ Duplicate</button>
 
                 <div style={{ width: 1, height: 16, background: '#2a2a2a', marginLeft: 'auto' }} />
                 <button style={cellBtnStyle({ color: '#e05c5c', borderColor: 'transparent' })}
