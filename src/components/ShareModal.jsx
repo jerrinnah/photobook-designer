@@ -128,7 +128,7 @@ export default function ShareModal({ open, onClose }) {
         }}>
           {creating
             ? (progress && progress.total > 0
-                ? `Uploading photos… ${progress.done} / ${progress.total}`
+                ? `Uploading… ${progress.done} / ${progress.total}${progress.bytes ? ` · ${(progress.bytes / 1_000_000).toFixed(1)} MB` : ''}`
                 : 'Generating link…')
             : '✦ Generate share link'}
         </button>

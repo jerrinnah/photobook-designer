@@ -9,9 +9,22 @@ import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 import { getEffectiveTier } from './premium';
 
 const BUCKET = 'share-previews';
-const SHARE_PHOTO_MAX_DIM = 1400; // long-edge downscale for share previews
-const SHARE_JPEG_QUALITY = 0.85;
-const UPLOAD_CONCURRENCY = 8;     // parallelism when pushing photos to Storage
+const SHARE_PHOTO_MAX_DIM = 1000; // long-edge downscale for share previews
+const SHARE_QUALITY = 0.78;
+const UPLOAD_CONCURRENCY = 10;    // parallelism when pushing photos to Storage
+
+// Detect WebP support once at module load — every modern browser we
+// ship to encodes WebP (Chrome 23+, Edge, Safari 14+, FF 65+), but
+// fall back to JPEG just in case.
+const _webpProbe = (() => {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    return c.toDataURL('image/webp').startsWith('data:image/webp');
+  } catch { return false; }
+})();
+const SHARE_MIME = _webpProbe ? 'image/webp' : 'image/jpeg';
+const SHARE_EXT  = _webpProbe ? 'webp' : 'jpg';
 
 // Resize a data URL down to SHARE_PHOTO_MAX_DIM on the longest edge.
 // Returns a Blob (which Supabase Storage uploads directly without
@@ -30,13 +43,7 @@ function downscaleForShare(dataURL) {
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, w, h);
-      const isPng = dataURL.startsWith('data:image/png');
-      const mime = isPng ? 'image/png' : 'image/jpeg';
-      canvas.toBlob(
-        (blob) => resolve(blob),
-        mime,
-        isPng ? undefined : SHARE_JPEG_QUALITY,
-      );
+      canvas.toBlob((blob) => resolve(blob), SHARE_MIME, SHARE_QUALITY);
     };
     img.onerror = () => resolve(null);
     img.src = dataURL;
@@ -47,8 +54,7 @@ function downscaleForShare(dataURL) {
 async function uploadOne(shareKey, photo, onProgress) {
   const blob = await downscaleForShare(photo.src);
   if (!blob) throw new Error(`Couldn't process photo "${photo.name}"`);
-  const ext = blob.type === 'image/png' ? 'png' : 'jpg';
-  const path = `${shareKey}/${photo.id}.${ext}`;
+  const path = `${shareKey}/${photo.id}.${SHARE_EXT}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
     contentType: blob.type,
     upsert: true,
@@ -56,7 +62,7 @@ async function uploadOne(shareKey, photo, onProgress) {
   });
   if (error) throw new Error(`Upload failed for "${photo.name}": ${error.message}`);
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  onProgress?.();
+  onProgress?.(blob.size);
   return { id: photo.id, name: photo.name, width: photo.width, height: photo.height, src: publicUrl };
 }
 
@@ -86,15 +92,26 @@ export async function createShare(state, onProgress) {
   if (getEffectiveTier(user) === 'free') throw new Error('Paid plan or active trial required to share for review.');
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
 
-  const photos = state.photos || [];
+  // Only upload photos actually placed on a spread — unused library
+  // photos would never render in the share viewer.
+  const placedIds = new Set(
+    (state.spreads || []).flatMap((sp) => (sp.cells || []).map((c) => c.photoId).filter(Boolean))
+  );
+  const photos = (state.photos || []).filter((p) => placedIds.has(p.id));
+  if (photos.length === 0) {
+    throw new Error('No photos placed on any spread yet — add some photos before sharing.');
+  }
+
   const shareKey = newShareKey();
 
   // 1) Upload every photo to Storage and collect the URLs.
   let done = 0;
+  let bytes = 0;
   const total = photos.length;
-  const uploadedPhotos = await uploadPhotosInBatches(shareKey, photos, () => {
+  const uploadedPhotos = await uploadPhotosInBatches(shareKey, photos, (size) => {
     done++;
-    onProgress?.({ done, total });
+    bytes += size || 0;
+    onProgress?.({ done, total, bytes });
   });
 
   // 2) Build a lightweight snapshot — URLs, not base64.
