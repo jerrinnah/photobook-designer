@@ -16,6 +16,7 @@ export default function ShareModal({ open, onClose }) {
   const user = useAuthUser();
   const isPremium = getEffectiveTier(user) !== 'free';
   const [creating, setCreating] = useState(false);
+  const [progress, setProgress] = useState(null); // { done, total } | null
   const [error, setError] = useState(null);
   const [shares, setShares] = useState([]);
   const [lastLink, setLastLink] = useState(null);
@@ -44,16 +45,20 @@ export default function ShareModal({ open, onClose }) {
     if (!isPremium) { setShowUpgrade(true); return; }
     setCreating(true);
     setError(null);
+    setProgress({ done: 0, total: state.photos?.length || 0 });
     try {
-      const token = await createShare({
-        bookName: state.bookName,
-        spreadSizeId: state.spreadSizeId,
-        customSize: state.customSize,
-        gap: state.gap,
-        blendEdges: state.blendEdges,
-        spreads: state.spreads,
-        photos: state.photos,
-      });
+      const token = await createShare(
+        {
+          bookName: state.bookName,
+          spreadSizeId: state.spreadSizeId,
+          customSize: state.customSize,
+          gap: state.gap,
+          blendEdges: state.blendEdges,
+          spreads: state.spreads,
+          photos: state.photos,
+        },
+        (p) => setProgress(p),
+      );
       const url = buildShareUrl(token);
       setLastLink(url);
       await refresh();
@@ -66,6 +71,7 @@ export default function ShareModal({ open, onClose }) {
       setError(err.message || 'Failed to create share.');
     } finally {
       setCreating(false);
+      setProgress(null);
     }
   };
 
@@ -120,7 +126,11 @@ export default function ShareModal({ open, onClose }) {
           opacity: (creating || !isPremium) ? 0.5 : 1,
           marginBottom: 12,
         }}>
-          {creating ? 'Generating link…' : '✦ Generate share link'}
+          {creating
+            ? (progress && progress.total > 0
+                ? `Uploading photos… ${progress.done} / ${progress.total}`
+                : 'Generating link…')
+            : '✦ Generate share link'}
         </button>
 
         {error && (
