@@ -4,7 +4,7 @@ import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportCurrentSpread, exportToFolder, exportAsPDF } from '../utils/export';
 import { subscribeAutosaveStatus } from '../store/autosave';
 import { getStoredUser, trackEvent, signOut, onAuthStateChange } from '../utils/supabase';
-import { getEffectiveTier, trialStatus } from '../utils/premium';
+import { getEffectiveTier, trialStatus, starterStatus } from '../utils/premium';
 import AuthModal from './AuthModal';
 import ProjectPicker from './ProjectPicker';
 import BrandingSettings from './BrandingSettings';
@@ -379,8 +379,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {authUser?.email ? (() => {
         const eff = getEffectiveTier(authUser);
         const trial = trialStatus(authUser);
-        const avatarBg = eff === 'premium' ? '#3a2a08' : eff === 'trial' ? '#1a3a2a' : '#1a3580';
-        const avatarColor = eff === 'premium' ? '#f6c90e' : eff === 'trial' ? '#6fcf97' : '#fff';
+        const starter = starterStatus(authUser);
+        const avatarBg = eff === 'pro' ? '#3a2a08' : eff === 'starter' ? '#0e2a3a' : eff === 'trial' ? '#1a3a2a' : '#1a3580';
+        const avatarColor = eff === 'pro' ? '#f6c90e' : eff === 'starter' ? '#6fb8d8' : eff === 'trial' ? '#6fcf97' : '#fff';
         return (
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
@@ -390,7 +391,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
               display: 'flex', alignItems: 'center', gap: 6,
               maxWidth: 180,
             }}
-            title={`${authUser.email} · ${eff === 'premium' ? 'Premium' : eff === 'trial' ? `Trial · ${trial.exportsLeft} export${trial.exportsLeft === 1 ? '' : 's'} left` : 'Free'}`}
+            title={
+              eff === 'pro' ? `${authUser.email} · Pro (unlimited)` :
+              eff === 'starter' ? `${authUser.email} · Starter · ${starter.remaining}/${starter.quota} exports left` :
+              eff === 'trial' ? `${authUser.email} · Trial · ${trial.exportsLeft} export${trial.exportsLeft === 1 ? '' : 's'} left` :
+              `${authUser.email} · Free`
+            }
           >
             <span style={{
               width: 18, height: 18, borderRadius: '50%',
@@ -426,9 +432,19 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                   <div style={{ color: '#ddd', fontSize: 12, marginTop: 2, fontWeight: 500 }}>
                     {authUser.email}
                   </div>
-                  {eff === 'premium' && (
+                  {eff === 'pro' && (
                     <div style={{ color: '#f6c90e', fontSize: 9, marginTop: 4, letterSpacing: 0.5 }}>
-                      ✦ PREMIUM
+                      ✦ PRO · unlimited
+                    </div>
+                  )}
+                  {eff === 'starter' && starter && (
+                    <div style={{ marginTop: 6, padding: '6px 8px', background: '#0e1a26', border: '1px solid #2a4a6a', borderRadius: 4 }}>
+                      <div style={{ color: '#6fb8d8', fontSize: 10, fontWeight: 600, letterSpacing: 0.3 }}>
+                        STARTER
+                      </div>
+                      <div style={{ color: '#aaa', fontSize: 10, marginTop: 3, lineHeight: 1.4 }}>
+                        {starter.remaining} of {starter.quota} export{starter.quota === 1 ? '' : 's'} left
+                      </div>
                     </div>
                   )}
                   {eff === 'trial' && trial?.isActive && (
@@ -444,7 +460,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                   )}
                   {eff === 'free' && (
                     <div style={{ color: '#888', fontSize: 9, marginTop: 4 }}>
-                      Free tier — trial ended
+                      Free tier
                     </div>
                   )}
                 </div>

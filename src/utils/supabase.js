@@ -67,9 +67,13 @@ export async function sendMagicLink(email, pendingPhone = null) {
   if (pendingPhone) {
     try { localStorage.setItem('photobook-pending-phone', pendingPhone); } catch { /* ignore */ }
   }
+  // Force the magic link to return to the public site URL — without this
+  // Supabase uses whatever origin the request came from, so a user signing
+  // in from localhost gets a magic link that returns to localhost.
+  const siteUrl = import.meta.env.VITE_SITE_URL || (window.location.origin + window.location.pathname);
   const { error } = await supabase.auth.signInWithOtp({
     email: trimmed,
-    options: { emailRedirectTo: window.location.origin + window.location.pathname },
+    options: { emailRedirectTo: siteUrl },
   });
   if (error) throw new Error(error.message);
 }

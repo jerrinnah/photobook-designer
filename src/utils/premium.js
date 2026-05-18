@@ -1,24 +1,47 @@
-// Premium gating with a generous trial.
+// Premium gating with two paid plans + a generous trial.
 //
-// Trial: full access to every premium feature for the first 5 photobook
-// EXPORTS or 30 days, whichever ends first. After that, free-tier locks
-// apply — but only ~50% of templates (vs. the older 70%), so the user
-// retains a meaningful free experience.
+// Plans:
+//   free    — no payment. Trial users land here after their trial ends.
+//   starter — ₦5,000 one-time. Up to 10 photobook exports. Access to
+//             every template EXCEPT Pro-only ones (Wedding, Event, premium
+//             covers — the "new templates and covers" pack).
+//   pro     — ₦30,000 one-time. Unlimited exports + every template.
+//
+// Trial: first 5 exports OR 30 days, whichever ends first. During the
+// trial, every Pro feature is unlocked.
 
 export const TRIAL_EXPORTS = 5;
 export const TRIAL_DAYS = 30;
+export const STARTER_QUOTA = 10;
 
 const FREE_COVER_IDS = new Set([
   'cover-arch-romance',
   'cover-minimal-bottom',
 ]);
 
-// Returns 'premium' | 'trial' | 'free'.
-// Trial is only meaningful for tier='free' users — paid premium users
-// always get 'premium'.
+// Pro-only template categories — the "new templates and covers" the user
+// wants to gate behind the Pro plan.
+function isProOnlyTemplate(tmpl) {
+  if (!tmpl) return false;
+  if (tmpl.category === 'Wedding') return true;
+  if (tmpl.category === 'Event') return true;
+  if (tmpl.category === 'Cover' && !FREE_COVER_IDS.has(tmpl.id)) return true;
+  return false;
+}
+
+// Returns 'pro' | 'starter' | 'trial' | 'free'.
+// Trial only applies to tier='free' users in their first 5 exports + 30 days.
+// Paid tiers (starter, pro) bypass trial.
 export function getEffectiveTier(user) {
   if (!user) return 'free';
-  if (user.tier === 'premium') return 'premium';
+  if (user.tier === 'pro') return 'pro';
+  if (user.tier === 'starter') {
+    // Starter is limited to STARTER_QUOTA exports. After that they're
+    // effectively free until they upgrade.
+    const used = user.photobookCount ?? 0;
+    return used < STARTER_QUOTA ? 'starter' : 'free';
+  }
+  // Tier is 'free' — check trial window
   const exportsUsed = user.photobookCount ?? 0;
   const createdMs = user.createdAt ? new Date(user.createdAt).getTime() : Date.now();
   const daysSince = (Date.now() - createdMs) / (1000 * 60 * 60 * 24);
@@ -26,9 +49,19 @@ export function getEffectiveTier(user) {
   return inTrial ? 'trial' : 'free';
 }
 
+// Convenience: has access to Pro-only templates (Wedding/Event/premium covers)
+export function hasProAccess(effectiveTier) {
+  return effectiveTier === 'pro' || effectiveTier === 'trial';
+}
+
+// Convenience: has full Premium feature access (sharing, branding, no watermark)
+export function hasPremiumAccess(effectiveTier) {
+  return effectiveTier === 'pro' || effectiveTier === 'starter' || effectiveTier === 'trial';
+}
+
 // What the user sees in the trial countdown badge.
 export function trialStatus(user) {
-  if (!user || user.tier === 'premium') return null;
+  if (!user || user.tier === 'pro' || user.tier === 'starter') return null;
   const exportsUsed = user.photobookCount ?? 0;
   const createdMs = user.createdAt ? new Date(user.createdAt).getTime() : Date.now();
   const daysSince = (Date.now() - createdMs) / (1000 * 60 * 60 * 24);
@@ -42,22 +75,31 @@ export function trialStatus(user) {
   };
 }
 
-// Tier-aware premium check. Returns true if the template is restricted
-// for the given effective tier.
+// What the user sees for Starter quota remaining.
+export function starterStatus(user) {
+  if (user?.tier !== 'starter') return null;
+  const used = user.photobookCount ?? 0;
+  return {
+    used,
+    quota: STARTER_QUOTA,
+    remaining: Math.max(0, STARTER_QUOTA - used),
+    isExhausted: used >= STARTER_QUOTA,
+  };
+}
+
+// Tier-aware lock check. Returns true if the template should show 🔒.
 //
-// premium / trial → nothing locked (full access)
-// free (post-trial) → ~50% locked:
-//   · Wedding category still premium
-//   · Cover-premium templates still premium (4 of 6)
-//   · Event category becomes free
-//   · Standard becomes free up to 9 cells (was 4)
+// pro / trial → nothing locked
+// starter     → only Pro-only templates locked (Wedding, Event, premium covers)
+// free        → ~50% locked: Pro-only + dense standard templates
 export function isPremiumTemplate(tmpl, effectiveTier = 'free') {
   if (!tmpl) return false;
-  if (effectiveTier === 'premium' || effectiveTier === 'trial') return false;
-  if (tmpl.category === 'Wedding') return true;
-  if (tmpl.category === 'Cover') return !FREE_COVER_IDS.has(tmpl.id);
+  if (effectiveTier === 'pro' || effectiveTier === 'trial') return false;
+  // Starter: locked iff it's Pro-only content
+  if (effectiveTier === 'starter') return isProOnlyTemplate(tmpl);
+  // Free / post-trial: Pro-only + dense (≥10 cell) standard templates
+  if (isProOnlyTemplate(tmpl)) return true;
   if (tmpl.printSize) return false;
-  if (tmpl.category === 'Event') return false;
   return (tmpl.cells?.length || 0) >= 10;
 }
 
@@ -65,34 +107,33 @@ export function isPremiumTemplate(tmpl, effectiveTier = 'free') {
 // sees exactly what the gate covers. Changing labels here updates the
 // admin UI; toggling actually-free vs paid behavior happens in the rule
 // function above.
-export const PREMIUM_FEATURES = [
-  { key: 'trial',           name: `${TRIAL_EXPORTS} free exports + ${TRIAL_DAYS} days full access`,
-    detail: 'New accounts get every Premium feature unlocked for the first 5 photobook exports OR 30 days, whichever ends first.' },
-  { key: 'no-watermark',    name: 'Exports without watermark',
-    detail: 'Free exports carry an "AutoBook by NEJ" diagonal watermark + corner badge' },
+export const STARTER_FEATURES = [
+  { key: 'starter-exports', name: `${STARTER_QUOTA} photobook exports`,
+    detail: `Each PDF/JPG export counts as one. Resets when you upgrade.` },
+  { key: 'no-watermark',    name: 'Exports without watermark' },
   { key: 'proofing',        name: 'Client proofing portal',
-    detail: 'Generate a read-only share link clients open in their browser. They approve or request changes — status reports back to you.' },
-  { key: 'branding',        name: 'White-label branding',
-    detail: 'Replace the AutoBook logo + PDF spec sheet with your own brand name, color, and logo' },
-  { key: 'cover-premium',   name: 'Premium cover designs (4 of 6)',
-    detail: 'Bold Letterspace, Side Editorial, Grand Script, Date Card' },
-  { key: 'wedding-tpl',     name: 'Wedding-category templates',
-    detail: 'All 19 wedding-specific layouts' },
-  { key: 'dense-tpl',       name: 'Dense editorial templates (10+ cells)',
-    detail: 'High-density mosaic layouts for large families and event books' },
+    detail: 'Share a read-only preview link with clients for approval' },
+  { key: 'branding',        name: 'White-label branding' },
+  { key: 'editing',         name: 'Full editing tools' },
 ];
 
-export const FREE_FEATURES = [
-  { key: 'basic-cover',     name: '2 starter cover designs',
-    detail: 'Arch Romance + Minimal Bottom' },
-  { key: 'basic-tpl',       name: 'Basic templates (1–4 cells)',
-    detail: 'Around 30% of layouts including all hero / pair / trio styles' },
-  { key: 'print-sizes',     name: 'Print-size templates',
-    detail: 'Standard print proportion guides' },
-  { key: 'editing',         name: 'Full editing tools',
-    detail: 'Pan / zoom / resize cells, captions, fonts, effects, gradients, backgrounds' },
-  { key: 'autosave',        name: 'Autosave + project save/load',
-    detail: 'Always available' },
-  { key: 'export',          name: 'Export at original resolution',
-    detail: 'JPG, PDF, all sizes' },
+export const PRO_FEATURES = [
+  { key: 'unlimited',       name: 'Unlimited photobook exports',
+    detail: 'No cap. Export as many books as you want, forever.' },
+  { key: 'all-templates',   name: 'All new templates + covers',
+    detail: 'Wedding-category templates (19), Event templates (4), and all 6 cover designs — including new releases as they ship.' },
+  { key: 'everything-starter', name: 'Everything in Starter',
+    detail: 'No-watermark exports, client proofing, white-label branding, full editing tools.' },
 ];
+
+export const PREMIUM_FEATURES = [...PRO_FEATURES, ...STARTER_FEATURES.slice(1)];
+
+export const FREE_FEATURES = [
+  { key: 'trial',           name: `${TRIAL_EXPORTS} free trial exports + ${TRIAL_DAYS} days full access`,
+    detail: 'New accounts get every Pro feature unlocked for the first 5 photobook exports OR 30 days, whichever ends first.' },
+  { key: 'basic-tpl',       name: 'Basic templates (1–9 cells)',
+    detail: 'Around half of all layouts including all hero / pair / trio styles' },
+  { key: 'print-sizes',     name: 'Print-size templates' },
+  { key: 'editing',         name: 'Full editing tools' },
+];
+

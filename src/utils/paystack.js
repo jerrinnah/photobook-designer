@@ -5,73 +5,80 @@
 import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 
 const PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-const AMOUNT_MAJOR = Number(import.meta.env.VITE_PAYSTACK_AMOUNT || 5000);
 const CURRENCY = import.meta.env.VITE_PAYSTACK_CURRENCY || 'NGN';
 
-// Minor unit conversion. Paystack expects amounts in kobo for NGN, cents
-// for USD, pesewas for GHS — all 1/100 of the major unit.
-const amountMinor = () => Math.round(AMOUNT_MAJOR * 100);
+export const PLAN_PRICES = {
+  starter: Number(import.meta.env.VITE_STARTER_PRICE || 5000),
+  pro:     Number(import.meta.env.VITE_PRO_PRICE     || 30000),
+};
+
+const CURRENCY_SYMBOLS = { NGN: '₦', USD: '$', GHS: '₵', ZAR: 'R', KES: 'KSh' };
 
 export const isPaystackConfigured = () =>
   Boolean(PUBLIC_KEY && !PUBLIC_KEY.endsWith('REPLACE_ME') && typeof window.PaystackPop !== 'undefined');
 
-export const formatPrice = () => {
-  const currencySymbols = { NGN: '₦', USD: '$', GHS: '₵', ZAR: 'R', KES: 'KSh' };
-  const symbol = currencySymbols[CURRENCY] || '';
-  return `${symbol}${AMOUNT_MAJOR.toLocaleString()}`;
+export const formatPrice = (plan) => {
+  const amount = PLAN_PRICES[plan];
+  if (!amount) return '';
+  const symbol = CURRENCY_SYMBOLS[CURRENCY] || '';
+  return `${symbol}${amount.toLocaleString()}`;
 };
 
-// Opens the Paystack popup. Resolves with the reference on success,
-// rejects if user closes or payment fails.
-export function openPaystackCheckout({ email }) {
+// Opens the Paystack popup for a specific plan. Resolves with the
+// reference on success, rejects if user closes or payment fails.
+export function openPaystackCheckout({ email, plan }) {
   return new Promise((resolve, reject) => {
     if (!isPaystackConfigured()) {
       reject(new Error('Paystack is not configured. Set VITE_PAYSTACK_PUBLIC_KEY.'));
       return;
     }
-    const reference = `pb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const amount = PLAN_PRICES[plan];
+    if (!amount) { reject(new Error('Unknown plan.')); return; }
+    const reference = `pb_${plan}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const handler = window.PaystackPop.setup({
       key: PUBLIC_KEY,
       email,
-      amount: amountMinor(),
+      amount: Math.round(amount * 100),
       currency: CURRENCY,
       ref: reference,
       metadata: {
+        plan,
         custom_fields: [
-          { display_name: 'Product', variable_name: 'product', value: 'AutoBook Premium' },
+          { display_name: 'Plan', variable_name: 'plan', value: `AutoBook ${plan === 'pro' ? 'Pro' : 'Starter'}` },
         ],
       },
-      callback: (response) => {
-        resolve(response.reference || reference);
-      },
-      onClose: () => {
-        reject(new Error('Payment was cancelled.'));
-      },
+      callback: (response) => resolve(response.reference || reference),
+      onClose: () => reject(new Error('Payment was cancelled.')),
     });
     handler.openIframe();
   });
 }
 
 // After successful payment, calls Supabase to record the payment and
-// upgrade the user. Returns true on success.
-export async function claimPremium(reference) {
+// flip the user's tier to the chosen plan. Returns true on success.
+export async function claimPlan(plan, reference) {
   const user = getStoredUser();
   if (!user?.id || !isSupabaseConfigured) {
-    throw new Error('Sign up first before upgrading.');
+    throw new Error('Sign in first before upgrading.');
   }
-  const { error } = await supabase.rpc('claim_premium', {
+  const { error } = await supabase.rpc('claim_plan', {
     p_user_id: user.id,
+    p_plan: plan,
     p_reference: reference,
-    p_amount: AMOUNT_MAJOR,
+    p_amount: PLAN_PRICES[plan],
     p_currency: CURRENCY,
   });
   if (error) throw new Error(error.message);
   // Update local cache so UI unlocks immediately
   try {
-    localStorage.setItem(
-      'photobook-user-v1',
-      JSON.stringify({ ...user, tier: 'premium' })
-    );
+    const patch = { tier: plan };
+    if (plan === 'starter') patch.photobookCount = 0; // backend reset
+    localStorage.setItem('photobook-user-v1', JSON.stringify({ ...user, ...patch }));
   } catch { /* ignore */ }
   return true;
+}
+
+// Backwards-compat alias used by older code paths
+export async function claimPremium(reference) {
+  return claimPlan('pro', reference);
 }
