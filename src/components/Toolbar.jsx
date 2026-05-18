@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES } from '../layouts/spreadSizes';
-import { exportCurrentSpread, exportToFolder, exportAsPDF } from '../utils/export';
+import { exportToFolder, exportAsPDF } from '../utils/export';
 import { subscribeAutosaveStatus } from '../store/autosave';
 import { getStoredUser, trackEvent, signOut, onAuthStateChange } from '../utils/supabase';
 import { getEffectiveTier, trialStatus, starterStatus } from '../utils/premium';
@@ -44,7 +44,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     customSize, setCustomSize,
     blendEdges, setBlendEdges,
     autoArrange, autoDesignAll, reshuffleAll, redesignSpread,
-    snapCellsToTemplate, snapAllCellsToTemplate,
     bookName, setBookName,
     gap, setGap,
     past, future, undo, redo,
@@ -66,7 +65,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
-  const fileInputRef = useRef(null);
 
   const brand = authUser?.brand || {};
 
@@ -158,9 +156,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     setRepeatedPhotoIds(ids);
   };
 
-  const handleExportCurrent = () =>
-    exportCurrentSpread(stageRef, activeSpreadId, spreadSizeId, customSize, bookName);
-
   const doExportAll = async () => {
     setExporting(true);
     await exportToFolder(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
@@ -176,15 +171,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const handleExportPDF = withSignupGate('export', doExportPDF);
 
   const handleSaveGated = withSignupGate('save', saveProject);
-
-  const handleLoadProject = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => loadProject(ev.target.result);
-    reader.readAsText(file);
-    e.target.value = '';
-  };
 
   return (
     <header style={{
@@ -290,26 +276,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         {redesigned ? '✓ Redesigned' : '⟳ Redesign'}
       </button>
 
-      {/* Snap cells to template — clears white gaps without changing the template */}
-      <button
-        onClick={() => snapCellsToTemplate(activeSpreadId)}
-        style={btnStyle({ color: '#888', padding: '5px 8px' })}
-        title="Snap cells back to template original size — removes white gaps on this spread without changing the template"
-      >
-        ⤢ Fit
-      </button>
-      <button
-        onClick={() => {
-          if (confirm('Snap all spreads back to their template-original cell sizes? This removes any white gaps left from older versions.')) {
-            snapAllCellsToTemplate();
-          }
-        }}
-        style={btnStyle({ color: '#666', fontSize: 10, padding: '5px 8px' })}
-        title="Apply snap-to-template to EVERY spread"
-      >
-        ⤢ All
-      </button>
-
       {/* Auto arrange (current spread) */}
       <button onClick={handleAutoArrange}
         style={btnStyle({
@@ -382,14 +348,15 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         const starter = starterStatus(authUser);
         const avatarBg = eff === 'pro' ? '#3a2a08' : eff === 'starter' ? '#0e2a3a' : eff === 'trial' ? '#1a3a2a' : '#1a3580';
         const avatarColor = eff === 'pro' ? '#f6c90e' : eff === 'starter' ? '#6fb8d8' : eff === 'trial' ? '#6fcf97' : '#fff';
+        const displayName = authUser.email.split('@')[0];
         return (
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
             onClick={() => setProfileOpen((v) => !v)}
             style={{
-              ...btnStyle({ padding: '4px 9px' }),
-              display: 'flex', alignItems: 'center', gap: 6,
-              maxWidth: 180,
+              ...btnStyle({ padding: '4px 10px' }),
+              display: 'flex', alignItems: 'center', gap: 7,
+              maxWidth: 240,
             }}
             title={
               eff === 'pro' ? `${authUser.email} · Pro (unlimited)` :
@@ -399,20 +366,24 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
             }
           >
             <span style={{
-              width: 18, height: 18, borderRadius: '50%',
+              width: 20, height: 20, borderRadius: '50%',
               background: avatarBg, color: avatarColor,
-              fontSize: 9, fontWeight: 700, display: 'inline-flex',
+              fontSize: 10, fontWeight: 700, display: 'inline-flex',
               alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
-              {(authUser.email || '?').slice(0, 1).toUpperCase()}
+              {displayName.slice(0, 1).toUpperCase()}
             </span>
             <span style={{
-              fontSize: 10, color: '#aaa', whiteSpace: 'nowrap',
-              overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130,
+              fontSize: 11, color: '#ccc', fontWeight: 500,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              maxWidth: 180,
             }}>
-              {authUser.email}
+              {displayName}
             </span>
+            {eff === 'pro' && <span style={{ fontSize: 8, color: '#f6c90e', letterSpacing: 0.5, flexShrink: 0 }}>PRO</span>}
+            {eff === 'starter' && <span style={{ fontSize: 8, color: '#6fb8d8', letterSpacing: 0.5, flexShrink: 0 }}>STARTER</span>}
+            {eff === 'trial' && <span style={{ fontSize: 8, color: '#6fcf97', letterSpacing: 0.5, flexShrink: 0 }}>TRIAL</span>}
           </button>
           {profileOpen && (
             <>
@@ -496,17 +467,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {/* Autosave status */}
       <AutosaveBadge status={autosaveStatus.status} meta={autosaveStatus.meta} />
 
-      <span style={{ fontSize: 10, color: '#333', flexShrink: 0 }}>
-        {spreads.length} spread{spreads.length !== 1 ? 's' : ''}
-      </span>
-
-      <span
-        title="AutoBook by NEJ · Proprietary software · All rights reserved"
-        style={{ fontSize: 9, color: '#2a2a2a', flexShrink: 0, fontVariantNumeric: 'tabular-nums', userSelect: 'none' }}
-      >
-        © NEJ v1.0.0
-      </span>
-
       {/* Preview */}
       <button onClick={onPreview}
         style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
@@ -528,71 +488,102 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       <Divider />
 
-      {/* My Projects — switch / create / duplicate / delete */}
+      {/* My Projects — switch / create / duplicate / delete · also holds backup */}
       <button onClick={() => setShowProjects(true)}
         style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
-        title="Switch between projects · create new · duplicate · delete">
+        title="Switch between projects · create new · duplicate · delete · backup/restore">
         📁 Projects
       </button>
 
-      {/* Save / Load project */}
-      <button onClick={handleSaveGated}
-        style={btnStyle({ color: '#6a9fd8', border: '1px solid #1e2d45', background: '#0e1620' })}
-        title="Save project as .photobook file">
-        ↓ Save
-      </button>
-      <button onClick={() => fileInputRef.current?.click()}
-        style={btnStyle({ color: '#6a9fd8', border: '1px solid #1e2d45', background: '#0e1620' })}
-        title="Load a .photobook project file">
-        ↑ Load
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".photobook,application/json"
-        style={{ display: 'none' }}
-        onChange={handleLoadProject}
+      {/* Export — single button with JPG / PDF options */}
+      <ExportMenu
+        onExportJPGs={handleExportAll}
+        onExportPDF={handleExportPDF}
+        exporting={exporting}
+        exportingPDF={exportingPDF}
       />
-
-      <Divider />
-
-      {/* Export */}
-      <button onClick={handleExportCurrent}
-        style={btnStyle({ color: '#6a9fd8', border: '1px solid #1e2d45', background: '#0e1620' })}>
-        Export Spread
-      </button>
-
-      <button onClick={handleExportAll} disabled={exporting}
-        style={{
-          ...btnStyle({ background: '#1a3580', color: '#fff', border: 'none' }),
-          opacity: exporting ? 0.65 : 1,
-          cursor: exporting ? 'wait' : 'pointer',
-        }}
-        title="Choose a folder — all spreads are saved as numbered JPGs">
-        {exporting ? 'Exporting…' : '↓ Export All JPGs'}
-      </button>
-
-      <button onClick={handleExportPDF} disabled={exportingPDF}
-        style={{
-          ...btnStyle({ background: '#2a1a10', color: '#d4843a', border: '1px solid #3a2a1a' }),
-          opacity: exportingPDF ? 0.65 : 1,
-          cursor: exportingPDF ? 'wait' : 'pointer',
-        }}
-        title="Export all spreads as print-ready PDF (opens browser print dialog)">
-        {exportingPDF ? 'Preparing…' : 'Print PDF'}
-      </button>
 
       <AuthModal
         open={Boolean(signup)}
         action={signup?.action}
         onClose={() => setSignup(null)}
       />
-      <ProjectPicker open={showProjects} onClose={() => setShowProjects(false)} />
+      <ProjectPicker
+        open={showProjects}
+        onClose={() => setShowProjects(false)}
+        onSaveBackup={handleSaveGated}
+        onLoadBackup={loadProject}
+      />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} />
     </header>
   );
 }
+
+// Combined export dropdown — replaces the old Export All JPGs + Print PDF
+// pair. Single button, click to open menu with both options.
+function ExportMenu({ onExportJPGs, onExportPDF, exporting, exportingPDF }) {
+  const [open, setOpen] = useState(false);
+  const busy = exporting || exportingPDF;
+  const label = exporting ? 'Exporting JPGs…' : exportingPDF ? 'Preparing PDF…' : '↓ Export ▾';
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => !busy && setOpen((v) => !v)}
+        disabled={busy}
+        style={{
+          ...btnStyle({ background: '#1a3580', color: '#fff', border: 'none', padding: '5px 12px' }),
+          opacity: busy ? 0.7 : 1,
+          cursor: busy ? 'wait' : 'pointer',
+          fontWeight: 600,
+        }}
+        title="Export all spreads — choose JPGs or print-ready PDF"
+      >
+        {label}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
+          />
+          <div style={{
+            position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+            zIndex: 31,
+            background: '#0e0e0e', border: '1px solid #1f1f1f',
+            borderRadius: 6, padding: 4, minWidth: 200,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          }}>
+            <button
+              onClick={() => { setOpen(false); onExportJPGs(); }}
+              style={exportMenuItem}
+              title="All spreads saved as numbered JPGs to a folder"
+            >
+              <span style={{ color: '#6a9fd8', fontWeight: 600 }}>↓ All JPGs</span>
+              <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Numbered images, one per spread</span>
+            </button>
+            <button
+              onClick={() => { setOpen(false); onExportPDF(); }}
+              style={exportMenuItem}
+              title="Print-ready PDF with all spreads"
+            >
+              <span style={{ color: '#d4843a', fontWeight: 600 }}>⬡ Print PDF</span>
+              <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Single PDF for print shops</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const exportMenuItem = {
+  display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+  width: '100%', textAlign: 'left',
+  padding: '8px 12px',
+  background: 'none', border: 'none',
+  fontSize: 12, cursor: 'pointer',
+  borderRadius: 4,
+};
 
 function AutosaveBadge({ status, meta }) {
   const map = {

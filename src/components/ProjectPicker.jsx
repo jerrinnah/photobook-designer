@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   getProjectIndex, createProject, deleteProject, duplicateProject,
   setActiveProjectId, getActiveProjectId,
@@ -6,11 +6,33 @@ import {
 
 // "My Projects" modal — lists every project saved in this browser.
 // Click to switch (reloads the app). Plus / Duplicate / Delete actions.
-export default function ProjectPicker({ open, onClose }) {
+// Backup section at the bottom handles .photobook file export / import.
+export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBackup }) {
   const [projects, setProjects] = useState([]);
   const [renaming, setRenaming] = useState(null); // { id, value }
   const [newName, setNewName] = useState('');
   const activeId = getActiveProjectId();
+  const fileInputRef = useRef(null);
+
+  const handleBackupClick = async () => {
+    if (onSaveBackup) await onSaveBackup();
+  };
+
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFilePicked = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onLoadBackup?.(ev.target.result);
+      onClose();
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   const refresh = async () => {
     const idx = await getProjectIndex();
@@ -121,8 +143,30 @@ export default function ProjectPicker({ open, onClose }) {
           ))}
         </div>
 
-        <div style={{ fontSize: 10, color: '#444', textAlign: 'center', paddingTop: 6, borderTop: '1px solid #1a1a1a' }}>
-          Projects are saved in this browser. Use ↓ Save in the toolbar for a portable .photobook backup.
+        {/* Backup section — portable .photobook file export/import */}
+        <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 12, marginTop: 4 }}>
+          <div style={{ fontSize: 10, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+            Backup
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={handleBackupClick} style={btnBackup} title="Download current project as a portable .photobook file">
+              ↓ Download backup
+            </button>
+            <button onClick={handleRestoreClick} style={btnBackup} title="Restore a .photobook file from disk">
+              ↑ Restore from file
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".photobook,application/json"
+              style={{ display: 'none' }}
+              onChange={handleFilePicked}
+            />
+          </div>
+          <div style={{ fontSize: 10, color: '#444', lineHeight: 1.5 }}>
+            Projects are saved in this browser automatically. Use Download backup before clearing
+            cache or moving to a different machine.
+          </div>
         </div>
       </div>
     </div>
@@ -153,4 +197,10 @@ const btnGhost = {
 const iconBtn = {
   background: 'none', border: 'none', color: '#666',
   fontSize: 14, cursor: 'pointer', padding: '4px 8px',
+};
+const btnBackup = {
+  flex: 1, padding: '8px 12px', fontSize: 11,
+  background: '#0e1620', color: '#6a9fd8',
+  border: '1px solid #1e2d45', borderRadius: 5,
+  cursor: 'pointer', whiteSpace: 'nowrap',
 };
