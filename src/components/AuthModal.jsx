@@ -1,33 +1,62 @@
 import { useState } from 'react';
-import { sendMagicLink, isSupabaseConfigured } from '../utils/supabase';
+import { sendMagicLink, signInWithPassword, isSupabaseConfigured } from '../utils/supabase';
 
-// Replaces SignupModal. One email field, sends a magic link. Same link
-// works for sign-in and sign-up — Supabase Auth resolves whether the
-// email is new or returning.
+// Sign-in / sign-up modal with two modes:
+//   - "Password" tab — existing users who set a password can sign in
+//     instantly with email + password.
+//   - "Magic link" tab — new users (and anyone who hasn't set a
+//     password yet) get a one-time link via email.
+//
+// New users always start on the magic-link tab because we use the link
+// to verify the email. After their first sign-in they can set a
+// password from the profile menu and skip magic links from then on.
 export default function AuthModal({ open, onClose, action }) {
+  const [mode, setMode] = useState('password'); // 'password' | 'magic'
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [sent, setSent] = useState(false);     // magic-link confirmation
   const [error, setError] = useState(null);
 
   if (!open) return null;
 
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const canPasswordSubmit = validEmail && password.length >= 8 && !pending;
+  const canMagicSubmit    = validEmail && !pending;
 
-  const submit = async (e) => {
+  const submitPassword = async (e) => {
     e.preventDefault();
-    if (!validEmail || sending) return;
-    setSending(true);
-    setError(null);
+    if (!canPasswordSubmit) return;
+    setPending(true); setError(null);
+    try {
+      await signInWithPassword(email, password);
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Sign-in failed.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const submitMagic = async (e) => {
+    e.preventDefault();
+    if (!canMagicSubmit) return;
+    setPending(true); setError(null);
     try {
       await sendMagicLink(email, phone || null);
       setSent(true);
     } catch (err) {
       setError(err.message || 'Could not send link. Try again.');
     } finally {
-      setSending(false);
+      setPending(false);
     }
+  };
+
+  const switchMode = (next) => {
+    setMode(next);
+    setError(null);
+    setPassword('');
   };
 
   return (
@@ -39,8 +68,8 @@ export default function AuthModal({ open, onClose, action }) {
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#111', border: '1px solid #1f1f1f',
-        borderRadius: 10, padding: '28px 30px',
-        width: 400, maxWidth: '92vw',
+        borderRadius: 10, padding: '24px 28px',
+        width: 420, maxWidth: '94vw',
         boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
         color: '#e0e0e0',
       }}>
@@ -49,15 +78,8 @@ export default function AuthModal({ open, onClose, action }) {
             ? 'Check your email'
             : action === 'save' ? 'Sign in to save your work'
             : action === 'export' ? 'Sign in to export'
-            : 'Sign in or sign up'}
+            : 'Sign in'}
         </div>
-
-        {!sent && (
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 18, lineHeight: 1.55 }}>
-            Enter your email — we'll send you a one-time sign-in link. Same email
-            signs you back in next time. No password needed.
-          </div>
-        )}
 
         {!isSupabaseConfigured && (
           <div style={warnStyle}>
@@ -65,8 +87,23 @@ export default function AuthModal({ open, onClose, action }) {
           </div>
         )}
 
+        {/* Mode tabs */}
+        {!sent && (
+          <div style={{
+            display: 'flex', gap: 0, marginBottom: 16, marginTop: 12,
+            borderBottom: '1px solid #1f1f1f',
+          }}>
+            <Tab active={mode === 'password'} onClick={() => switchMode('password')}>
+              Password
+            </Tab>
+            <Tab active={mode === 'magic'} onClick={() => switchMode('magic')}>
+              Magic link
+            </Tab>
+          </div>
+        )}
+
         {sent ? (
-          <div style={{ padding: '16px 0' }}>
+          <div style={{ padding: '4px 0' }}>
             <div style={{ fontSize: 13, color: '#6fcf97', marginBottom: 10 }}>
               ✓ Magic link sent to <b style={{ color: '#ddd' }}>{email}</b>
             </div>
@@ -75,12 +112,20 @@ export default function AuthModal({ open, onClose, action }) {
               You'll land back here, automatically signed in. The link
               expires in 1 hour.
             </div>
-            <div style={{ fontSize: 11, color: '#555', marginTop: 16 }}>
-              Wrong email? <button onClick={() => { setSent(false); setEmail(''); setPhone(''); }} style={linkBtn}>Try another</button>
+            <div style={{ fontSize: 11, color: '#666', marginTop: 14, lineHeight: 1.5 }}>
+              Tip: after you sign in, open your profile menu (top right) and
+              choose <b style={{ color: '#aaa' }}>Set password</b> to skip the
+              magic link next time.
+            </div>
+            <div style={{ fontSize: 11, color: '#555', marginTop: 12 }}>
+              Wrong email?{' '}
+              <button onClick={() => { setSent(false); setEmail(''); setPassword(''); setPhone(''); }} style={linkBtn}>
+                Try another
+              </button>
             </div>
           </div>
-        ) : (
-          <form onSubmit={submit}>
+        ) : mode === 'password' ? (
+          <form onSubmit={submitPassword}>
             <label style={{ display: 'block', marginBottom: 12 }}>
               <span style={labelStyle}>Email</span>
               <input
@@ -90,7 +135,50 @@ export default function AuthModal({ open, onClose, action }) {
                 style={inputStyle}
               />
             </label>
+            <label style={{ display: 'block', marginBottom: 14 }}>
+              <span style={labelStyle}>Password</span>
+              <input
+                type="password" required minLength={8}
+                value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                style={inputStyle}
+              />
+            </label>
 
+            {error && <div style={errStyle}>{error}</div>}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14, alignItems: 'center' }}>
+              <button type="button" onClick={() => switchMode('magic')}
+                style={{ ...linkBtn, marginRight: 'auto' }}>
+                Forgot password? Email me a link
+              </button>
+              <button type="button" onClick={onClose} disabled={pending} style={btnGhost}>
+                Cancel
+              </button>
+              <button type="submit" disabled={!canPasswordSubmit || !isSupabaseConfigured} style={{
+                ...btnPrimary,
+                opacity: (!canPasswordSubmit || !isSupabaseConfigured) ? 0.5 : 1,
+                cursor: (!canPasswordSubmit || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
+              }}>
+                {pending ? 'Signing in…' : 'Sign in'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={submitMagic}>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.55 }}>
+              New here, or no password set yet? Enter your email and we'll send a
+              one-time sign-in link. After you arrive you can set a password.
+            </div>
+            <label style={{ display: 'block', marginBottom: 12 }}>
+              <span style={labelStyle}>Email</span>
+              <input
+                type="email" autoFocus required
+                value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                style={inputStyle}
+              />
+            </label>
             <label style={{ display: 'block', marginBottom: 14 }}>
               <span style={labelStyle}>Phone <span style={{ textTransform: 'none', color: '#444' }}>(optional)</span></span>
               <input
@@ -102,22 +190,36 @@ export default function AuthModal({ open, onClose, action }) {
 
             {error && <div style={errStyle}>{error}</div>}
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button type="button" onClick={onClose} disabled={sending} style={btnGhost}>
-                Cancel
-              </button>
-              <button type="submit" disabled={!validEmail || sending || !isSupabaseConfigured} style={{
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button type="button" onClick={onClose} disabled={pending} style={btnGhost}>Cancel</button>
+              <button type="submit" disabled={!canMagicSubmit || !isSupabaseConfigured} style={{
                 ...btnPrimary,
-                opacity: (!validEmail || sending || !isSupabaseConfigured) ? 0.5 : 1,
-                cursor: (!validEmail || sending || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
+                opacity: (!canMagicSubmit || !isSupabaseConfigured) ? 0.5 : 1,
+                cursor: (!canMagicSubmit || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
               }}>
-                {sending ? 'Sending…' : '✉ Send sign-in link'}
+                {pending ? 'Sending…' : '✉ Send sign-in link'}
               </button>
             </div>
           </form>
         )}
       </div>
     </div>
+  );
+}
+
+function Tab({ active, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      padding: '8px 14px',
+      background: 'none', border: 'none',
+      color: active ? '#ddd' : '#666',
+      fontSize: 12, fontWeight: active ? 600 : 400,
+      cursor: 'pointer',
+      borderBottom: `2px solid ${active ? '#4f8ef7' : 'transparent'}`,
+      marginBottom: -1,
+    }}>
+      {children}
+    </button>
   );
 }
 
@@ -134,7 +236,7 @@ const inputStyle = {
 const btnPrimary = {
   padding: '8px 16px', fontSize: 12, fontWeight: 600,
   background: '#1a3580', color: '#fff', border: 'none',
-  borderRadius: 5, cursor: 'pointer',
+  borderRadius: 5,
 };
 const btnGhost = {
   padding: '8px 14px', fontSize: 12,

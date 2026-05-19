@@ -98,6 +98,45 @@ export async function signOut() {
   try { localStorage.removeItem('photobook-pending-phone'); } catch { /* ignore */ }
 }
 
+// ── Password auth (optional, for returning users) ───────────────────
+// Users always start with magic link (Supabase Auth verifies the email
+// that way). After their first sign-in they can optionally set a
+// password from the profile menu — subsequent sign-ins can then use
+// either method.
+
+export async function signInWithPassword(email, password) {
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  const trimmed = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    throw new Error('Please enter a valid email.');
+  }
+  if (!password || password.length < 8) {
+    throw new Error('Password must be at least 8 characters.');
+  }
+  const { error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
+  if (error) {
+    // Surface Supabase's "Invalid login credentials" in a friendlier way.
+    if (/invalid login/i.test(error.message)) {
+      throw new Error('Wrong email or password. New here? Use the magic link tab to sign up.');
+    }
+    throw new Error(error.message);
+  }
+}
+
+// Sets (or changes) the current user's password. Requires an active
+// session (they had to magic-link in first). After this, the same email
+// can sign in via password OR magic link.
+export async function setMyPassword(newPassword) {
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error('Password must be at least 8 characters.');
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Sign in first via magic link, then set a password.');
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+}
+
 // After a magic-link redirect, the auth state-change listener fires
 // SIGNED_IN. We then call ensure_my_user to find or create the public.users
 // row matching the auth session and cache the profile.

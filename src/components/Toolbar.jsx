@@ -9,6 +9,7 @@ import AuthModal from './AuthModal';
 import ProjectPicker from './ProjectPicker';
 import BrandingSettings from './BrandingSettings';
 import ShareModal from './ShareModal';
+import SetPasswordModal from './SetPasswordModal';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -62,6 +63,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [signup, setSignup] = useState(null); // { action: 'save'|'export' } | null
   const [showProjects, setShowProjects] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
@@ -443,6 +445,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     Brand settings
                   </button>
                   <button
+                    onClick={() => { setShowPassword(true); setProfileOpen(false); }}
+                    style={menuItemStyle}
+                  >
+                    Set / change password
+                  </button>
+                  <button
                     onClick={handleSignOut}
                     style={{ ...menuItemStyle, color: '#e05c5c' }}
                   >
@@ -515,6 +523,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onLoadBackup={loadProject}
       />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
+      <SetPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} stageRef={stageRef} />
     </header>
   );
