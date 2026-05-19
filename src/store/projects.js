@@ -101,6 +101,15 @@ export async function createProject(name = 'Untitled photobook') {
   return id;
 }
 
+// Rename a project in the index. Project name and book name are the
+// same field — whichever surface (toolbar input or Projects modal) the
+// user edits, the other reflects it.
+export async function renameProject(id, name) {
+  if (!id) return;
+  const clean = (name || '').trim() || 'Untitled photobook';
+  await upsertIndexEntry({ id, name: clean, savedAt: Date.now() });
+}
+
 // ── Migration ──────────────────────────────────────────────────────
 // On first run after this feature ships, take whatever the legacy
 // single-project autosave has and turn it into the user's first

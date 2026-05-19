@@ -17,8 +17,8 @@ const STEPS = [
   },
   {
     selector: '[data-tour="book-name"]',
-    title: 'Name your book',
-    body: 'Appears in your exports (filenames) and at the top of the share link your clients see.',
+    title: 'Name your project',
+    body: 'This is the book\'s name — used in export filenames, shown to clients on the share link, and listed in your Projects menu. Edit it here anytime; everywhere stays in sync.',
     placement: 'bottom',
   },
   {

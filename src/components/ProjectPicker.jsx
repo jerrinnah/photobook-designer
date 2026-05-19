@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   getProjectIndex, createProject, deleteProject, duplicateProject,
-  setActiveProjectId, getActiveProjectId,
+  setActiveProjectId, getActiveProjectId, saveProject,
 } from '../store/projects';
 
 // "My Projects" modal — lists every project saved in this browser.
@@ -46,6 +46,11 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
   const handleCreate = async () => {
     const name = newName.trim() || 'Untitled photobook';
     const id = await createProject(name);
+    // Seed the project blob with the bookName so the editor opens with
+    // the right name in the toolbar (project name = book name, single
+    // source of truth). The autosave will fill in the rest of the
+    // state on first interaction.
+    await saveProject(id, { bookName: name, savedAt: Date.now() });
     setActiveProjectId(id);
     window.location.reload();
   };

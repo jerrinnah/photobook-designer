@@ -236,13 +236,16 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         }}
       />
 
-      {/* Book name */}
+      {/* Project / book name — single field, single source of truth.
+          Edits here rename the active project in the Projects modal. */}
       <input
         data-tour="book-name"
         value={bookName}
-        onChange={(e) => setBookName(e.target.value.trim() || 'photobook')}
-        style={{ ...inputStyle, width: 100, fontWeight: 600, color: '#ccc', fontSize: 12, flexShrink: 0 }}
-        title="Book name (used in export filenames)"
+        onChange={(e) => setBookName(e.target.value)}
+        onBlur={(e) => setBookName(e.target.value.trim() || 'Untitled photobook')}
+        style={{ ...inputStyle, width: 140, fontWeight: 600, color: '#ccc', fontSize: 12, flexShrink: 0 }}
+        title="Project name — used in export filenames and shown in the Projects list"
+        placeholder="Project name"
       />
 
       <Divider />

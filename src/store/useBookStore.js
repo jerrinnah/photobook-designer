@@ -346,7 +346,20 @@ export const useBookStore = create((set, get) => ({
   setSpreadSize: (id) => set({ spreadSizeId: id }),
   setCustomSize: (size) => set({ customSize: size }),
   setBlendEdges: (val) => set(h(() => ({ blendEdges: val }))),
-  setBookName: (name) => set({ bookName: name }),
+  // setBookName: writes the new name into the store AND renames the
+  // current project in the Projects index. Project name = book name
+  // (one source of truth — whichever surface the user edits, the other
+  // reflects it).
+  setBookName: (name) => {
+    const clean = (name || '').trim() || 'photobook';
+    set({ bookName: clean });
+    // Best-effort rename — projects.js is async-imported to avoid a
+    // circular dep at module init.
+    import('./projects').then(({ getActiveProjectId, renameProject }) => {
+      const id = getActiveProjectId();
+      if (id) renameProject(id, clean);
+    }).catch(() => { /* ignore */ });
+  },
   setGap: (gap) => set(h(() => ({ gap }))),
 
   // ── Photo selection ────────────────────────────────────────────────
