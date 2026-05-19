@@ -392,7 +392,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                 style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
               />
               <div style={{
-                position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+                position: 'fixed', right: 10, top: 48,
                 zIndex: 31,
                 background: '#0e0e0e', border: '1px solid #1f1f1f',
                 borderRadius: 6, padding: 6, minWidth: 220,
@@ -547,7 +547,7 @@ function ExportMenu({ onExportJPGs, onExportPDF, exporting, exportingPDF }) {
             style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
           />
           <div style={{
-            position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+            position: 'fixed', right: 10, top: 48,
             zIndex: 31,
             background: '#0e0e0e', border: '1px solid #1f1f1f',
             borderRadius: 6, padding: 4, minWidth: 200,
