@@ -91,11 +91,29 @@ export async function sendMagicLink(email, pendingPhone = null) {
   if (error) throw new Error(error.message);
 }
 
-// Sign out — clears Supabase session + local cache
+// Sign out — clears Supabase session + local cache, then reloads so no
+// component anywhere can hang on to stale in-memory auth state. The
+// reload is intentional: it's the simplest guarantee that sign-out is
+// always a clean break, regardless of which component subscribed where.
 export async function signOut() {
-  try { await supabase?.auth.signOut(); } catch { /* ignore */ }
+  try { await supabase?.auth.signOut(); } catch { /* ignore — proceed anyway */ }
+
+  // Belt-and-braces: manually purge any Supabase auth keys in case
+  // signOut() didn't fully clean up (network errors, stale tokens, etc.)
+  try {
+    const allKeys = Object.keys(localStorage);
+    for (const k of allKeys) {
+      if (k.startsWith('sb-') && (k.endsWith('-auth-token') || k.endsWith('-auth-token-code-verifier'))) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch { /* ignore */ }
+
   clearStoredUser();
   try { localStorage.removeItem('photobook-pending-phone'); } catch { /* ignore */ }
+
+  // Hard reload to clear every React tree's cached auth state.
+  setTimeout(() => { window.location.reload(); }, 50);
 }
 
 // ── Password auth (optional, for returning users) ───────────────────
