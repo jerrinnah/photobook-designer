@@ -21,6 +21,46 @@ const SHARE_QUALITY = 0.72;
 const UPLOAD_CONCURRENCY = 4;
 const UPLOAD_TIMEOUT_MS = 180_000; // 3 min per spread — generous for slow uploads
 const CAPTURE_SETTLE_MS = 220;     // time for Konva stage to repaint after spread switch
+const SHARE_CACHE_KEY = 'photobook-share-cache-v1';
+
+// ── Content-addressed cache ─────────────────────────────────────────
+// Each captured spread is uploaded to share-previews/{userId}/{hash}.webp
+// where {hash} is a deterministic hash of the spread's visible state.
+// Unchanged spreads on a re-share share the exact same path → already
+// uploaded → skip render and upload entirely.
+
+// djb2 — fast string hash, deterministic, plenty of bits for our purposes
+function djb2(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+// Capture only the bits that affect the final rendered pixels — anything
+// else (UI-only state) is excluded so cosmetic changes don't invalidate
+// the cache.
+function hashSpread(spread) {
+  const minimal = {
+    bg: spread.bgColor || null,
+    tmpl: spread.templateId || null,
+    cells: (spread.cells || []).map((c) => ({
+      p: c.photoId, z: c.zoom, ox: c.offsetX, oy: c.offsetY,
+      mc: c.manualCrop, r: c.rotation, l: c.locked,
+    })),
+    geo: spread.cellGeometry,
+    cap: spread.captions,
+  };
+  return djb2(JSON.stringify(minimal));
+}
+
+function loadShareCache() {
+  try { return JSON.parse(localStorage.getItem(SHARE_CACHE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveShareCache(cache) {
+  try { localStorage.setItem(SHARE_CACHE_KEY, JSON.stringify(cache)); }
+  catch { localStorage.removeItem(SHARE_CACHE_KEY); }
+}
 
 const _webpProbe = (() => {
   try {
@@ -32,48 +72,33 @@ const _webpProbe = (() => {
 const SHARE_MIME = _webpProbe ? 'image/webp' : 'image/jpeg';
 const SHARE_EXT  = _webpProbe ? 'webp' : 'jpg';
 
-// ── Capture: render every spread to a WebP Blob ─────────────────────
-// stageRef.current is the Konva Stage. We flip activeSpreadId one
-// at a time, wait for the editor to repaint, then snapshot.
-async function captureSpreadsForShare({
-  stageRef, spreads, setActiveSpread, originalActiveId, onProgress,
-}) {
-  if (!stageRef?.current) throw new Error('Editor stage not ready — close the share dialog and try again.');
-  const captured = [];
-  for (let i = 0; i < spreads.length; i++) {
-    const sp = spreads[i];
-    setActiveSpread(sp.id);
-    await new Promise((r) => setTimeout(r, CAPTURE_SETTLE_MS));
-
-    const stage = stageRef.current;
-    if (!stage) throw new Error('Editor stage disappeared mid-capture.');
-    const w = stage.width();
-    const h = stage.height();
-    // Cap the long edge so big square/portfolio spreads don't produce
-    // multi-MB WebPs that take forever to upload.
-    const longEdge = Math.max(w, h);
-    const pixelRatio = longEdge > MAX_SPREAD_LONG_EDGE ? MAX_SPREAD_LONG_EDGE / longEdge : 1;
-    const canvas = stage.toCanvas({ pixelRatio });
-    const blob = await new Promise((resolve) => {
-      canvas.toBlob((b) => resolve(b), SHARE_MIME, SHARE_QUALITY);
-    });
-    if (!blob) throw new Error(`Couldn't capture spread ${i + 1}`);
-    console.info(`[Share] captured spread ${i + 1} — ${(blob.size / 1024).toFixed(0)} KB (${canvas.width}×${canvas.height})`);
-    captured.push({ id: sp.id, role: sp.role, w, h, blob });
-    onProgress?.({ stage: 'capture', done: i + 1, total: spreads.length });
-  }
-  setActiveSpread(originalActiveId);
-  return captured;
+// ── Capture: render one spread to a WebP Blob ───────────────────────
+async function captureOneSpread(stageRef, spread, setActiveSpread, index) {
+  setActiveSpread(spread.id);
+  await new Promise((r) => setTimeout(r, CAPTURE_SETTLE_MS));
+  const stage = stageRef.current;
+  if (!stage) throw new Error('Editor stage disappeared mid-capture.');
+  const w = stage.width();
+  const h = stage.height();
+  const longEdge = Math.max(w, h);
+  const pixelRatio = longEdge > MAX_SPREAD_LONG_EDGE ? MAX_SPREAD_LONG_EDGE / longEdge : 1;
+  const canvas = stage.toCanvas({ pixelRatio });
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob((b) => resolve(b), SHARE_MIME, SHARE_QUALITY);
+  });
+  if (!blob) throw new Error(`Couldn't capture spread ${index + 1}`);
+  console.info(`[Share] captured spread ${index + 1} — ${(blob.size / 1024).toFixed(0)} KB (${canvas.width}×${canvas.height})`);
+  return { w, h, blob };
 }
 
-// ── Upload: push one captured spread blob ───────────────────────────
-async function uploadOneSpread(shareKey, spreadIdx, captured, onProgress) {
-  const path = `${shareKey}/spread-${spreadIdx + 1}.${SHARE_EXT}`;
+// Upload one blob to the user's content-addressed slot.
+async function uploadBlob(userBucketKey, hash, blob, spreadIdx) {
+  const path = `${userBucketKey}/${hash}.${SHARE_EXT}`;
   const startedAt = Date.now();
-  console.info(`[Share] uploading spread ${spreadIdx + 1} → ${path} (${(captured.blob.size / 1024).toFixed(0)} KB)…`);
+  console.info(`[Share] uploading spread ${spreadIdx + 1} → ${path} (${(blob.size / 1024).toFixed(0)} KB)…`);
   const { error } = await withTimeout(
-    supabase.storage.from(BUCKET).upload(path, captured.blob, {
-      contentType: captured.blob.type,
+    supabase.storage.from(BUCKET).upload(path, blob, {
+      contentType: blob.type,
       upsert: true,
       cacheControl: '604800',
     }),
@@ -83,31 +108,7 @@ async function uploadOneSpread(shareKey, spreadIdx, captured, onProgress) {
   if (error) throw new Error(`Upload failed for spread ${spreadIdx + 1}: ${error.message}`);
   console.info(`[Share] spread ${spreadIdx + 1} uploaded in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  onProgress?.(captured.blob.size);
-  return {
-    id: captured.id,
-    role: captured.role,
-    w: captured.w,
-    h: captured.h,
-    imageUrl: publicUrl,
-  };
-}
-
-async function uploadSpreadsInBatches(shareKey, capturedAll, onProgress) {
-  const results = new Array(capturedAll.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < capturedAll.length) {
-      const i = cursor++;
-      results[i] = await uploadOneSpread(shareKey, i, capturedAll[i], onProgress);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, capturedAll.length) }, worker));
-  return results;
-}
-
-function newShareKey() {
-  return (window.crypto?.randomUUID?.() || `s_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  return publicUrl;
 }
 
 // Promise wrapper with a timeout — if `promise` doesn't settle in
@@ -125,7 +126,12 @@ function withTimeout(promise, ms, label) {
 // ── Main entry: createShare ─────────────────────────────────────────
 // state: the relevant slice of useBookStore state (bookName, etc).
 // stage: { stageRef, setActiveSpread, originalActiveId } — capture deps.
-// onProgress: ({stage:'capture'|'upload', done, total, bytes}) => void
+// onProgress: ({stage:'capture'|'upload', done, total, cached, bytes}) => void
+//
+// Smart re-share: each spread is hashed and the imageUrl cached locally
+// under {userId}/{hash}.webp. Unchanged spreads on subsequent shares are
+// reused instantly — no render, no upload. Only changed or new spreads
+// pay the capture + upload cost.
 export async function createShare(state, stage, onProgress) {
   const user = getStoredUser();
   if (!user?.id) throw new Error('Sign in first.');
@@ -140,54 +146,74 @@ export async function createShare(state, stage, onProgress) {
   if (!session?.access_token) {
     throw new Error('Your sign-in session has expired. Please sign out (profile menu) and sign back in via magic link, then try sharing again.');
   }
+  if (!stage?.stageRef?.current) throw new Error('Editor stage not ready — close and reopen the share dialog.');
 
   const spreads = state.spreads || [];
   if (spreads.length === 0) throw new Error('Nothing to share — add a spread first.');
 
-  const shareKey = newShareKey();
+  // The user's auth UUID becomes the storage folder. Content-addressed
+  // path inside: {hash}.webp. Multiple shares from the same user reuse
+  // the same path when a spread hasn't changed.
+  const userBucketKey = session.user.id;
+  const cache = loadShareCache();
+  const userCache = cache[userBucketKey] || {};
 
-  // 1. Render every spread to a Blob in the editor stage.
-  const captured = await captureSpreadsForShare({
-    stageRef: stage.stageRef,
-    spreads,
-    setActiveSpread: stage.setActiveSpread,
-    originalActiveId: stage.originalActiveId,
-    onProgress,
+  // Hash each spread first so we know what's cached vs needs work.
+  const tasks = spreads.map((sp, i) => {
+    const hash = hashSpread(sp);
+    return { idx: i, spread: sp, hash, cachedUrl: userCache[hash] || null };
   });
+  const cachedCount = tasks.filter((t) => t.cachedUrl).length;
+  console.info(`[Share] ${cachedCount} of ${tasks.length} spreads cached — capturing ${tasks.length - cachedCount}`);
 
-  // 2. Push the blobs to Storage in parallel.
-  let bytes = 0;
+  // Walk spreads in order. Cached ones resolve instantly; uncached ones
+  // need a Konva render + upload. Renders must be sequential because
+  // they share the single editor stage.
   let done = 0;
-  const uploaded = await uploadSpreadsInBatches(shareKey, captured, (size) => {
+  let bytes = 0;
+  const finalized = [];
+  for (const task of tasks) {
+    if (task.cachedUrl) {
+      finalized.push({
+        id: task.spread.id, role: task.spread.role,
+        w: null, h: null, imageUrl: task.cachedUrl,
+      });
+      done++;
+      onProgress?.({ stage: 'capture', done, total: tasks.length, cached: cachedCount });
+      continue;
+    }
+    // Not cached — render + upload
+    const { w, h, blob } = await captureOneSpread(stage.stageRef, task.spread, stage.setActiveSpread, task.idx);
+    const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx);
+    userCache[task.hash] = url;
+    cache[userBucketKey] = userCache;
+    saveShareCache(cache);
+    bytes += blob.size;
+    finalized.push({ id: task.spread.id, role: task.spread.role, w, h, imageUrl: url });
     done++;
-    bytes += size || 0;
-    onProgress?.({ stage: 'upload', done, total: captured.length, bytes });
-  });
+    onProgress?.({ stage: 'upload', done, total: tasks.length, cached: cachedCount, bytes });
+  }
+  stage.setActiveSpread(stage.originalActiveId);
 
-  // 3. Build the lightweight snapshot. No photos, no template state —
-  //    the viewer only needs the spread images and book-level meta.
+  // Build snapshot — URLs only, no template state.
   const snapshot = {
     bookName: state.bookName,
     spreadSizeId: state.spreadSizeId,
     customSize: state.customSize,
-    spreads: uploaded,
+    spreads: finalized,
   };
 
-  // 4. Insert the row.
+  // Insert the row. share_key is now the user's content-addressed folder
+  // (rather than a per-share folder); delete_share no longer purges
+  // the bucket since files are shared across all the user's shares.
   const { data, error } = await supabase.rpc('create_share', {
     p_project_name: state.bookName || 'Untitled',
-    p_share_key: shareKey,
+    p_share_key: userBucketKey,
     p_snapshot: snapshot,
   });
-  if (error) {
-    try { await purgeShareFolder(shareKey); } catch { /* ignore */ }
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
   const token = typeof data === 'string' ? data : data?.[0];
-  if (!token) {
-    try { await purgeShareFolder(shareKey); } catch { /* ignore */ }
-    throw new Error('Failed to create share');
-  }
+  if (!token) throw new Error('Failed to create share');
   return token;
 }
 
@@ -212,23 +238,14 @@ export async function getMyShares() {
   return Array.isArray(data) ? data : [];
 }
 
-// Delete the DB row AND the bucket folder so the share is fully revoked.
+// Revoke a share — just delete the DB row. The actual image files
+// stay in storage because they're content-addressed and may be
+// referenced by other shares the user has created (or might create
+// later, if they re-share an unchanged book).
 export async function deleteShare(token) {
   if (!isSupabaseConfigured) return;
-  const { data, error } = await supabase.rpc('delete_share', { p_token: token });
+  const { error } = await supabase.rpc('delete_share', { p_token: token });
   if (error) throw new Error(error.message);
-  const shareKey = typeof data === 'string' ? data : data?.[0];
-  if (shareKey) {
-    try { await purgeShareFolder(shareKey); } catch { /* best-effort */ }
-  }
-}
-
-// List + delete every object inside a share's folder.
-async function purgeShareFolder(shareKey) {
-  const { data: files, error } = await supabase.storage.from(BUCKET).list(shareKey, { limit: 1000 });
-  if (error || !files?.length) return;
-  const paths = files.map((f) => `${shareKey}/${f.name}`);
-  await supabase.storage.from(BUCKET).remove(paths);
 }
 
 export function buildShareUrl(token) {

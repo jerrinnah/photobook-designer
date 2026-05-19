@@ -133,9 +133,7 @@ export default function ShareModal({ open, onClose, stageRef }) {
         }}>
           {creating
             ? (progress && progress.total > 0
-                ? (progress.stage === 'capture'
-                    ? `Capturing spreads… ${progress.done} / ${progress.total}`
-                    : `Uploading… ${progress.done} / ${progress.total}${progress.bytes ? ` · ${(progress.bytes / 1_000_000).toFixed(1)} MB` : ''}`)
+                ? `${progress.stage === 'capture' ? 'Processing' : 'Uploading'}… ${progress.done} / ${progress.total}${progress.cached ? ` · ${progress.cached} cached` : ''}${progress.bytes ? ` · ${(progress.bytes / 1_000_000).toFixed(1)} MB` : ''}`
                 : 'Generating link…')
             : '✦ Generate share link'}
         </button>
