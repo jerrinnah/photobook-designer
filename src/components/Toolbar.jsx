@@ -6,7 +6,7 @@ import { subscribeAutosaveStatus } from '../store/autosave';
 import { getStoredUser, trackEvent, signOut, onAuthStateChange } from '../utils/supabase';
 import { isProjectUnlocked } from '../utils/paystack';
 import { getActiveProjectId } from '../store/projects';
-import { getEffectiveTier, trialStatus, starterStatus } from '../utils/premium';
+import { getEffectiveTier, trialStatus, starterStatus, priceForProject } from '../utils/premium';
 import AuthModal from './AuthModal';
 import ProjectPicker from './ProjectPicker';
 import BrandingSettings from './BrandingSettings';
@@ -123,7 +123,14 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       await fn();
       return;
     }
-    // Block — show upgrade / per-book payment options
+    // Free + not unlocked. If they haven't actually designed anything,
+    // upgrade is meaningless — nudge them to design first.
+    const price = priceForProject(spreads);
+    if (price.totalNGN === 0) {
+      alert('Add photos to at least one spread before exporting. (Try Design All to fill every spread in one click.)');
+      return;
+    }
+    // Show upgrade / per-book options with the calculated price
     setUpgradeReason('export');
   };
 

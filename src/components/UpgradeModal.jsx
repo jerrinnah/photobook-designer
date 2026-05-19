@@ -102,7 +102,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
 
         {/* Plan cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 14 }}>
-          {/* PAY PER BOOK — pay-as-you-go, scoped to the current project */}
+          {/* PAY PER BOOK — counts ONLY designed spreads (cells with photos). */}
           <PlanCard
             name="Pay-per-book"
             price={`₦${bookPrice.totalNGN.toLocaleString()}`}
@@ -110,10 +110,15 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
             badgeColor="#6fb8d8"
             accentColor="#0e2a3a"
             features={[
-              { key: 'count', name: `${bookPrice.spreadCount} spread${bookPrice.spreadCount === 1 ? '' : 's'}${bookPrice.coverCount ? ` + ${bookPrice.coverCount} cover` : ''}`,
-                detail: `₦${SPREAD_PRICE.toLocaleString()} per spread · ₦${COVER_PRICE.toLocaleString()} for cover` },
+              { key: 'count',
+                name: bookPrice.spreadCount + bookPrice.coverCount > 0
+                  ? `${bookPrice.spreadCount} designed spread${bookPrice.spreadCount === 1 ? '' : 's'}${bookPrice.coverCount ? ` + ${bookPrice.coverCount} cover` : ''}`
+                  : 'No designed spreads yet',
+                detail: bookPrice.totalSpreadsInBook > 0
+                  ? `${bookPrice.spreadCount + bookPrice.coverCount} of ${bookPrice.totalSpreadsInBook} spreads have photos · ₦${SPREAD_PRICE.toLocaleString()}/spread · ₦${COVER_PRICE.toLocaleString()}/cover`
+                  : `₦${SPREAD_PRICE.toLocaleString()} per spread · ₦${COVER_PRICE.toLocaleString()} for cover` },
               { key: 'export', name: 'Unlimited exports of this book',
-                detail: 'Re-export anytime, no extra charge. Add spreads later — pay only for the new ones.' },
+                detail: 'Re-export anytime, no extra charge. Design more spreads later — pay only for the new ones.' },
               { key: 'share', name: 'Client proofing portal' },
               { key: 'no-watermark', name: 'No watermark' },
             ]}
@@ -121,7 +126,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
               success === 'book' ? '✓ Unlocked' :
               paying === 'book' ? 'Opening Paystack…' :
               bookPrice.totalNGN > 0 ? `Pay ₦${bookPrice.totalNGN.toLocaleString()} for this book` :
-              'No spreads yet'
+              'Add photos to a spread first'
             }
             onClick={handlePayPerBook}
             disabled={!canPay || paying || success || bookPrice.totalNGN <= 0}

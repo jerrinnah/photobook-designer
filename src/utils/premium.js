@@ -15,22 +15,34 @@ export const TRIAL_DAYS = 30;
 export const STARTER_QUOTA = 10;
 
 // Pay-per-book pricing — third option alongside Starter / Pro.
-// Each regular spread is ₦750, the cover is ₦1,000. One payment unlocks
-// that specific project for unlimited exports. If the user later adds
-// more spreads, they top up the unlock with another payment.
+// Each designed regular spread is ₦750, a designed cover is ₦1,000.
+// One payment unlocks that specific project for unlimited exports.
+// If the user later designs more spreads, they top up with another
+// payment that covers just the new ones.
 export const SPREAD_PRICE = 750;
 export const COVER_PRICE  = 1000;
 
+// A spread is "designed" iff at least one of its cells holds a photo.
+// Empty/skipped spreads don't count toward the price — pay for what
+// you finish, not for placeholders.
+export function isSpreadDesigned(spread) {
+  if (!spread?.cells || !Array.isArray(spread.cells)) return false;
+  return spread.cells.some((c) => c?.photoId != null);
+}
+
 // Calculate what this book would cost on pay-per-spread.
-// Returns { totalNGN, spreadCount, coverCount }.
+// Returns { totalNGN, spreadCount, coverCount, totalSpreadsInBook }.
+// Only DESIGNED spreads contribute to the price.
 export function priceForProject(spreads) {
   const list = spreads || [];
-  const coverCount = list.filter((s) => s?.role === 'cover').length;
-  const spreadCount = Math.max(0, list.length - coverCount);
+  const designed = list.filter(isSpreadDesigned);
+  const coverCount  = designed.filter((s) => s?.role === 'cover').length;
+  const spreadCount = Math.max(0, designed.length - coverCount);
   return {
     totalNGN: spreadCount * SPREAD_PRICE + coverCount * COVER_PRICE,
     spreadCount,
     coverCount,
+    totalSpreadsInBook: list.length,   // for "x of N spreads designed" messaging
   };
 }
 
