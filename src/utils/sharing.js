@@ -132,6 +132,15 @@ export async function createShare(state, stage, onProgress) {
   if (getEffectiveTier(user) === 'free') throw new Error('Paid plan or active trial required to share for review.');
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
 
+  // Verify the Supabase auth session is still valid BEFORE we burn time
+  // capturing spreads. Storage upload + create_share RPC both require
+  // an authenticated JWT; without one Storage RLS rejects with a confusing
+  // "new row violates row-level security policy".
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Your sign-in session has expired. Please sign out (profile menu) and sign back in via magic link, then try sharing again.');
+  }
+
   const spreads = state.spreads || [];
   if (spreads.length === 0) throw new Error('Nothing to share — add a spread first.');
 
