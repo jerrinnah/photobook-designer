@@ -234,7 +234,7 @@ export default function PhotoPanel({ mobile = false }) {
   }
 
   return (
-    <aside style={{
+    <aside data-tour="photos" style={{
       width: mobile ? '100%' : 180,
       height: mobile ? '100%' : undefined,
       background: '#141414',

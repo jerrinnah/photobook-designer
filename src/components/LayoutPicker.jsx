@@ -107,7 +107,7 @@ export default function LayoutPicker({ mobile = false }) {
     : ALL_ORDER.filter((k) => groups[k]);
 
   return (
-    <aside style={{ width: mobile ? '100%' : 200, height: mobile ? '100%' : undefined, background: '#111', borderLeft: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <aside data-tour="layouts" style={{ width: mobile ? '100%' : 200, height: mobile ? '100%' : undefined, background: '#111', borderLeft: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px 6px 12px' }}>
         <span style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>Layout</span>
         {!mobile && (

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import PhotoPanel from './components/PhotoPanel';
 import SpreadNav from './components/SpreadNav';
 import SpreadCanvas from './components/SpreadCanvas';
@@ -10,13 +10,30 @@ import MobileShell from './components/MobileShell';
 import RotateOverlay from './components/RotateOverlay';
 import AdminDashboard from './components/AdminDashboard';
 import ClientProofingView from './components/ClientProofingView';
+import Tour, { hasSeenTour } from './components/Tour';
 import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
   const stageRef = useRef(null);
   const [previewing, setPreviewing] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const { isMobile, isPortrait } = useViewport();
+
+  // Auto-start the tour for first-time visitors. We delay slightly so the
+  // toolbar has a chance to mount before Tour queries data-tour selectors.
+  useEffect(() => {
+    if (hasSeenTour()) return;
+    const t = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Listen for replay requests from the profile menu
+  useEffect(() => {
+    const onReplay = () => setTourOpen(true);
+    window.addEventListener('autobook:start-tour', onReplay);
+    return () => window.removeEventListener('autobook:start-tour', onReplay);
+  }, []);
 
   // Routes (URL-based)
   if (typeof window !== 'undefined') {
@@ -51,6 +68,7 @@ export default function App() {
 
       {previewing && <PreviewMode onClose={() => setPreviewing(false)} />}
       {printPreviewing && <PrintPreview onClose={() => setPrintPreviewing(false)} />}
+      <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
   );
 }

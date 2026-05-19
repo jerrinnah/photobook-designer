@@ -203,6 +203,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       {/* Book name */}
       <input
+        data-tour="book-name"
         value={bookName}
         onChange={(e) => setBookName(e.target.value.trim() || 'photobook')}
         style={{ ...inputStyle, width: 100, fontWeight: 600, color: '#ccc', fontSize: 12, flexShrink: 0 }}
@@ -268,7 +269,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       <Divider />
 
       {/* Redesign current spread with a new high-density template */}
-      <button onClick={handleRedesign}
+      <button data-tour="redesign" onClick={handleRedesign}
         style={btnStyle({
           background: redesigned ? '#1a1230' : '#181818',
           color: redesigned ? '#c084fc' : '#888',
@@ -289,7 +290,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       </button>
 
       {/* Auto design all */}
-      <button onClick={handleAutoDesignAll}
+      <button data-tour="design-all" onClick={handleAutoDesignAll}
         style={btnStyle({
           background: designed ? '#1a1230' : '#181818',
           color: designed ? '#b89fff' : '#888',
@@ -300,7 +301,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       </button>
 
       {/* Reshuffle */}
-      <button onClick={handleReshuffle}
+      <button data-tour="reshuffle" onClick={handleReshuffle}
         style={btnStyle({
           background: reshuffled ? '#1a2a1a' : '#181818',
           color: reshuffled ? '#6fcf97' : '#888',
@@ -354,6 +355,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         return (
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
+            data-tour="profile"
             onClick={() => setProfileOpen((v) => !v)}
             style={{
               ...btnStyle({ padding: '4px 10px' }),
@@ -451,6 +453,15 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     Set / change password
                   </button>
                   <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      window.dispatchEvent(new CustomEvent('autobook:start-tour'));
+                    }}
+                    style={menuItemStyle}
+                  >
+                    Take the tour
+                  </button>
+                  <button
                     onClick={handleSignOut}
                     style={{ ...menuItemStyle, color: '#e05c5c' }}
                   >
@@ -464,6 +475,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         );
       })() : (
         <button
+          data-tour="profile"
           onClick={() => setSignup({ action: 'signin' })}
           style={btnStyle({ color: '#aaa', padding: '4px 12px' })}
           title="Sign in or sign up"
@@ -476,7 +488,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       <AutosaveBadge status={autosaveStatus.status} meta={autosaveStatus.meta} />
 
       {/* Preview */}
-      <button onClick={onPreview}
+      <button data-tour="preview" onClick={onPreview}
         style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
         title="Full-screen book preview">
         ▶ Preview
@@ -488,7 +500,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         ⬡ Print
       </button>
 
-      <button onClick={() => setShowShare(true)}
+      <button data-tour="share" onClick={() => setShowShare(true)}
         style={btnStyle({ color: '#9fb88b', border: '1px solid #2a3a20', background: '#0e1408' })}
         title="Share a read-only preview link with your client (Premium)">
         ✦ Share
@@ -497,19 +509,21 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       <Divider />
 
       {/* My Projects — switch / create / duplicate / delete · also holds backup */}
-      <button onClick={() => setShowProjects(true)}
+      <button data-tour="projects" onClick={() => setShowProjects(true)}
         style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
         title="Switch between projects · create new · duplicate · delete · backup/restore">
         📁 Projects
       </button>
 
       {/* Export — single button with JPG / PDF options */}
-      <ExportMenu
-        onExportJPGs={handleExportAll}
-        onExportPDF={handleExportPDF}
-        exporting={exporting}
-        exportingPDF={exportingPDF}
-      />
+      <div data-tour="export">
+        <ExportMenu
+          onExportJPGs={handleExportAll}
+          onExportPDF={handleExportPDF}
+          exporting={exporting}
+          exportingPDF={exportingPDF}
+        />
+      </div>
 
       <AuthModal
         open={Boolean(signup)}
