@@ -3,7 +3,7 @@ import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportToFolder, exportAsPDF } from '../utils/export';
 import { subscribeAutosaveStatus } from '../store/autosave';
-import { getStoredUser, trackEvent, signOut, onAuthStateChange } from '../utils/supabase';
+import { getStoredUser, trackEvent, signOut, onAuthStateChange, refreshUserTier } from '../utils/supabase';
 import { isProjectUnlocked } from '../utils/paystack';
 import { getActiveProjectId } from '../store/projects';
 import { getEffectiveTier, trialStatus, starterStatus, priceForProject } from '../utils/premium';
@@ -114,7 +114,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     // Export path: tier or per-book unlock required
     const tier = getEffectiveTier(user);
     if (tier === 'pro' || tier === 'starter' || tier === 'trial') {
-      trackEvent('photobook_export');
+      // Increment photobook_count THEN refresh the cached profile so
+      // the trial chip ("4 exports left") updates immediately, not on
+      // the next reload. trackEvent itself is awaited so the count is
+      // already +1 by the time refreshUserTier reads it.
+      try { await trackEvent('photobook_export'); } catch { /* ignore */ }
+      refreshUserTier(); // fire-and-forget — cacheListeners fire when it lands
       await fn();
       return;
     }
@@ -597,7 +602,8 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
           pendingExportRef.current = null;
           setUpgradeReason(null);
           if (pending) {
-            try { trackEvent('photobook_export'); } catch { /* ignore */ }
+            try { await trackEvent('photobook_export'); } catch { /* ignore */ }
+            refreshUserTier();
             await pending();
           }
         }}
