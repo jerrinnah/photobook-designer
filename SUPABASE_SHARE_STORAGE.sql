@@ -100,19 +100,39 @@ declare
 begin
   if v_auth_id is null then raise exception 'Not signed in'; end if;
 
-  -- Look up by auth_id first, then fall back to email match
+  -- 1. Try by auth_id (the normal path once ensure_my_user has linked them)
   select id, tier, photobook_count, created_at, brand_name, brand_logo_url
     into v_user_id, v_tier, v_count, v_created, v_brand_name, v_brand_logo
     from public.users where auth_id = v_auth_id;
 
+  -- 2. Fall back to email match (legacy users who signed up before
+  --    auth_id linking, or users whose ensure_my_user call failed)
   if v_user_id is null then
     select au.email into v_email from auth.users au where au.id = v_auth_id;
     select id, tier, photobook_count, created_at, brand_name, brand_logo_url
       into v_user_id, v_tier, v_count, v_created, v_brand_name, v_brand_logo
       from public.users where lower(email) = lower(trim(v_email)) limit 1;
+    -- If we found a legacy row by email, attach the auth_id for next time.
+    if v_user_id is not null then
+      update public.users set auth_id = v_auth_id where id = v_user_id;
+    end if;
   end if;
 
-  if v_user_id is null then raise exception 'No matching account — please sign out and sign back in'; end if;
+  -- 3. Still nothing — create a fresh row (self-heal, same logic as
+  --    ensure_my_user). Avoids the dead-end "No matching account" error
+  --    when a brand-new password sign-in or a previously-failed
+  --    ensure_my_user call left this user without a public.users row.
+  if v_user_id is null then
+    if v_email is null then
+      select au.email into v_email from auth.users au where au.id = v_auth_id;
+    end if;
+    insert into public.users (auth_id, email)
+    values (v_auth_id, lower(trim(coalesce(v_email, ''))))
+    returning id, tier, photobook_count, created_at, brand_name, brand_logo_url
+    into v_user_id, v_tier, v_count, v_created, v_brand_name, v_brand_logo;
+  end if;
+
+  if v_user_id is null then raise exception 'Could not resolve your account — sign out and back in.'; end if;
 
   v_in_trial := coalesce(v_count, 0) < 5
             and coalesce(v_created, now()) > now() - interval '30 days';
