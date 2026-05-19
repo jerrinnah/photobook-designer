@@ -14,6 +14,26 @@ export const TRIAL_EXPORTS = 5;
 export const TRIAL_DAYS = 30;
 export const STARTER_QUOTA = 10;
 
+// Pay-per-book pricing — third option alongside Starter / Pro.
+// Each regular spread is ₦750, the cover is ₦1,000. One payment unlocks
+// that specific project for unlimited exports. If the user later adds
+// more spreads, they top up the unlock with another payment.
+export const SPREAD_PRICE = 750;
+export const COVER_PRICE  = 1000;
+
+// Calculate what this book would cost on pay-per-spread.
+// Returns { totalNGN, spreadCount, coverCount }.
+export function priceForProject(spreads) {
+  const list = spreads || [];
+  const coverCount = list.filter((s) => s?.role === 'cover').length;
+  const spreadCount = Math.max(0, list.length - coverCount);
+  return {
+    totalNGN: spreadCount * SPREAD_PRICE + coverCount * COVER_PRICE,
+    spreadCount,
+    coverCount,
+  };
+}
+
 const FREE_COVER_IDS = new Set([
   'cover-arch-romance',
   'cover-minimal-bottom',
@@ -57,6 +77,16 @@ export function hasProAccess(effectiveTier) {
 // Convenience: has full Premium feature access (sharing, branding, no watermark)
 export function hasPremiumAccess(effectiveTier) {
   return effectiveTier === 'pro' || effectiveTier === 'starter' || effectiveTier === 'trial';
+}
+
+// Can the user export the current project? Either a tier with export
+// allowance OR they paid for this specific project under pay-per-spread.
+// `projectUnlocked` is a boolean the caller computes (via supabase RPC
+// or a local cache that mirrors project_unlocks).
+export function canExportProject(effectiveTier, projectUnlocked) {
+  if (effectiveTier === 'pro' || effectiveTier === 'trial') return true;
+  if (effectiveTier === 'starter') return true;      // gated separately by quota
+  return Boolean(projectUnlocked);
 }
 
 // What the user sees in the trial countdown badge.

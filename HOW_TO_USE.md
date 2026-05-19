@@ -177,21 +177,32 @@ The password is stored encrypted by Supabase Auth — we never see or store it o
 - Full Pro access during trial — every template, all features unlocked
 - After trial: ~half the basic templates remain accessible (no Pro-only categories)
 
+### Pay-per-book — ₦750 per spread + ₦1,000 cover
+- **Pay only for what you finish.** Designing a 15-spread + cover book? ₦12,250 unlocks it.
+- One payment = unlimited exports of **that specific book** forever.
+- Add spreads later? Top up for just the new ones — no double-charging.
+- Other books still locked, so this is the right fit when you have one project (not a stream).
+- Best for: photographers doing a single wedding album, or anyone who wants to try before committing to a plan.
+
 ### Starter — ₦5,000 (one-time)
-- **10 photobook exports** (per account)
+- **10 photobook exports** (across all books)
 - Every basic template
 - Client proofing portal
 - White-label branding
 - Full editing tools
 - No watermark
+- Best for: 2-3 books / events per quarter.
 
 ### Pro — ₦30,000 (one-time)
 - **Unlimited exports**
 - Every template — including Wedding (19), Event (4), and premium covers
 - Everything in Starter
 - New templates as we add them, automatically
+- Best for: working studios with steady client flow — pays for itself after ~4 books.
 
 No subscriptions. No card-on-file. Pay once, own it. Pay via Paystack — Naira card, Visa, Verve, or bank transfer.
+
+**Tip:** Start with Pay-per-book on your first project. If you find yourself doing 3+ books, upgrading to Starter or Pro saves money.
 
 ---
 

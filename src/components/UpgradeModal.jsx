@@ -1,16 +1,27 @@
 import { useState } from 'react';
-import { STARTER_FEATURES, PRO_FEATURES, FREE_FEATURES } from '../utils/premium';
-import { openPaystackCheckout, claimPlan, isPaystackConfigured, formatPrice } from '../utils/paystack';
+import {
+  STARTER_FEATURES, PRO_FEATURES, FREE_FEATURES,
+  SPREAD_PRICE, COVER_PRICE, priceForProject,
+} from '../utils/premium';
+import {
+  openPaystackCheckout, claimPlan, isPaystackConfigured, formatPrice,
+  openPerSpreadCheckout, unlockProject,
+} from '../utils/paystack';
 import { useAuthUser } from '../utils/supabase';
+import { useBookStore } from '../store/useBookStore';
+import { getActiveProjectId } from '../store/projects';
 
 export default function UpgradeModal({ open, onClose, blockedFeature }) {
-  const [paying, setPaying] = useState(false); // 'starter' | 'pro' | false
+  const [paying, setPaying] = useState(false); // 'starter' | 'pro' | 'book' | false
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const user = useAuthUser();
+  const spreads = useBookStore((s) => s.spreads);
   if (!open) return null;
 
   const canPay = isPaystackConfigured() && user?.email;
+  const bookPrice = priceForProject(spreads);
+  const projectId = getActiveProjectId();
 
   const handlePay = async (plan) => {
     if (!canPay || paying) return;
@@ -20,6 +31,36 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
       const reference = await openPaystackCheckout({ email: user.email, plan });
       await claimPlan(plan, reference);
       setSuccess(plan);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      setError(err.message || 'Payment failed. Try again.');
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const handlePayPerBook = async () => {
+    if (!canPay || paying) return;
+    if (!projectId) { setError('Open or create a project first.'); return; }
+    if (bookPrice.totalNGN <= 0) { setError('This book has no spreads to unlock yet.'); return; }
+    setError(null);
+    setPaying('book');
+    try {
+      const reference = await openPerSpreadCheckout({
+        email: user.email,
+        projectId,
+        totalNGN: bookPrice.totalNGN,
+        spreadCount: bookPrice.spreadCount,
+        coverCount: bookPrice.coverCount,
+      });
+      await unlockProject({
+        projectId,
+        spreadCount: bookPrice.spreadCount,
+        coverCount: bookPrice.coverCount,
+        totalNGN: bookPrice.totalNGN,
+        reference,
+      });
+      setSuccess('book');
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
       setError(err.message || 'Payment failed. Try again.');
@@ -60,7 +101,32 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
         )}
 
         {/* Plan cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 14 }}>
+          {/* PAY PER BOOK — pay-as-you-go, scoped to the current project */}
+          <PlanCard
+            name="Pay-per-book"
+            price={`₦${bookPrice.totalNGN.toLocaleString()}`}
+            badge="This book only"
+            badgeColor="#6fb8d8"
+            accentColor="#0e2a3a"
+            features={[
+              { key: 'count', name: `${bookPrice.spreadCount} spread${bookPrice.spreadCount === 1 ? '' : 's'}${bookPrice.coverCount ? ` + ${bookPrice.coverCount} cover` : ''}`,
+                detail: `₦${SPREAD_PRICE.toLocaleString()} per spread · ₦${COVER_PRICE.toLocaleString()} for cover` },
+              { key: 'export', name: 'Unlimited exports of this book',
+                detail: 'Re-export anytime, no extra charge. Add spreads later — pay only for the new ones.' },
+              { key: 'share', name: 'Client proofing portal' },
+              { key: 'no-watermark', name: 'No watermark' },
+            ]}
+            buttonLabel={
+              success === 'book' ? '✓ Unlocked' :
+              paying === 'book' ? 'Opening Paystack…' :
+              bookPrice.totalNGN > 0 ? `Pay ₦${bookPrice.totalNGN.toLocaleString()} for this book` :
+              'No spreads yet'
+            }
+            onClick={handlePayPerBook}
+            disabled={!canPay || paying || success || bookPrice.totalNGN <= 0}
+            success={success === 'book'}
+          />
           {/* STARTER */}
           <PlanCard
             name="Starter"
@@ -99,7 +165,11 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
         </div>
 
         {error && <div style={errBox}>{error}</div>}
-        {success && <div style={okBox}>✓ {success === 'pro' ? 'Pro' : 'Starter'} activated. Refreshing…</div>}
+        {success && (
+          <div style={okBox}>
+            ✓ {success === 'pro' ? 'Pro' : success === 'starter' ? 'Starter' : 'Book'} {success === 'book' ? 'unlocked' : 'activated'}. Refreshing…
+          </div>
+        )}
 
         {/* Free tier reference */}
         <details style={{ marginTop: 8 }}>

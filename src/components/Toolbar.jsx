@@ -4,12 +4,15 @@ import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportToFolder, exportAsPDF } from '../utils/export';
 import { subscribeAutosaveStatus } from '../store/autosave';
 import { getStoredUser, trackEvent, signOut, onAuthStateChange } from '../utils/supabase';
+import { isProjectUnlocked } from '../utils/paystack';
+import { getActiveProjectId } from '../store/projects';
 import { getEffectiveTier, trialStatus, starterStatus } from '../utils/premium';
 import AuthModal from './AuthModal';
 import ProjectPicker from './ProjectPicker';
 import BrandingSettings from './BrandingSettings';
 import ShareModal from './ShareModal';
 import SetPasswordModal from './SetPasswordModal';
+import UpgradeModal from './UpgradeModal';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -67,6 +70,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const brand = authUser?.brand || {};
 
@@ -96,16 +100,31 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   // Soft gate: if no stored user yet, show the magic-link sign-in modal.
   // Once the user clicks the link in their email and returns, they're
   // signed in automatically — they just have to click Save / Export again.
-  // 'export' actions count toward photobook_count (trial counter); 'save'
-  // does NOT, so users can save freely without burning trial exports.
+  // 'save' actions: just require sign-in. No tier or quota check.
+  // 'export' actions: also require Pro/Starter/Trial tier OR a per-book
+  // unlock for the current project. Free-tier users (post-trial) get
+  // prompted to upgrade or pay for THIS book at the per-spread rate.
   const withSignupGate = (action, fn) => async () => {
     const user = getStoredUser();
-    if (user) {
-      if (action === 'export') trackEvent('photobook_export');
+    if (!user) { setSignup({ action }); return; }
+    if (action !== 'export') { await fn(); return; }
+
+    // Export path: tier or per-book unlock required
+    const tier = getEffectiveTier(user);
+    if (tier === 'pro' || tier === 'starter' || tier === 'trial') {
+      trackEvent('photobook_export');
       await fn();
       return;
     }
-    setSignup({ action });
+    // Free tier — check whether this book has been paid for already
+    const projectId = getActiveProjectId();
+    if (projectId && (await isProjectUnlocked(projectId))) {
+      trackEvent('photobook_export');
+      await fn();
+      return;
+    }
+    // Block — show upgrade / per-book payment options
+    setShowUpgrade(true);
   };
 
   // Keyboard undo / redo
@@ -538,6 +557,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
       <SetPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} blockedFeature="exporting this book" />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} stageRef={stageRef} />
     </header>
   );
