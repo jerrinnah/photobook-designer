@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportToFolder, exportAsPDF } from '../utils/export';
@@ -71,6 +71,8 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState(null); // 'export' | 'plans' | null
+  // The export action queued behind a paywall — runs after per-book unlock.
+  const pendingExportRef = useRef(null);
 
   const brand = authUser?.brand || {};
 
@@ -130,7 +132,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       alert('Add photos to at least one spread before exporting. (Try Design All to fill every spread in one click.)');
       return;
     }
-    // Show upgrade / per-book options with the calculated price
+    // Queue this export so it runs automatically once the user pays for
+    // the per-book unlock (no need to click Export again post-payment).
+    pendingExportRef.current = fn;
     setUpgradeReason('export');
   };
 
@@ -584,8 +588,19 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       <SetPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
       <UpgradeModal
         open={Boolean(upgradeReason)}
-        onClose={() => setUpgradeReason(null)}
+        onClose={() => { setUpgradeReason(null); pendingExportRef.current = null; }}
         blockedFeature={upgradeReason === 'export' ? 'exporting this book' : null}
+        onUnlockSuccess={async () => {
+          // Per-book unlock landed — close the modal and run the queued
+          // export so the user gets their download with no extra clicks.
+          const pending = pendingExportRef.current;
+          pendingExportRef.current = null;
+          setUpgradeReason(null);
+          if (pending) {
+            try { trackEvent('photobook_export'); } catch { /* ignore */ }
+            await pending();
+          }
+        }}
       />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} stageRef={stageRef} />
     </header>

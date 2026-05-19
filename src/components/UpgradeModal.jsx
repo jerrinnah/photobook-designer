@@ -11,7 +11,7 @@ import { useAuthUser } from '../utils/supabase';
 import { useBookStore } from '../store/useBookStore';
 import { getActiveProjectId } from '../store/projects';
 
-export default function UpgradeModal({ open, onClose, blockedFeature }) {
+export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSuccess }) {
   const [paying, setPaying] = useState(false); // 'starter' | 'pro' | 'book' | false
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -46,6 +46,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
     setError(null);
     setPaying('book');
     try {
+      // Paystack popup. Resolves with the reference on user payment.
       const reference = await openPerSpreadCheckout({
         email: user.email,
         projectId,
@@ -53,6 +54,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
         spreadCount: bookPrice.spreadCount,
         coverCount: bookPrice.coverCount,
       });
+      // Paystack confirmed payment — record it in our DB to grant the unlock.
       await unlockProject({
         projectId,
         spreadCount: bookPrice.spreadCount,
@@ -60,11 +62,22 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
         totalNGN: bookPrice.totalNGN,
         reference,
       });
+      // Show "Payment success" before triggering download / closing.
       setSuccess('book');
-      setTimeout(() => window.location.reload(), 1500);
+      setPaying(false);
+      // Brief delay so the user sees the green confirmation, then hand
+      // off to onUnlockSuccess which re-runs whatever action the user
+      // was attempting when the gate fired. No page reload — the unlock
+      // is already recorded, the export can proceed in-memory.
+      setTimeout(async () => {
+        if (onUnlockSuccess) {
+          await onUnlockSuccess();
+        } else {
+          window.location.reload();
+        }
+      }, 1200);
     } catch (err) {
       setError(err.message || 'Payment failed. Try again.');
-    } finally {
       setPaying(false);
     }
   };
@@ -123,7 +136,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
               { key: 'no-watermark', name: 'No watermark' },
             ]}
             buttonLabel={
-              success === 'book' ? '✓ Unlocked' :
+              success === 'book' ? '✓ Payment success — preparing download…' :
               paying === 'book' ? 'Opening Paystack…' :
               bookPrice.totalNGN > 0 ? `Pay ₦${bookPrice.totalNGN.toLocaleString()} for this book` :
               'Add photos to a spread first'
@@ -172,7 +185,9 @@ export default function UpgradeModal({ open, onClose, blockedFeature }) {
         {error && <div style={errBox}>{error}</div>}
         {success && (
           <div style={okBox}>
-            ✓ {success === 'pro' ? 'Pro' : success === 'starter' ? 'Starter' : 'Book'} {success === 'book' ? 'unlocked' : 'activated'}. Refreshing…
+            {success === 'book'
+              ? '✓ Payment confirmed by Paystack — starting your download…'
+              : `✓ ${success === 'pro' ? 'Pro' : 'Starter'} activated. Refreshing…`}
           </div>
         )}
 
