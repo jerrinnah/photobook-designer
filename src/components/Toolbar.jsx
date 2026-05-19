@@ -70,7 +70,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState(null); // 'export' | 'plans' | null
 
   const brand = authUser?.brand || {};
 
@@ -124,7 +124,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       return;
     }
     // Block — show upgrade / per-book payment options
-    setShowUpgrade(true);
+    setUpgradeReason('export');
   };
 
   // Keyboard undo / redo
@@ -481,6 +481,15 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     Take the tour
                   </button>
                   <button
+                    onClick={() => { setUpgradeReason('plans'); setProfileOpen(false); }}
+                    style={{ ...menuItemStyle, color: eff === 'free' ? '#f6c90e' : '#bbb' }}
+                  >
+                    {eff === 'pro' ? 'View plans'
+                     : eff === 'starter' ? 'Upgrade to Pro'
+                     : eff === 'trial' ? 'View plans (trial active)'
+                     : '✦ Upgrade plan'}
+                  </button>
+                  <button
                     onClick={handleSignOut}
                     style={{ ...menuItemStyle, color: '#e05c5c' }}
                   >
@@ -493,14 +502,23 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         </div>
         );
       })() : (
-        <button
-          data-tour="profile"
-          onClick={() => setSignup({ action: 'signin' })}
-          style={btnStyle({ color: '#aaa', padding: '4px 12px' })}
-          title="Sign in or sign up"
-        >
-          Sign in
-        </button>
+        <>
+          <button
+            onClick={() => setUpgradeReason('plans')}
+            style={btnStyle({ color: '#f6c90e', padding: '4px 12px', border: '1px solid #3a2a08', background: '#181208' })}
+            title="See pricing and plans"
+          >
+            ✦ Plans
+          </button>
+          <button
+            data-tour="profile"
+            onClick={() => setSignup({ action: 'signin' })}
+            style={btnStyle({ color: '#aaa', padding: '4px 12px' })}
+            title="Sign in or sign up"
+          >
+            Sign in
+          </button>
+        </>
       )}
 
       {/* Autosave status */}
@@ -557,7 +575,11 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
       <SetPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
-      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} blockedFeature="exporting this book" />
+      <UpgradeModal
+        open={Boolean(upgradeReason)}
+        onClose={() => setUpgradeReason(null)}
+        blockedFeature={upgradeReason === 'export' ? 'exporting this book' : null}
+      />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} stageRef={stageRef} />
     </header>
   );
