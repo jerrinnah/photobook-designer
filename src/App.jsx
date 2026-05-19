@@ -11,6 +11,7 @@ import RotateOverlay from './components/RotateOverlay';
 import AdminDashboard from './components/AdminDashboard';
 import ClientProofingView from './components/ClientProofingView';
 import Tour, { hasSeenTour } from './components/Tour';
+import NameProjectHint from './components/NameProjectHint';
 import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
@@ -57,6 +58,7 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0d0d0d', color: '#e0e0e0', fontFamily: 'system-ui, sans-serif' }}>
       <Toolbar stageRef={stageRef} onPreview={() => setPreviewing(true)} onPrintPreview={() => setPrintPreviewing(true)} />
+      <NameProjectHint />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SpreadNav />
         <PhotoPanel />
