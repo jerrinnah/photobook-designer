@@ -231,6 +231,29 @@ export async function setShareStatus(token, status) {
   await supabase.rpc('set_share_status', { p_token: token, p_status: status });
 }
 
+// ── Per-spread feedback ────────────────────────────────────────────
+// Anyone with the share token can read or post.
+
+export async function addSpreadFeedback(token, spreadIdx, comment) {
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  const trimmed = (comment || '').trim();
+  if (!trimmed) throw new Error('Please write something before sending.');
+  if (trimmed.length > 1000) throw new Error('Comment is too long (max 1000 characters).');
+  const { error } = await supabase.rpc('add_spread_feedback', {
+    p_token: token,
+    p_spread_idx: spreadIdx,
+    p_comment: trimmed,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function getSpreadFeedback(token) {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.rpc('get_spread_feedback', { p_token: token });
+  if (error) return [];
+  return Array.isArray(data) ? data : [];
+}
+
 export async function getMyShares() {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase.rpc('get_my_shares');

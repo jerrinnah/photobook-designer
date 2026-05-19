@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { useAuthUser } from '../utils/supabase';
 import { getEffectiveTier } from '../utils/premium';
-import { createShare, getMyShares, deleteShare, buildShareUrl } from '../utils/sharing';
+import { createShare, getMyShares, deleteShare, buildShareUrl, getSpreadFeedback } from '../utils/sharing';
 import UpgradeModal from './UpgradeModal';
 
 const STATUS_STYLES = {
@@ -170,34 +170,14 @@ export default function ShareModal({ open, onClose, stageRef }) {
               Active shares
             </div>
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-              {shares.map((s) => {
-                const url = buildShareUrl(s.token);
-                const style = STATUS_STYLES[s.status] || STATUS_STYLES.pending;
-                return (
-                  <div key={s.token} style={{
-                    padding: '10px 12px',
-                    background: '#161616',
-                    border: '1px solid #1f1f1f',
-                    borderRadius: 5,
-                    marginBottom: 6,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, color: '#ddd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {s.project_name || 'Untitled'}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#666', marginTop: 3, display: 'flex', gap: 8 }}>
-                          <span style={{ color: style.color }}>● {style.label}</span>
-                          <span>{s.view_count || 0} view{(s.view_count || 0) === 1 ? '' : 's'}</span>
-                          <span>· {formatDate(s.created_at)}</span>
-                        </div>
-                      </div>
-                      <button onClick={() => handleCopy(url)} style={smallBtn} title="Copy link">⎘</button>
-                      <button onClick={() => handleDelete(s.token)} style={{ ...smallBtn, color: '#e05c5c' }} title="Revoke link">✕</button>
-                    </div>
-                  </div>
-                );
-              })}
+              {shares.map((s) => (
+                <ShareRow
+                  key={s.token}
+                  share={s}
+                  onCopy={() => handleCopy(buildShareUrl(s.token))}
+                  onDelete={() => handleDelete(s.token)}
+                />
+              ))}
             </div>
           </>
         )}
@@ -208,6 +188,95 @@ export default function ShareModal({ open, onClose, stageRef }) {
 
         <UpgradeModal open={showUpgrade} blockedFeature="client proofing" onClose={() => setShowUpgrade(false)} />
       </div>
+    </div>
+  );
+}
+
+// One row in the "Active shares" list with expand-to-view-feedback support.
+function ShareRow({ share, onCopy, onDelete }) {
+  const style = STATUS_STYLES[share.status] || STATUS_STYLES.pending;
+  const commentCount = share.comment_count || 0;
+  const [expanded, setExpanded] = useState(false);
+  const [feedback, setFeedback] = useState(null); // null = not loaded yet
+
+  const toggleExpanded = async () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && feedback === null) {
+      const rows = await getSpreadFeedback(share.token);
+      // Group by spread_idx
+      const grouped = {};
+      rows.forEach((r) => {
+        (grouped[r.spread_idx] = grouped[r.spread_idx] || []).push(r);
+      });
+      setFeedback(grouped);
+    }
+  };
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      background: '#161616',
+      border: `1px solid ${commentCount > 0 ? '#5a1a1a' : '#1f1f1f'}`,
+      borderRadius: 5,
+      marginBottom: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, color: '#ddd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {share.project_name || 'Untitled'}
+          </div>
+          <div style={{ fontSize: 10, color: '#666', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ color: style.color }}>● {style.label}</span>
+            <span>{share.view_count || 0} view{(share.view_count || 0) === 1 ? '' : 's'}</span>
+            {commentCount > 0 && (
+              <button onClick={toggleExpanded} style={{
+                background: 'none', border: 'none', padding: 0,
+                color: '#e05c5c', cursor: 'pointer', fontSize: 10,
+                textDecoration: 'underline',
+              }}>
+                💬 {commentCount} note{commentCount === 1 ? '' : 's'} {expanded ? '▾' : '▸'}
+              </button>
+            )}
+            <span>· {formatDate(share.created_at)}</span>
+          </div>
+        </div>
+        <button onClick={onCopy} style={smallBtn} title="Copy link">⎘</button>
+        <button onClick={onDelete} style={{ ...smallBtn, color: '#e05c5c' }} title="Revoke link">✕</button>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #232323' }}>
+          {feedback === null ? (
+            <div style={{ fontSize: 11, color: '#555' }}>Loading notes…</div>
+          ) : Object.keys(feedback).length === 0 ? (
+            <div style={{ fontSize: 11, color: '#555' }}>No notes yet.</div>
+          ) : (
+            Object.keys(feedback)
+              .map(Number)
+              .sort((a, b) => a - b)
+              .map((idx) => (
+                <div key={idx} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: '#999', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
+                    Spread {idx + 1}
+                  </div>
+                  {feedback[idx].map((f) => (
+                    <div key={f.created_at + f.comment} style={{
+                      padding: '7px 9px', marginBottom: 4,
+                      background: '#0e0e0e', border: '1px solid #232323',
+                      borderRadius: 3, fontSize: 11, color: '#ccc', lineHeight: 1.5,
+                    }}>
+                      <div>{f.comment}</div>
+                      <div style={{ fontSize: 9, color: '#555', marginTop: 3 }}>
+                        {new Date(f.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

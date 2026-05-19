@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { loadShare, setShareStatus } from '../utils/sharing';
+import { loadShare, setShareStatus, addSpreadFeedback, getSpreadFeedback } from '../utils/sharing';
 import { getScreenDims } from '../layouts/spreadSizes';
 
 // Standalone viewer — what the client opens when they receive the link.
@@ -15,15 +15,26 @@ export default function ClientProofingView({ token }) {
   const [share, setShare] = useState(null);
   const [idx, setIdx] = useState(0);
   const [status, setStatus] = useState('pending');
+  const [feedback, setFeedback] = useState([]);          // [{ spread_idx, comment, created_at }]
+  const [draftComment, setDraftComment] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+  const [commentError, setCommentError] = useState(null);
+
+  const refreshFeedback = async () => {
+    const rows = await getSpreadFeedback(token);
+    setFeedback(rows);
+  };
 
   useEffect(() => {
     let cancelled = false;
     loadShare(token)
-      .then((row) => {
+      .then(async (row) => {
         if (cancelled) return;
         setShare(row);
         setStatus(row.status || 'pending');
         setLoading(false);
+        const fb = await getSpreadFeedback(token);
+        if (!cancelled) setFeedback(fb);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -32,6 +43,32 @@ export default function ClientProofingView({ token }) {
       });
     return () => { cancelled = true; };
   }, [token]);
+
+  // Clear draft + error when the user moves to a different spread
+  useEffect(() => {
+    setDraftComment('');
+    setCommentError(null);
+  }, [idx]);
+
+  const handleSendComment = async (e) => {
+    e?.preventDefault?.();
+    if (!draftComment.trim() || sendingComment) return;
+    setSendingComment(true);
+    setCommentError(null);
+    try {
+      await addSpreadFeedback(token, idx, draftComment);
+      setDraftComment('');
+      await refreshFeedback();
+      // adding feedback auto-flips share to changes_requested on the server
+      if (status === 'pending') setStatus('changes_requested');
+    } catch (err) {
+      setCommentError(err.message || 'Could not send.');
+    } finally {
+      setSendingComment(false);
+    }
+  };
+
+  const currentSpreadFeedback = feedback.filter((f) => f.spread_idx === idx);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -105,7 +142,7 @@ export default function ClientProofingView({ token }) {
       </div>
 
       {/* Preview area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: 24, overflow: 'auto' }}>
         <SpreadImage spread={spread} aspect={aspect} />
 
         {/* Nav */}
@@ -116,6 +153,17 @@ export default function ClientProofingView({ token }) {
           </span>
           <button onClick={() => setIdx((i) => Math.min(i + 1, spreads.length - 1))} disabled={idx === spreads.length - 1} style={navBtn(idx === spreads.length - 1)}>›</button>
         </div>
+
+        {/* Per-spread feedback */}
+        <SpreadFeedback
+          idx={idx}
+          existing={currentSpreadFeedback}
+          draft={draftComment}
+          onDraft={setDraftComment}
+          onSend={handleSendComment}
+          sending={sendingComment}
+          error={commentError}
+        />
 
         {/* Decision buttons */}
         <div style={{ display: 'flex', gap: 10, marginTop: 22, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -143,6 +191,73 @@ export default function ClientProofingView({ token }) {
           Use ← → arrows to navigate · Powered by AutoBook by NEJ
         </div>
       </div>
+    </div>
+  );
+}
+
+// Per-spread feedback box — note input + list of existing notes for THIS spread.
+function SpreadFeedback({ idx, existing, draft, onDraft, onSend, sending, error }) {
+  return (
+    <div style={{
+      width: 'min(700px, 92vw)',
+      marginTop: 18,
+      padding: '14px 16px',
+      background: '#0e0e0e',
+      border: '1px solid #1f1f1f',
+      borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 11, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+        Notes for spread {idx + 1}
+      </div>
+
+      {existing.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          {existing.map((f) => (
+            <div key={f.created_at + f.comment} style={{
+              padding: '8px 10px', marginBottom: 6,
+              background: '#161616', border: '1px solid #232323',
+              borderRadius: 4, fontSize: 12, color: '#ccc', lineHeight: 1.5,
+            }}>
+              <div>{f.comment}</div>
+              <div style={{ fontSize: 9, color: '#555', marginTop: 4 }}>
+                {new Date(f.created_at).toLocaleString()}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={onSend}>
+        <textarea
+          value={draft}
+          onChange={(e) => onDraft(e.target.value)}
+          placeholder={`Anything to change on spread ${idx + 1}? (e.g. "swap photos 2 and 3", "make this larger", "use a different cover")`}
+          rows={2}
+          maxLength={1000}
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: '#181818', border: '1px solid #252525',
+            borderRadius: 5, color: '#ddd', fontSize: 12,
+            padding: '8px 10px', outline: 'none',
+            resize: 'vertical', fontFamily: 'inherit',
+          }}
+        />
+        {error && <div style={{ fontSize: 11, color: '#e05c5c', marginTop: 6 }}>{error}</div>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          <span style={{ fontSize: 10, color: '#444' }}>
+            {draft.length} / 1000
+          </span>
+          <button type="submit" disabled={!draft.trim() || sending} style={{
+            padding: '7px 14px', fontSize: 11, fontWeight: 600,
+            background: !draft.trim() || sending ? '#1a1a1a' : '#1a3580',
+            color: !draft.trim() || sending ? '#555' : '#fff',
+            border: 'none', borderRadius: 4,
+            cursor: !draft.trim() || sending ? 'not-allowed' : 'pointer',
+          }}>
+            {sending ? 'Sending…' : '→ Send note'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
