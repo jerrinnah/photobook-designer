@@ -166,12 +166,16 @@ export default function AdminDashboard() {
           <span style={{ fontSize: 11, color: '#666' }}>{sorted.length} of {users.length}</span>
         </div>
 
+        {/* Grant tier to any email — even unverified ones */}
+        <AddUserByEmail password={password} onAdded={() => load(password)} />
+
         <div style={{ background: '#111', borderRadius: 8, overflow: 'hidden', border: '1px solid #1a1a1a' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0c0c0c' }}>
                 {[
                   ['email', 'Email'],
+                  ['verified', 'Status'],
                   ['tier', 'Tier'],
                   ['phone', 'Phone'],
                   ['photobook_count', 'Photobooks'],
@@ -197,37 +201,62 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {sorted.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
                   {users.length === 0 ? 'No signups yet.' : 'No matches.'}
                 </td></tr>
               )}
               {sorted.map((u) => (
-                <tr key={u.id} style={{ borderBottom: '1px solid #161616' }}>
+                <tr key={u.email} style={{ borderBottom: '1px solid #161616' }}>
                   <td style={cellStyle}>{u.email}</td>
                   <td style={cellStyle}>
-                    <button
-                      onClick={async () => {
-                        const next = u.tier === 'premium' ? 'free' : 'premium';
-                        if (!confirm(`Change ${u.email} from ${u.tier} to ${next}?`)) return;
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase',
+                      padding: '2px 8px', borderRadius: 3,
+                      background: u.verified ? '#0e1a10' : '#1a1408',
+                      color:      u.verified ? '#6fcf97' : '#f6c90e',
+                      border: `1px solid ${u.verified ? '#2a4a2a' : '#3a2a10'}`,
+                    }}>
+                      {u.verified ? '● Verified' : '○ Pending'}
+                    </span>
+                  </td>
+                  <td style={cellStyle}>
+                    <select
+                      value={u.tier}
+                      onChange={async (e) => {
+                        const next = e.target.value;
+                        if (next === u.tier) return;
+                        if (!confirm(`Change ${u.email} from ${u.tier} to ${next}?`)) {
+                          e.target.value = u.tier;
+                          return;
+                        }
                         try {
-                          const { error } = await supabase.rpc('set_user_tier_admin', {
-                            p_password: password, p_user_id: u.id, p_tier: next,
+                          const { error } = await supabase.rpc('set_tier_by_email_admin', {
+                            p_password: password, p_email: u.email, p_tier: next,
                           });
                           if (error) throw new Error(error.message);
                           await load(password);
-                        } catch (err) { alert(err.message); }
+                        } catch (err) { alert(err.message); e.target.value = u.tier; }
                       }}
                       style={{
-                        padding: '2px 8px', fontSize: 10, fontWeight: 600,
-                        background: u.tier === 'premium' ? '#3a2a08' : '#181818',
-                        color: u.tier === 'premium' ? '#f6c90e' : '#888',
-                        border: `1px solid ${u.tier === 'premium' ? '#5a4010' : '#2a2a2a'}`,
+                        padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                        background:
+                          u.tier === 'pro' ? '#3a2a08' :
+                          u.tier === 'starter' ? '#0e2a3a' : '#181818',
+                        color:
+                          u.tier === 'pro' ? '#f6c90e' :
+                          u.tier === 'starter' ? '#6fb8d8' : '#aaa',
+                        border: `1px solid ${
+                          u.tier === 'pro' ? '#5a4010' :
+                          u.tier === 'starter' ? '#2a4a6a' : '#2a2a2a'
+                        }`,
                         borderRadius: 3, cursor: 'pointer', letterSpacing: 0.5, textTransform: 'uppercase',
                       }}
-                      title="Click to toggle tier"
+                      title="Change tier"
                     >
-                      {u.tier === 'premium' ? '✦ Premium' : 'Free'}
-                    </button>
+                      <option value="free">Free</option>
+                      <option value="starter">Starter</option>
+                      <option value="pro">✦ Pro</option>
+                    </select>
                   </td>
                   <td style={{ ...cellStyle, color: '#888' }}>{u.phone || '—'}</td>
                   <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#6fcf97' }}>{u.photobook_count}</td>
@@ -277,6 +306,79 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Inline form: grant a tier to ANY email (creates the public.users
+// row if it doesn't exist yet — useful for pre-loading paid customers
+// who haven't signed up yet, or unverified magic-link recipients).
+function AddUserByEmail({ password, onAdded }) {
+  const [email, setEmail] = useState('');
+  const [tier, setTier] = useState('pro');
+  const [pending, setPending] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const handleAdd = async (e) => {
+    e?.preventDefault?.();
+    if (!email.trim() || pending) return;
+    setPending(true); setMsg(null);
+    try {
+      const { data, error } = await supabase.rpc('set_tier_by_email_admin', {
+        p_password: password,
+        p_email: email.trim(),
+        p_tier: tier,
+      });
+      if (error) throw new Error(error.message);
+      setMsg({ tone: 'ok', text: `${data === 'created' ? 'Created' : 'Updated'}: ${email.trim()} → ${tier}` });
+      setEmail('');
+      onAdded?.();
+    } catch (err) {
+      setMsg({ tone: 'err', text: err.message || 'Failed' });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleAdd} style={{
+      display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+      padding: '8px 10px', background: '#0c0c0c', border: '1px solid #1a1a1a', borderRadius: 6,
+      flexWrap: 'wrap',
+    }}>
+      <span style={{ fontSize: 10, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase', marginRight: 4 }}>
+        Grant tier
+      </span>
+      <input
+        type="email" required
+        placeholder="customer@example.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        style={{ ...inputStyle, flex: 1, minWidth: 220 }}
+      />
+      <select value={tier} onChange={(e) => setTier(e.target.value)} style={{
+        ...inputStyle, padding: '6px 10px', cursor: 'pointer',
+      }}>
+        <option value="free">Free</option>
+        <option value="starter">Starter</option>
+        <option value="pro">✦ Pro</option>
+      </select>
+      <button type="submit" disabled={!email.trim() || pending} style={{
+        padding: '6px 14px', fontSize: 11, fontWeight: 600,
+        background: '#1a3580', color: '#fff', border: 'none', borderRadius: 4,
+        cursor: pending || !email.trim() ? 'not-allowed' : 'pointer',
+        opacity: pending || !email.trim() ? 0.5 : 1,
+      }}>
+        {pending ? 'Saving…' : '+ Grant'}
+      </button>
+      {msg && (
+        <span style={{
+          fontSize: 11,
+          color: msg.tone === 'ok' ? '#6fcf97' : '#e05c5c',
+        }}>
+          {msg.text}
+        </span>
+      )}
+    </form>
   );
 }
 
