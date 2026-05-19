@@ -9,6 +9,11 @@
 -- After running this, sharing works for projects of any size — the DB
 -- row stays a few KB regardless of how many photos.
 
+-- Make sure pgcrypto is available — gen_random_bytes lives in this
+-- extension. Supabase usually ships it pre-installed in the
+-- `extensions` schema but this is idempotent and safe to re-run.
+create extension if not exists pgcrypto with schema extensions;
+
 -- ── 1. Public share-previews bucket ────────────────────────────────
 -- public=true → anyone with the URL can fetch the image (necessary
 -- because the client viewer is unauthenticated). The unguessable
@@ -141,7 +146,9 @@ begin
     raise exception 'Paid plan or active trial required to share for review';
   end if;
 
-  v_token := encode(gen_random_bytes(18), 'base64');
+  -- Qualify with the extensions schema — our search_path is `public`
+  -- only, and gen_random_bytes lives in extensions on Supabase.
+  v_token := encode(extensions.gen_random_bytes(18), 'base64');
   v_token := replace(replace(replace(v_token, '/', '_'), '+', '-'), '=', '');
 
   insert into public.shared_projects
