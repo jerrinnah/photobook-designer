@@ -10,26 +10,26 @@
 
 import { useEffect, useState } from 'react';
 
-// Per-currency pricing tuned to local purchasing power, not raw exchange.
+// Per-currency pricing anchored to NGN at current exchange rates.
 //
-// USD is the international anchor — $19 / $59 is intentionally aggressive
-// for a one-time-pay SaaS (most photographer tools are $20-90/mo).
+// NGN is the home-market price (₦5K / ₦45K, ~$3 / $30 USD). Other
+// currencies match the SAME effective rate — international customers
+// get the same fair deal as Nigerian customers.
 //
-// NGN is held at the original strategic-discount levels (₦5K / ₦45K) —
-// ~$3 / $30 at current exchange — to keep the Nigerian home market
-// accessible. This is roughly 70% off USD at exchange rates, intentional.
+// This positions AutoBook as a "global flat price" tool, not a
+// USD-anchored SaaS that charges Africa less. Lower revenue per
+// international sale, but builds long-term goodwill and removes
+// the awkward "why is it 5x more expensive in dollars" question.
 //
-// ZAR / GHS / KES land between those two anchors: priced as "fair for
-// the local market" rather than direct USD conversions, but not as
-// deeply discounted as NGN. Approx 25-35% off USD at exchange rates.
+// Reference exchange (approx):  1 USD ≈ ₦1,500 ≈ R18 ≈ ₵12 ≈ KSh 130
 //
 // Tweak any number below freely — these flow straight through to the
 // landing page, upgrade modal, and Paystack popup.
 export const CURRENCIES = {
   USD: {
     code: 'USD', symbol: '$', label: 'USD',
-    starter: 19, pro: 59,
-    spread: 1, cover: 1.5,
+    starter: 5, pro: 29,
+    spread: 0.5, cover: 1,
     flag: '🌎',
   },
   NGN: {
@@ -40,19 +40,19 @@ export const CURRENCIES = {
   },
   ZAR: {
     code: 'ZAR', symbol: 'R', label: 'ZAR',
-    starter: 199, pro: 599,
-    spread: 12, cover: 19,
+    starter: 59, pro: 549,
+    spread: 9, cover: 12,
     flag: '🇿🇦',
   },
   GHS: {
     code: 'GHS', symbol: '₵', label: 'GHS',
-    starter: 99, pro: 299,
-    spread: 5, cover: 8,
+    starter: 39, pro: 349,
+    spread: 6, cover: 8,
     flag: '🇬🇭',
   },
   KES: {
     code: 'KES', symbol: 'KSh', label: 'KES',
-    starter: 999, pro: 3999,
+    starter: 499, pro: 3999,
     spread: 65, cover: 99,
     flag: '🇰🇪',
   },
