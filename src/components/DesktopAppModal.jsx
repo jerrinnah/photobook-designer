@@ -1,9 +1,12 @@
 import DesktopDownloads from './DesktopDownloads';
 
 // Thin modal wrapper around DesktopDownloads — opened from the profile
-// menu when someone explicitly wants the desktop installer (rather than
-// scrolling to the bottom of the upgrade modal).
-export default function DesktopAppModal({ open, onClose }) {
+// menu when someone explicitly wants the desktop installer.
+//
+// onUpgradeClick fires when the LockedPanel's "See plans" button is
+// pressed by a free / signed-out user. The parent (Toolbar) handles
+// it by closing this modal and opening the UpgradeModal.
+export default function DesktopAppModal({ open, onClose, onUpgradeClick }) {
   if (!open) return null;
   return (
     <div onClick={onClose} style={{
@@ -22,7 +25,7 @@ export default function DesktopAppModal({ open, onClose }) {
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 14, color: '#e8e8e8' }}>
           Get AutoBook for desktop
         </div>
-        <DesktopDownloads />
+        <DesktopDownloads onUpgradeClick={onUpgradeClick} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={onClose} style={{
             padding: '8px 14px', fontSize: 12,

@@ -9,7 +9,7 @@ const CURRENCY = import.meta.env.VITE_PAYSTACK_CURRENCY || 'NGN';
 
 export const PLAN_PRICES = {
   starter: Number(import.meta.env.VITE_STARTER_PRICE || 5000),
-  pro:     Number(import.meta.env.VITE_PRO_PRICE     || 30000),
+  pro:     Number(import.meta.env.VITE_PRO_PRICE     || 45000),
 };
 
 const CURRENCY_SYMBOLS = { NGN: '₦', USD: '$', GHS: '₵', ZAR: 'R', KES: 'KSh' };

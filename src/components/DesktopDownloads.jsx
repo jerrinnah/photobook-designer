@@ -1,6 +1,13 @@
-// Mac + Windows download cards. Auto-highlights the user's platform.
-// URLs come from env vars so they can point at cPanel paths, a CDN,
-// or GitHub Releases without code changes.
+// Mac + Windows download cards, gated by tier.
+//
+// Paid (Pro / Starter) or Trial users can download. Free / signed-out
+// visitors see a locked panel that explains why and links to the
+// upgrade modal. Once they install the desktop app and sign in, their
+// tier follows them — the desktop app shares the same Supabase backend
+// so the access level mirrors the web account exactly.
+
+import { useAuthUser } from '../utils/supabase';
+import { getEffectiveTier, hasPremiumAccess } from '../utils/premium';
 
 const MAC_URL =
   import.meta.env.VITE_DESKTOP_MAC_URL || '/downloads/AutoBook-mac.dmg';
@@ -15,8 +22,11 @@ function detectPlatform() {
   return 'other';
 }
 
-export default function DesktopDownloads({ compact = false }) {
+export default function DesktopDownloads({ compact = false, onUpgradeClick }) {
+  const user = useAuthUser();
+  const tier = getEffectiveTier(user);
   const platform = detectPlatform();
+  const canDownload = Boolean(user?.email) && hasPremiumAccess(tier);
 
   return (
     <div style={{
@@ -39,26 +49,81 @@ export default function DesktopDownloads({ compact = false }) {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 14 }}>
-        <DownloadCard
-          label="macOS"
-          sublabel="Apple Silicon · Intel"
-          icon=""
-          url={MAC_URL}
-          recommended={platform === 'mac'}
-        />
-        <DownloadCard
-          label="Windows"
-          sublabel="64-bit · installer"
-          icon="⊞"
-          url={WIN_URL}
-          recommended={platform === 'win'}
-        />
-      </div>
+      {canDownload ? (
+        <>
+          {/* Tier indicator — reassure user the desktop app respects their plan */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginTop: 12, padding: '4px 10px',
+            background: '#0e1a10', border: '1px solid #2a4a2a',
+            borderRadius: 4, fontSize: 10, color: '#6fcf97',
+          }}>
+            <span style={{ fontSize: 11 }}>●</span>
+            <span style={{ fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              {tier === 'pro' ? 'Pro access' : tier === 'starter' ? 'Starter access' : 'Trial access'}
+            </span>
+            <span style={{ color: '#aaa' }}>— same features as web</span>
+          </div>
 
-      <div style={{ fontSize: 10, color: '#555', marginTop: 12, lineHeight: 1.5 }}>
-        Your projects sync via your AutoBook account — sign in on either platform and your books follow you.
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 12 }}>
+            <DownloadCard
+              label="macOS"
+              sublabel="Apple Silicon · Intel"
+              icon=""
+              url={MAC_URL}
+              recommended={platform === 'mac'}
+            />
+            <DownloadCard
+              label="Windows"
+              sublabel="64-bit · installer"
+              icon="⊞"
+              url={WIN_URL}
+              recommended={platform === 'win'}
+            />
+          </div>
+
+          <div style={{ fontSize: 10, color: '#555', marginTop: 12, lineHeight: 1.5 }}>
+            Sign in to the desktop app with the same email — your projects and {tier} access follow you across devices.
+          </div>
+        </>
+      ) : (
+        <LockedPanel
+          isSignedIn={Boolean(user?.email)}
+          onUpgradeClick={onUpgradeClick}
+        />
+      )}
+    </div>
+  );
+}
+
+function LockedPanel({ isSignedIn, onUpgradeClick }) {
+  return (
+    <div style={{
+      marginTop: 12, padding: '12px 14px',
+      background: '#1a1408', border: '1px solid #3a2a10',
+      borderRadius: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 13, color: '#f6c90e' }}>🔒</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#f6c90e' }}>
+          Paid plan required for the desktop app
+        </span>
       </div>
+      <div style={{ fontSize: 11, color: '#aaa', lineHeight: 1.55, marginBottom: 10 }}>
+        {isSignedIn
+          ? 'The offline app is a Pro, Starter, or Trial feature. Upgrade and the same email unlocks the desktop installer.'
+          : 'Sign in first, then upgrade to Pro, Starter, or start a trial — the desktop app mirrors your plan automatically.'}
+      </div>
+      {onUpgradeClick && (
+        <button onClick={onUpgradeClick} style={{
+          padding: '7px 14px', fontSize: 11, fontWeight: 600,
+          background: '#3a2a08', color: '#f6c90e',
+          border: '1px solid #5a4010', borderRadius: 4,
+          cursor: 'pointer',
+        }}>
+          ✦ See plans
+        </button>
+      )}
     </div>
   );
 }

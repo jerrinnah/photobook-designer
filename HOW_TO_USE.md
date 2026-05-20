@@ -29,7 +29,7 @@ If you've ever spent 4 hours moving photos around a grid in Photoshop, AutoBook 
 | **Auto-save** | Never lose work. Switches between projects without exporting |
 | **Multi-project** | Run dozens of jobs in parallel from the same browser |
 | **White-label branding** | Your logo on every client viewer (Pro) |
-| **No subscription guilt** | One-time payment — ₦5K Starter or ₦30K Pro |
+| **No subscription guilt** | One-time payment — ₦5K Starter or ₦45K Pro |
 | **Works on phone** | Real editor on mobile, not a "use desktop" wall |
 
 ---
@@ -193,12 +193,13 @@ The password is stored encrypted by Supabase Auth — we never see or store it o
 - No watermark
 - Best for: 2-3 books / events per quarter.
 
-### Pro — ₦30,000 (one-time)
+### Pro — ₦45,000 (one-time)
 - **Unlimited exports**
 - Every template — including Wedding (19), Event (4), and premium covers
+- **Desktop app for macOS + Windows** — work offline, exports run faster
 - Everything in Starter
 - New templates as we add them, automatically
-- Best for: working studios with steady client flow — pays for itself after ~4 books.
+- Best for: working studios with steady client flow — pays for itself after ~6 books.
 
 No subscriptions. No card-on-file. Pay once, own it. Pay via Paystack — Naira card, Visa, Verve, or bank transfer.
 

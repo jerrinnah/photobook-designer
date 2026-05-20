@@ -602,7 +602,11 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
       <SetPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
-      <DesktopAppModal open={showDesktop} onClose={() => setShowDesktop(false)} />
+      <DesktopAppModal
+        open={showDesktop}
+        onClose={() => setShowDesktop(false)}
+        onUpgradeClick={() => { setShowDesktop(false); setUpgradeReason('plans'); }}
+      />
       <UpgradeModal
         open={Boolean(upgradeReason)}
         onClose={() => { setUpgradeReason(null); pendingExportRef.current = null; }}

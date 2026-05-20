@@ -5,7 +5,7 @@
 //   starter — ₦5,000 one-time. Up to 10 photobook exports. Access to
 //             every template EXCEPT Pro-only ones (Wedding, Event, premium
 //             covers — the "new templates and covers" pack).
-//   pro     — ₦30,000 one-time. Unlimited exports + every template.
+//   pro     — ₦45,000 one-time. Unlimited exports + every template + desktop app.
 //
 // Trial: first 5 exports OR 30 days, whichever ends first. During the
 // trial, every Pro feature is unlocked.
