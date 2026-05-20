@@ -13,6 +13,7 @@ import BrandingSettings from './BrandingSettings';
 import ShareModal from './ShareModal';
 import SetPasswordModal from './SetPasswordModal';
 import UpgradeModal from './UpgradeModal';
+import DesktopAppModal from './DesktopAppModal';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -67,6 +68,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showProjects, setShowProjects] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showDesktop, setShowDesktop] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
@@ -500,6 +502,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     Take the tour
                   </button>
                   <button
+                    onClick={() => { setShowDesktop(true); setProfileOpen(false); }}
+                    style={menuItemStyle}
+                  >
+                    ↓ Download desktop app
+                  </button>
+                  <button
                     onClick={() => { setUpgradeReason('plans'); setProfileOpen(false); }}
                     style={{ ...menuItemStyle, color: eff === 'free' ? '#f6c90e' : '#bbb' }}
                   >
@@ -594,6 +602,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
       <BrandingSettings open={showBrand} onClose={() => setShowBrand(false)} />
       <SetPasswordModal open={showPassword} onClose={() => setShowPassword(false)} />
+      <DesktopAppModal open={showDesktop} onClose={() => setShowDesktop(false)} />
       <UpgradeModal
         open={Boolean(upgradeReason)}
         onClose={() => { setUpgradeReason(null); pendingExportRef.current = null; }}

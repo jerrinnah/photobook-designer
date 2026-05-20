@@ -10,6 +10,7 @@ import {
 import { useAuthUser } from '../utils/supabase';
 import { useBookStore } from '../store/useBookStore';
 import { getActiveProjectId } from '../store/projects';
+import DesktopDownloads from './DesktopDownloads';
 
 export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSuccess }) {
   const [paying, setPaying] = useState(false); // 'starter' | 'pro' | 'book' | false
@@ -205,6 +206,11 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
             ))}
           </div>
         </details>
+
+        {/* Offline option — desktop apps */}
+        <div style={{ marginTop: 14 }}>
+          <DesktopDownloads compact />
+        </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={onClose} disabled={Boolean(paying)} style={btnGhost}>Not now</button>
