@@ -94,10 +94,10 @@ export default function AuthModal({ open, onClose, action }) {
             borderBottom: '1px solid #1f1f1f',
           }}>
             <Tab active={mode === 'password'} onClick={() => switchMode('password')}>
-              Password
+              Sign in
             </Tab>
             <Tab active={mode === 'magic'} onClick={() => switchMode('magic')}>
-              Magic link
+              Sign up
             </Tab>
           </div>
         )}
@@ -105,17 +105,17 @@ export default function AuthModal({ open, onClose, action }) {
         {sent ? (
           <div style={{ padding: '4px 0' }}>
             <div style={{ fontSize: 13, color: '#6fcf97', marginBottom: 10 }}>
-              ✓ Magic link sent to <b style={{ color: '#ddd' }}>{email}</b>
+              ✓ Sign-up link sent to <b style={{ color: '#ddd' }}>{email}</b>
             </div>
             <div style={{ fontSize: 12, color: '#888', lineHeight: 1.6 }}>
-              Open the email on this device and click the sign-in button.
-              You'll land back here, automatically signed in. The link
-              expires in 1 hour.
+              Open the email on this device and click the link. You'll land
+              back here with your account ready to use. The link expires
+              in 1 hour.
             </div>
             <div style={{ fontSize: 11, color: '#666', marginTop: 14, lineHeight: 1.5 }}>
               Tip: after you sign in, open your profile menu (top right) and
-              choose <b style={{ color: '#aaa' }}>Set password</b> to skip the
-              magic link next time.
+              choose <b style={{ color: '#aaa' }}>Set password</b> so you can
+              skip the email link next time.
             </div>
             <div style={{ fontSize: 11, color: '#555', marginTop: 12 }}>
               Wrong email?{' '}
@@ -167,8 +167,9 @@ export default function AuthModal({ open, onClose, action }) {
         ) : (
           <form onSubmit={submitMagic}>
             <div style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.55 }}>
-              New here, or no password set yet? Enter your email and we'll send a
-              one-time sign-in link. After you arrive you can set a password.
+              New here? Enter your email and we'll send a link to activate your account.
+              Already have one but no password? Same link works — sign in, set a password,
+              you're set for life.
             </div>
             <label style={{ display: 'block', marginBottom: 12 }}>
               <span style={labelStyle}>Email</span>
@@ -197,7 +198,7 @@ export default function AuthModal({ open, onClose, action }) {
                 opacity: (!canMagicSubmit || !isSupabaseConfigured) ? 0.5 : 1,
                 cursor: (!canMagicSubmit || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
               }}>
-                {pending ? 'Sending…' : '✉ Send sign-in link'}
+                {pending ? 'Sending…' : '✉ Send sign-up link'}
               </button>
             </div>
           </form>

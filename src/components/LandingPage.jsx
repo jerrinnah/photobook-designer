@@ -4,6 +4,7 @@ import {
 } from '../utils/premium';
 import { formatPrice } from '../utils/paystack';
 import { useCurrency, CURRENCIES, formatMoney } from '../utils/currency';
+import SupportModal from './SupportModal';
 
 // AutoBook marketing landing page. Lives at "/" so cold visitors get a
 // proper introduction before being dropped into the editor. The "Open
@@ -11,20 +12,27 @@ import { useCurrency, CURRENCIES, formatMoney } from '../utils/currency';
 // editor experience.
 
 export default function LandingPage() {
+  const [supportOpen, setSupportOpen] = useState(false);
   const goToEditor = () => { window.location.href = '?app=1'; };
   const goToPricing = () => {
     document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
   };
+  const openSupport = () => setSupportOpen(true);
 
   return (
     <div style={{
-      minHeight: '100vh',
+      // body has overflow:hidden for the editor — override here so the
+      // marketing page can actually scroll. position:absolute + inset:0
+      // pins to the viewport; overflow-y:auto restores scrolling.
+      position: 'absolute', inset: 0,
+      overflowY: 'auto',
+      overflowX: 'hidden',
       background: '#0a0a0a',
       color: '#e8e8e8',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       lineHeight: 1.55,
     }}>
-      <Nav onTry={goToEditor} onPricing={goToPricing} />
+      <Nav onTry={goToEditor} onPricing={goToPricing} onSupport={openSupport} />
       <Hero onTry={goToEditor} onPricing={goToPricing} />
       <SocialProofBar />
       <HowItWorks />
@@ -33,13 +41,14 @@ export default function LandingPage() {
       <Pricing onTry={goToEditor} />
       <FAQ />
       <FinalCTA onTry={goToEditor} />
-      <Footer />
+      <Footer onSupport={openSupport} />
+      <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
     </div>
   );
 }
 
 // ── Nav ────────────────────────────────────────────────────────────
-function Nav({ onTry, onPricing }) {
+function Nav({ onTry, onPricing, onSupport }) {
   return (
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
@@ -57,6 +66,7 @@ function Nav({ onTry, onPricing }) {
       <button onClick={onPricing} style={navLinkStyle}>Pricing</button>
       <a href="#features" style={navLinkStyle}>Features</a>
       <a href="#faq" style={navLinkStyle}>FAQ</a>
+      <button onClick={onSupport} style={navLinkStyle}>Support</button>
       <button onClick={onTry} style={ctaPrimary}>Open editor →</button>
     </nav>
   );
@@ -563,7 +573,7 @@ function FinalCTA({ onTry }) {
 }
 
 // ── Footer ─────────────────────────────────────────────────────────
-function Footer() {
+function Footer({ onSupport }) {
   return (
     <footer style={{
       padding: '32px 28px 24px',
@@ -579,7 +589,9 @@ function Footer() {
           <span>© {new Date().getFullYear()} AutoBook by NEJ</span>
         </div>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-          <a href="mailto:support@autobookbynej.online" style={footerLink}>support@autobookbynej.online</a>
+          <button onClick={onSupport} style={{ ...footerLink, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 11 }}>
+            Contact support
+          </button>
           <a href="?app=1" style={footerLink}>Open editor</a>
           <a href="#pricing" style={footerLink}>Pricing</a>
           <a href="#faq" style={footerLink}>FAQ</a>

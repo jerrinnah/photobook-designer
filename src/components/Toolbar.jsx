@@ -14,6 +14,7 @@ import ShareModal from './ShareModal';
 import SetPasswordModal from './SetPasswordModal';
 import UpgradeModal from './UpgradeModal';
 import DesktopAppModal from './DesktopAppModal';
+import SupportModal from './SupportModal';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -69,6 +70,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showBrand, setShowBrand] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showDesktop, setShowDesktop] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
@@ -508,6 +510,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     ↓ Download desktop app
                   </button>
                   <button
+                    onClick={() => { setShowSupport(true); setProfileOpen(false); }}
+                    style={menuItemStyle}
+                  >
+                    ✉ Contact support
+                  </button>
+                  <button
                     onClick={() => { setUpgradeReason('plans'); setProfileOpen(false); }}
                     style={{ ...menuItemStyle, color: eff === 'free' ? '#f6c90e' : '#bbb' }}
                   >
@@ -607,6 +615,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onClose={() => setShowDesktop(false)}
         onUpgradeClick={() => { setShowDesktop(false); setUpgradeReason('plans'); }}
       />
+      <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
       <UpgradeModal
         open={Boolean(upgradeReason)}
         onClose={() => { setUpgradeReason(null); pendingExportRef.current = null; }}
