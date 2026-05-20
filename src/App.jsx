@@ -12,6 +12,7 @@ import AdminDashboard from './components/AdminDashboard';
 import ClientProofingView from './components/ClientProofingView';
 import Tour, { hasSeenTour } from './components/Tour';
 import NameProjectHint from './components/NameProjectHint';
+import LandingPage from './components/LandingPage';
 import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
@@ -44,6 +45,10 @@ export default function App() {
     if (shareToken) return <ClientProofingView token={shareToken} />;
     // Admin dashboard
     if (params.has('admin')) return <AdminDashboard />;
+    // Marketing landing page is the default at "/" — visitors must
+    // explicitly enter the editor via ?app=1 (or a CTA button on the
+    // landing page). Existing users can bookmark ?app=1 directly.
+    if (!params.has('app')) return <LandingPage />;
   }
 
   if (isMobile) {
