@@ -10,6 +10,21 @@
 
 import { useEffect, useState } from 'react';
 
+// Per-currency pricing tuned to local purchasing power, not raw exchange.
+//
+// USD is the international anchor — $19 / $59 is intentionally aggressive
+// for a one-time-pay SaaS (most photographer tools are $20-90/mo).
+//
+// NGN is held at the original strategic-discount levels (₦5K / ₦45K) —
+// ~$3 / $30 at current exchange — to keep the Nigerian home market
+// accessible. This is roughly 70% off USD at exchange rates, intentional.
+//
+// ZAR / GHS / KES land between those two anchors: priced as "fair for
+// the local market" rather than direct USD conversions, but not as
+// deeply discounted as NGN. Approx 25-35% off USD at exchange rates.
+//
+// Tweak any number below freely — these flow straight through to the
+// landing page, upgrade modal, and Paystack popup.
 export const CURRENCIES = {
   USD: {
     code: 'USD', symbol: '$', label: 'USD',
@@ -25,20 +40,20 @@ export const CURRENCIES = {
   },
   ZAR: {
     code: 'ZAR', symbol: 'R', label: 'ZAR',
-    starter: 349, pro: 1099,
-    spread: 19, cover: 29,
+    starter: 199, pro: 599,
+    spread: 12, cover: 19,
     flag: '🇿🇦',
   },
   GHS: {
     code: 'GHS', symbol: '₵', label: 'GHS',
-    starter: 249, pro: 749,
-    spread: 12, cover: 18,
+    starter: 99, pro: 299,
+    spread: 5, cover: 8,
     flag: '🇬🇭',
   },
   KES: {
     code: 'KES', symbol: 'KSh', label: 'KES',
-    starter: 2499, pro: 7999,
-    spread: 125, cover: 199,
+    starter: 999, pro: 3999,
+    spread: 65, cover: 99,
     flag: '🇰🇪',
   },
 };
