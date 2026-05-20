@@ -83,12 +83,28 @@ export async function sendMagicLink(email, pendingPhone = null) {
   // Force the magic link to return to the public site URL — without this
   // Supabase uses whatever origin the request came from, so a user signing
   // in from localhost gets a magic link that returns to localhost.
-  const siteUrl = import.meta.env.VITE_SITE_URL || (window.location.origin + window.location.pathname);
+  // Include ?app=1 in the redirect so they land on the editor, not the
+  // marketing page, when they click the link.
+  const baseUrl = import.meta.env.VITE_SITE_URL || (window.location.origin + window.location.pathname);
+  const siteUrl = baseUrl.includes('?') ? baseUrl : `${baseUrl}?app=1`;
   const { error } = await supabase.auth.signInWithOtp({
     email: trimmed,
     options: { emailRedirectTo: siteUrl },
   });
   if (error) throw new Error(error.message);
+  // Remember that this visitor has engaged with the auth flow — they
+  // should skip the marketing landing on future visits regardless of
+  // whether they clicked the link.
+  try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+}
+
+// Has this visitor ever started the auth flow OR successfully signed in?
+// Used by App.jsx to decide whether to show the marketing landing page
+// at "/" — engaged users go straight to the editor.
+export function hasEngaged() {
+  if (getStoredUser()) return true;
+  try { return localStorage.getItem('photobook-engaged-v1') === '1'; }
+  catch { return false; }
 }
 
 // Sign out — clears Supabase session + local cache, then reloads so no
@@ -111,6 +127,9 @@ export async function signOut() {
 
   clearStoredUser();
   try { localStorage.removeItem('photobook-pending-phone'); } catch { /* ignore */ }
+  // Clear the "engaged" flag so they see the marketing landing on next
+  // visit (e.g. shared computer, deliberate fresh start).
+  try { localStorage.removeItem('photobook-engaged-v1'); } catch { /* ignore */ }
 
   // Hard reload to clear every React tree's cached auth state.
   setTimeout(() => { window.location.reload(); }, 50);
@@ -139,6 +158,7 @@ export async function signInWithPassword(email, password) {
     }
     throw new Error(error.message);
   }
+  try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
 }
 
 // Sets (or changes) the current user's password. Requires an active

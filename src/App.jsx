@@ -13,6 +13,7 @@ import ClientProofingView from './components/ClientProofingView';
 import Tour, { hasSeenTour } from './components/Tour';
 import NameProjectHint from './components/NameProjectHint';
 import LandingPage from './components/LandingPage';
+import { hasEngaged } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 
 export default function App() {
@@ -45,10 +46,11 @@ export default function App() {
     if (shareToken) return <ClientProofingView token={shareToken} />;
     // Admin dashboard
     if (params.has('admin')) return <AdminDashboard />;
-    // Marketing landing page is the default at "/" — visitors must
-    // explicitly enter the editor via ?app=1 (or a CTA button on the
-    // landing page). Existing users can bookmark ?app=1 directly.
-    if (!params.has('app')) return <LandingPage />;
+    // Marketing landing page at "/" — but only for cold visitors.
+    // Anyone who has signed in OR even just requested a magic link
+    // skips the landing and lands in the editor. The marketing page
+    // would be redundant for them.
+    if (!params.has('app') && !hasEngaged()) return <LandingPage />;
   }
 
   if (isMobile) {
