@@ -28,6 +28,7 @@ export default function LandingPage() {
       <Hero onTry={goToEditor} onPricing={goToPricing} />
       <SocialProofBar />
       <HowItWorks />
+      <DeviceSupport />
       <FeatureGrid />
       <Pricing onTry={goToEditor} />
       <FAQ />
@@ -122,8 +123,8 @@ function SocialProofBar() {
   const items = [
     'Built for Nigerian photographers',
     '60+ wedding & event templates',
-    'Per-spread client feedback',
-    'Mac + Windows desktop apps',
+    'Works on phone, tablet, desktop',
+    'Mac + Windows offline apps',
     'Print-ready 300 DPI PDFs',
   ];
   return (
@@ -183,6 +184,99 @@ function HowItWorks() {
             </div>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Device support ─────────────────────────────────────────────────
+function DeviceSupport() {
+  const devices = [
+    {
+      icon: '◰', label: 'Phone',
+      tagline: 'iPhone · Android',
+      body: 'Full editor in your browser — pinch to zoom, tap to swap photos, swipe between spreads. Review and approve client books on the go.',
+      tier: 'All plans',
+      tierColor: '#6fcf97',
+    },
+    {
+      icon: '▭', label: 'Tablet',
+      tagline: 'iPad · Android tablet',
+      body: 'Larger canvas, same touch controls. Perfect for client review meetings — flip through every spread on a screen big enough to actually see the photos.',
+      tier: 'All plans',
+      tierColor: '#6fcf97',
+    },
+    {
+      icon: '◻', label: 'Browser',
+      tagline: 'Any modern browser',
+      body: 'Chrome, Safari, Edge, Firefox. Works on Mac, Windows, Linux. Auto-saves to your browser so your project survives refreshes and tab closes.',
+      tier: 'All plans',
+      tierColor: '#6fcf97',
+    },
+    {
+      icon: '⊞', label: 'Desktop app',
+      tagline: 'Mac · Windows · offline',
+      body: 'Native installers for when WiFi is unreliable or you need maximum performance. Same projects, same templates — your tier follows your sign-in.',
+      tier: 'Pro',
+      tierColor: '#f6c90e',
+    },
+  ];
+
+  return (
+    <section style={sectionStyle}>
+      <SectionLabel>Every device</SectionLabel>
+      <h2 style={h2Style}>Design from wherever you are</h2>
+      <p style={{ fontSize: 14, color: '#888', textAlign: 'center', marginTop: 10, maxWidth: 600, margin: '10px auto 0' }}>
+        Phone in the car, tablet at the client meeting, desktop in the studio — AutoBook
+        is the same editor on all of them, with projects auto-syncing through your account.
+      </p>
+
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 14, marginTop: 32,
+      }}>
+        {devices.map((d) => (
+          <div key={d.label} style={{
+            padding: '20px 18px',
+            background: '#0e0e0e',
+            border: '1px solid #1a1a1a',
+            borderRadius: 8,
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 36, color: '#6fb8d8', lineHeight: 1, fontWeight: 300 }}>
+                {d.icon}
+              </span>
+              <span style={{
+                fontSize: 9, color: d.tierColor,
+                background: d.tier === 'Pro' ? '#3a2a08' : '#0e1a10',
+                border: `1px solid ${d.tier === 'Pro' ? '#5a4010' : '#2a4a2a'}`,
+                padding: '2px 7px', borderRadius: 3,
+                letterSpacing: 0.5, textTransform: 'uppercase', fontWeight: 600,
+              }}>
+                {d.tier}
+              </span>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{d.label}</div>
+            <div style={{ fontSize: 11, color: '#666', marginTop: 2, marginBottom: 10 }}>{d.tagline}</div>
+            <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.6, flex: 1 }}>
+              {d.body}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        marginTop: 22, padding: '14px 18px',
+        background: '#0c0c0c', border: '1px solid #1a1a1a',
+        borderRadius: 8,
+        fontSize: 12, color: '#aaa', lineHeight: 1.6,
+        textAlign: 'center',
+      }}>
+        <strong style={{ color: '#fff' }}>Truly device-agnostic.</strong>{' '}
+        Start a book on your phone during a shoot, refine it on your iPad over coffee,
+        finish exports on your desktop. Sign in with the same email everywhere — your
+        projects follow you.
       </div>
     </section>
   );
