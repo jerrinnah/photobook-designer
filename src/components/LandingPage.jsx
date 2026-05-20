@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
   STARTER_FEATURES, PRO_FEATURES, FREE_FEATURES,
-  SPREAD_PRICE, COVER_PRICE,
 } from '../utils/premium';
 import { formatPrice } from '../utils/paystack';
+import { useCurrency, CURRENCIES, formatMoney } from '../utils/currency';
 
 // AutoBook marketing landing page. Lives at "/" so cold visitors get a
 // proper introduction before being dropped into the editor. The "Open
@@ -70,16 +70,6 @@ function Hero({ onTry, onPricing }) {
       maxWidth: 1100, margin: '0 auto',
       textAlign: 'center',
     }}>
-      <span style={{
-        display: 'inline-block', padding: '6px 14px',
-        background: '#1a1408', border: '1px solid #3a2a10',
-        borderRadius: 30,
-        fontSize: 11, color: '#f6c90e', fontWeight: 600,
-        letterSpacing: 0.5, textTransform: 'uppercase',
-        marginBottom: 24,
-      }}>
-        Live · Pay in Naira via Paystack
-      </span>
       <h1 style={{
         fontSize: 'clamp(36px, 5.5vw, 64px)',
         fontWeight: 700, lineHeight: 1.1, letterSpacing: -1.5,
@@ -93,7 +83,7 @@ function Hero({ onTry, onPricing }) {
         fontSize: 'clamp(15px, 1.6vw, 19px)',
         color: '#aaa', maxWidth: 680, margin: '0 auto 36px',
       }}>
-        AutoBook gives Nigerian wedding & event photographers AI-powered layouts,
+        AutoBook gives wedding & event photographers AI-powered layouts,
         client review portals, and print-ready exports — for one fair price,
         no subscriptions.
       </p>
@@ -121,7 +111,7 @@ function Hero({ onTry, onPricing }) {
 // ── Social proof bar ───────────────────────────────────────────────
 function SocialProofBar() {
   const items = [
-    'Built for Nigerian photographers',
+    'Built for professional photographers',
     '60+ wedding & event templates',
     'Works on phone, tablet, desktop',
     'Mac + Windows offline apps',
@@ -332,13 +322,35 @@ function FeatureGrid() {
 
 // ── Pricing ────────────────────────────────────────────────────────
 function Pricing({ onTry }) {
+  const { code, set, currency, available } = useCurrency();
+
   return (
     <section style={sectionStyle} id="pricing">
       <SectionLabel>Pricing</SectionLabel>
       <h2 style={h2Style}>One-time payments. No subscriptions.</h2>
-      <p style={{ fontSize: 14, color: '#888', textAlign: 'center', marginTop: 8, marginBottom: 32 }}>
-        Pay in Naira via Paystack. Card, Verve, or bank transfer.
+      <p style={{ fontSize: 14, color: '#888', textAlign: 'center', marginTop: 8, marginBottom: 18 }}>
+        Pay with any major card via Paystack. We auto-detect your currency — switch below if you'd like.
       </p>
+
+      {/* Currency selector */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 24, flexWrap: 'wrap' }}>
+        {available.map((c) => {
+          const cur = CURRENCIES[c];
+          const active = c === code;
+          return (
+            <button key={c} onClick={() => set(c)} style={{
+              padding: '6px 12px', fontSize: 11, fontWeight: 600,
+              background: active ? '#1a3580' : '#161616',
+              color: active ? '#fff' : '#aaa',
+              border: `1px solid ${active ? '#2a4a90' : '#252525'}`,
+              borderRadius: 5, cursor: 'pointer',
+              letterSpacing: 0.5,
+            }}>
+              {cur.flag} {cur.label}
+            </button>
+          );
+        })}
+      </div>
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
@@ -348,8 +360,8 @@ function Pricing({ onTry }) {
           name="Pay-per-book"
           badge="One book"
           badgeColor="#6fb8d8" accentBg="#0e2a3a"
-          price={`₦${SPREAD_PRICE.toLocaleString()}`}
-          priceUnit={`/spread + ₦${COVER_PRICE.toLocaleString()} cover`}
+          price={formatMoney(currency.spread, code)}
+          priceUnit={`/spread + ${formatMoney(currency.cover, code)} cover`}
           tagline="Pay only for what you finish"
           bullets={[
             'Unlimited exports of this book',
@@ -364,7 +376,7 @@ function Pricing({ onTry }) {
           name="Starter"
           badge="10 books"
           badgeColor="#6fcf97" accentBg="#0e1a10"
-          price={formatPrice('starter') || '₦5,000'}
+          price={formatMoney(currency.starter, code)}
           priceUnit="one-time"
           tagline="2-3 books per quarter"
           bullets={STARTER_FEATURES.map((f) => f.name)}
@@ -376,7 +388,7 @@ function Pricing({ onTry }) {
           name="Pro"
           badge="Unlimited + desktop"
           badgeColor="#f6c90e" accentBg="#3a2a08"
-          price={formatPrice('pro') || '₦45,000'}
+          price={formatMoney(currency.pro, code)}
           priceUnit="one-time"
           tagline="Working studios — pays for itself in ~6 books"
           bullets={[

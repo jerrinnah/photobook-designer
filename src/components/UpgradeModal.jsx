@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
   STARTER_FEATURES, PRO_FEATURES, FREE_FEATURES,
-  SPREAD_PRICE, COVER_PRICE, priceForProject,
+  priceForProject,
 } from '../utils/premium';
 import {
   openPaystackCheckout, claimPlan, isPaystackConfigured, formatPrice,
   openPerSpreadCheckout, unlockProject,
 } from '../utils/paystack';
+import { useCurrency, CURRENCIES, formatMoney } from '../utils/currency';
 import { useAuthUser } from '../utils/supabase';
 import { useBookStore } from '../store/useBookStore';
 import { getActiveProjectId } from '../store/projects';
@@ -18,10 +19,11 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
   const [success, setSuccess] = useState(false);
   const user = useAuthUser();
   const spreads = useBookStore((s) => s.spreads);
+  const { code: currencyCode, set: setCurrency, currency, available } = useCurrency();
   if (!open) return null;
 
   const canPay = isPaystackConfigured() && user?.email;
-  const bookPrice = priceForProject(spreads);
+  const bookPrice = priceForProject(spreads, currencyCode);
   const projectId = getActiveProjectId();
 
   const handlePay = async (plan) => {
@@ -29,7 +31,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
     setError(null);
     setPaying(plan);
     try {
-      const reference = await openPaystackCheckout({ email: user.email, plan });
+      const reference = await openPaystackCheckout({ email: user.email, plan, currencyCode });
       await claimPlan(plan, reference);
       setSuccess(plan);
       setTimeout(() => window.location.reload(), 1500);
@@ -51,17 +53,19 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
       const reference = await openPerSpreadCheckout({
         email: user.email,
         projectId,
-        totalNGN: bookPrice.totalNGN,
+        totalNGN: bookPrice.total,
         spreadCount: bookPrice.spreadCount,
         coverCount: bookPrice.coverCount,
+        currencyCode,
       });
       // Paystack confirmed payment — record it in our DB to grant the unlock.
       await unlockProject({
         projectId,
         spreadCount: bookPrice.spreadCount,
         coverCount: bookPrice.coverCount,
-        totalNGN: bookPrice.totalNGN,
+        totalNGN: bookPrice.total,
         reference,
+        currencyCode,
       });
       // Show "Payment success" before triggering download / closing.
       setSuccess('book');
@@ -114,12 +118,31 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
           <div style={warnBox}>Sign in first (Save or Export a photobook) — your account needs an email so the receipt can be sent.</div>
         )}
 
+        {/* Currency selector */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          {available.map((c) => {
+            const cur = CURRENCIES[c];
+            const active = c === currencyCode;
+            return (
+              <button key={c} onClick={() => setCurrency(c)} style={{
+                padding: '4px 10px', fontSize: 10, fontWeight: 600,
+                background: active ? '#1a3580' : '#161616',
+                color: active ? '#fff' : '#888',
+                border: `1px solid ${active ? '#2a4a90' : '#252525'}`,
+                borderRadius: 4, cursor: 'pointer', letterSpacing: 0.5,
+              }}>
+                {cur.flag} {cur.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Plan cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 14 }}>
           {/* PAY PER BOOK — counts ONLY designed spreads (cells with photos). */}
           <PlanCard
             name="Pay-per-book"
-            price={`₦${bookPrice.totalNGN.toLocaleString()}`}
+            price={formatMoney(bookPrice.total, currencyCode)}
             badge="This book only"
             badgeColor="#6fb8d8"
             accentColor="#0e2a3a"
@@ -129,8 +152,8 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
                   ? `${bookPrice.spreadCount} designed spread${bookPrice.spreadCount === 1 ? '' : 's'}${bookPrice.coverCount ? ` + ${bookPrice.coverCount} cover` : ''}`
                   : 'No designed spreads yet',
                 detail: bookPrice.totalSpreadsInBook > 0
-                  ? `${bookPrice.spreadCount + bookPrice.coverCount} of ${bookPrice.totalSpreadsInBook} spreads have photos · ₦${SPREAD_PRICE.toLocaleString()}/spread · ₦${COVER_PRICE.toLocaleString()}/cover`
-                  : `₦${SPREAD_PRICE.toLocaleString()} per spread · ₦${COVER_PRICE.toLocaleString()} for cover` },
+                  ? `${bookPrice.spreadCount + bookPrice.coverCount} of ${bookPrice.totalSpreadsInBook} spreads have photos · ${formatMoney(currency.spread, currencyCode)}/spread · ${formatMoney(currency.cover, currencyCode)}/cover`
+                  : `${formatMoney(currency.spread, currencyCode)} per spread · ${formatMoney(currency.cover, currencyCode)} for cover` },
               { key: 'export', name: 'Unlimited exports of this book',
                 detail: 'Re-export anytime, no extra charge. Design more spreads later — pay only for the new ones.' },
               { key: 'share', name: 'Client proofing portal' },
@@ -139,17 +162,17 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
             buttonLabel={
               success === 'book' ? '✓ Payment success — preparing download…' :
               paying === 'book' ? 'Opening Paystack…' :
-              bookPrice.totalNGN > 0 ? `Pay ₦${bookPrice.totalNGN.toLocaleString()} for this book` :
+              bookPrice.total > 0 ? `Pay ${formatMoney(bookPrice.total, currencyCode)} for this book` :
               'Add photos to a spread first'
             }
             onClick={handlePayPerBook}
-            disabled={!canPay || paying || success || bookPrice.totalNGN <= 0}
+            disabled={!canPay || paying || success || bookPrice.total <= 0}
             success={success === 'book'}
           />
           {/* STARTER */}
           <PlanCard
             name="Starter"
-            price={formatPrice('starter')}
+            price={formatPrice('starter', currencyCode)}
             badge="10 photobooks"
             badgeColor="#6fcf97"
             accentColor="#2a4a2a"
@@ -157,7 +180,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
             buttonLabel={
               success === 'starter' ? '✓ Activated' :
               paying === 'starter' ? 'Opening Paystack…' :
-              `Choose Starter · ${formatPrice('starter')}`
+              `Choose Starter · ${formatPrice('starter', currencyCode)}`
             }
             onClick={() => handlePay('starter')}
             disabled={!canPay || paying || success}
@@ -166,7 +189,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
           {/* PRO */}
           <PlanCard
             name="Pro"
-            price={formatPrice('pro')}
+            price={formatPrice('pro', currencyCode)}
             badge="Unlimited + Pro templates"
             badgeColor="#f6c90e"
             accentColor="#3a2a08"
@@ -175,7 +198,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
             buttonLabel={
               success === 'pro' ? '✓ Activated' :
               paying === 'pro' ? 'Opening Paystack…' :
-              `Choose Pro · ${formatPrice('pro')}`
+              `Choose Pro · ${formatPrice('pro', currencyCode)}`
             }
             onClick={() => handlePay('pro')}
             disabled={!canPay || paying || success}

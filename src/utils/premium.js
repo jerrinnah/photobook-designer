@@ -15,10 +15,13 @@ export const TRIAL_DAYS = 30;
 export const STARTER_QUOTA = 10;
 
 // Pay-per-book pricing — third option alongside Starter / Pro.
-// Each designed regular spread is ₦750, a designed cover is ₦1,000.
+// Each designed regular spread + the cover are charged at per-currency
+// rates set in utils/currency.js (the visitor sees their local currency).
 // One payment unlocks that specific project for unlimited exports.
-// If the user later designs more spreads, they top up with another
-// payment that covers just the new ones.
+// Top up later if more spreads get designed — only the new ones count.
+//
+// The NGN constants below are retained for legacy callers (admin, etc.).
+// New code should call priceForProject(spreads, currencyCode).
 export const SPREAD_PRICE = 750;
 export const COVER_PRICE  = 1000;
 
@@ -31,18 +34,30 @@ export function isSpreadDesigned(spread) {
 }
 
 // Calculate what this book would cost on pay-per-spread.
-// Returns { totalNGN, spreadCount, coverCount, totalSpreadsInBook }.
-// Only DESIGNED spreads contribute to the price.
-export function priceForProject(spreads) {
+// Returns { total, spreadCount, coverCount, totalSpreadsInBook, currency }.
+// Only DESIGNED spreads contribute to the price. Amount is in the
+// caller-specified currency (defaults to the visitor's active one).
+// The legacy `totalNGN` key is preserved on the result for callers that
+// haven't migrated yet — it now means "total in the active currency",
+// despite the historical name.
+import { getCurrency, getActiveCurrency } from './currency';
+export function priceForProject(spreads, currencyCode) {
+  const code = currencyCode || getActiveCurrency();
+  const c = getCurrency(code);
+
   const list = spreads || [];
   const designed = list.filter(isSpreadDesigned);
   const coverCount  = designed.filter((s) => s?.role === 'cover').length;
   const spreadCount = Math.max(0, designed.length - coverCount);
+  const total = spreadCount * (c.spread || 0) + coverCount * (c.cover || 0);
+
   return {
-    totalNGN: spreadCount * SPREAD_PRICE + coverCount * COVER_PRICE,
+    total,
+    totalNGN: total,                   // legacy key — same value, renamed semantically
     spreadCount,
     coverCount,
-    totalSpreadsInBook: list.length,   // for "x of N spreads designed" messaging
+    totalSpreadsInBook: list.length,
+    currency: code,
   };
 }
 

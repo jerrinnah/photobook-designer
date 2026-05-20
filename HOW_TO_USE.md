@@ -201,7 +201,7 @@ The password is stored encrypted by Supabase Auth — we never see or store it o
 - New templates as we add them, automatically
 - Best for: working studios with steady client flow — pays for itself after ~6 books.
 
-No subscriptions. No card-on-file. Pay once, own it. Pay via Paystack — Naira card, Visa, Verve, or bank transfer.
+No subscriptions. No card-on-file. Pay once, own it. Pay via Paystack — Visa, Mastercard, Verve, or bank transfer. Prices auto-convert to your local currency (NGN, USD, ZAR, GHS, KES).
 
 **Tip:** Start with Pay-per-book on your first project. If you find yourself doing 3+ books, upgrading to Starter or Pro saves money.
 
@@ -234,7 +234,7 @@ No subscriptions. No card-on-file. Pay once, own it. Pay via Paystack — Naira 
 ## Frequently asked questions
 
 ### How do I print my book?
-Export as **Print PDF**. Send the PDF to any commercial printer that does photobook printing (e.g. PrintCraft, PrintPro, Pixma in Lagos). The PDF has bleed and crop marks already.
+Export as **Print PDF**. Send the PDF to any commercial photobook printer worldwide. The PDF includes bleed and crop marks already — no special prep needed.
 
 ### Where are my photos stored?
 In your browser's IndexedDB. We never upload your originals. The only time photos leave your device is:
@@ -305,4 +305,4 @@ If there's a feature you want, email us. Most of what we ship comes from real ph
 - **Support**: support@autobookbynej.online
 - **GitHub** (open source bits & issues): [jerrinnah/photobook-designer](https://github.com/jerrinnah/photobook-designer)
 
-Built with care by NEJ. Made for the Nigerian wedding and event photography community first — used everywhere we can ship to.
+Built with care by NEJ. Serving professional wedding and event photographers worldwide.
