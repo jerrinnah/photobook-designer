@@ -124,7 +124,7 @@ export default function ClientProofingView({ token }) {
         background: '#0c0c0c',
       }}>
         {share.brand_logo_url ? (
-          <img src={share.brand_logo_url} alt="" style={{ height: 28, width: 28, objectFit: 'contain', borderRadius: '50%' }} />
+          <img src={share.brand_logo_url} alt="" style={{ height: 40, width: 40, objectFit: 'contain', borderRadius: 4 }} />
         ) : (
           <div style={{ height: 28, width: 28, borderRadius: '50%', background: '#1a3580', color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
             {(share.brand_name || 'A').slice(0, 1).toUpperCase()}

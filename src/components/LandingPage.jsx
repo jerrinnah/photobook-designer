@@ -58,10 +58,15 @@ function Nav({ onTry, onPricing, onSupport }) {
       backdropFilter: 'blur(10px)',
       borderBottom: '1px solid #1a1a1a',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-        <img src="./logo.png" alt="AutoBook" style={{ height: 28, width: 28, borderRadius: '50%' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-        <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2 }}>AutoBook</span>
-        <span style={{ fontSize: 10, color: '#666', letterSpacing: 1, textTransform: 'uppercase' }}>by NEJ</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+        <img
+          src="./logo.png"
+          alt="AutoBook"
+          style={{ height: 44, width: 44, objectFit: 'contain' }}
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.3 }}>AutoBook</span>
+        <span style={{ fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase' }}>by NEJ</span>
       </div>
       <button onClick={onPricing} style={navLinkStyle}>Pricing</button>
       <a href="#features" style={navLinkStyle}>Features</a>
@@ -584,8 +589,13 @@ function Footer({ onSupport }) {
         maxWidth: 1100, margin: '0 auto',
         display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="./logo.png" alt="" style={{ height: 20, width: 20, borderRadius: '50%' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img
+            src="./logo.png"
+            alt=""
+            style={{ height: 32, width: 32, objectFit: 'contain' }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
           <span>© {new Date().getFullYear()} AutoBook by NEJ</span>
         </div>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>

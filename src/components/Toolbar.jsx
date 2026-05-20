@@ -234,9 +234,11 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onClick={() => setShowBrand(true)}
         onError={(e) => { e.currentTarget.src = './logo.png'; }}
         style={{
-          height: 30, width: 30, objectFit: 'contain', borderRadius: '50%',
+          height: 36, width: 36, objectFit: 'contain',
+          // Round-crop only for user-uploaded brand logos (which expect
+          // profile-style framing). Default AutoBook logo shows in full.
+          borderRadius: brand.logoUrl ? '50%' : 4,
           flexShrink: 0, cursor: 'pointer',
-          background: '#181818',
         }}
       />
 
