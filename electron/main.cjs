@@ -16,7 +16,10 @@ function createWindow() {
     },
   });
 
-  win.loadFile(path.join(__dirname, '../dist/index.html'));
+  // Pass ?app=1 so the SPA router skips the marketing landing page —
+  // anyone running the desktop app has already chosen to use AutoBook
+  // and shouldn't be re-pitched at every launch.
+  win.loadFile(path.join(__dirname, '../dist/index.html'), { search: 'app=1' });
   win.once('ready-to-show', () => win.show());
 
   // Open any <a target="_blank"> links in the system browser
