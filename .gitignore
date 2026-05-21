@@ -31,3 +31,7 @@ build/ico_tmp/
 *.sln
 *.sw?
 .vercel
+
+
+# Generated PDFs (run `npx md-to-pdf <file>.md` to regenerate)
+*.pdf

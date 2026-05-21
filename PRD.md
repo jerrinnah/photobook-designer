@@ -4,17 +4,20 @@
 |---|---|
 | **Product** | AutoBook by NEJ |
 | **Tagline** | Design wedding photobooks in 5 minutes, not 5 hours. |
-| **Owner** | NEJ Studios (Jerry Nnah) |
+| **Parent company** | **OctaveDev** — builds products and websites/apps for brands |
+| **Founder** | Jerry Nnah (OctaveDev) |
 | **Stage** | Soft launch (live payments active) |
 | **Live URL** | https://autobookbynej.online |
 | **Repository** | https://github.com/jerrinnah/photobook-designer |
-| **Document version** | 1.0 |
+| **Document version** | 1.1 |
 
 ---
 
 ## 1. Overview
 
-AutoBook is an AI-assisted photobook designer for professional wedding, event, and portrait photographers. It collapses a multi-hour layout job in InDesign or Photoshop into a few clicks, includes a built-in client review portal, and exports print-ready files. Available as a web app (browser, mobile, tablet) and native desktop installers for Mac and Windows.
+AutoBook is **OctaveDev's** first major B2B SaaS product — an AI-assisted photobook designer for professional wedding, event, and portrait photographers. It collapses a multi-hour layout job in InDesign or Photoshop into a few clicks, includes a built-in client review portal, and exports print-ready files. Available as a web app (browser, mobile, tablet) and native desktop installers for Mac and Windows.
+
+OctaveDev is a digital studio specializing in building products and websites/apps for brands. AutoBook represents OctaveDev's expansion from client services into productized software — using the same craft and quality bar applied to brand work, now sold directly to end-users worldwide.
 
 Monetized via one-time payments — not a subscription. Three tiers serve different commitment levels: pay-per-book for first-time users, Starter for casual photographers, and Pro for working studios.
 
