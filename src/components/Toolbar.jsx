@@ -534,6 +534,23 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     ↓ Download desktop app
                   </button>
                   <button
+                    onClick={async () => {
+                      setProfileOpen(false);
+                      try {
+                        await refreshUserTier();
+                        const fresh = getStoredUser();
+                        alert(fresh?.tier
+                          ? `Account refreshed. Current tier: ${fresh.tier}.`
+                          : "Couldn't refresh — try signing out and back in.");
+                      } catch (err) {
+                        alert("Couldn't refresh account. Try signing out and back in.");
+                      }
+                    }}
+                    style={menuItemStyle}
+                  >
+                    ↻ Refresh account
+                  </button>
+                  <button
                     onClick={() => { setShowSupport(true); setProfileOpen(false); }}
                     style={menuItemStyle}
                   >
