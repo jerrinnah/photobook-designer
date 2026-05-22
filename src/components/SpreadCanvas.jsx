@@ -9,6 +9,7 @@ import { loadPhoto as loadPhotoFile } from '../utils/photoLoader';
 import { assignPhotoWithPrompt } from '../utils/photoAssign';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import AltLayoutSuggestions from './AltLayoutSuggestions';
+import { useTheme } from '../utils/theme';
 
 // Convert gradient angle + two stops to Konva linearGradient start/end points
 function gradientPoints(angle, w, h) {
@@ -377,6 +378,14 @@ const cellBtnStyle = (extra = {}) => ({
 });
 
 export default function SpreadCanvas({ stageRef, mobile = false }) {
+  const { t } = useTheme();
+  const zoomBtnStyle = {
+    background: t.bgInput, border: `1px solid ${t.border}`,
+    borderRadius: 4, color: t.text,
+    fontSize: 14, padding: '4px 9px',
+    cursor: 'pointer', lineHeight: 1,
+    minWidth: 28, textAlign: 'center',
+  };
   const {
     spreads, activeSpreadId, assignPhoto, addPhotos, addCellAt,
     spreadSizeId, customSize, blendEdges, gap,
@@ -1650,10 +1659,10 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
         position: 'absolute', bottom: 12, left: '50%',
         transform: 'translateX(-50%)',
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        background: 'rgba(20,20,20,0.94)',
-        border: '1px solid #2a2a2a', borderRadius: 8,
+        background: t.mode === 'light' ? 'rgba(255,255,255,0.96)' : 'rgba(20,20,20,0.94)',
+        border: `1px solid ${t.border}`, borderRadius: 8,
         padding: '6px 8px',
-        boxShadow: '0 6px 22px rgba(0,0,0,0.65)',
+        boxShadow: `0 6px 22px ${t.shadow}`,
         zIndex: 10,
         backdropFilter: 'blur(10px)',
       }}>
@@ -1675,26 +1684,29 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
         <button onClick={() => setZoomClamped(zoom * 1.25)} style={zoomBtnStyle} title="Zoom in (Cmd/Ctrl + wheel)">+</button>
 
-        <div style={{ width: 1, height: 18, background: '#2a2a2a', margin: '0 2px' }} />
+        <div style={{ width: 1, height: 18, background: t.border, margin: '0 2px' }} />
 
         {/* Quick-jump presets */}
-        {[0.5, 1, 1.5, 2].map((preset) => (
+        {[0.5, 1, 1.5, 2].map((preset) => {
+          const active = Math.abs(zoom - preset) < 0.01;
+          return (
           <button
             key={preset}
             onClick={() => setZoom(preset)}
             style={{
               ...zoomBtnStyle,
               minWidth: 40, fontSize: 10,
-              background: Math.abs(zoom - preset) < 0.01 ? '#1e2535' : '#181818',
-              color: Math.abs(zoom - preset) < 0.01 ? '#4f8ef7' : '#bbb',
-              borderColor: Math.abs(zoom - preset) < 0.01 ? '#2c4070' : '#2a2a2a',
-              fontWeight: Math.abs(zoom - preset) < 0.01 ? 600 : 400,
+              background: active ? (t.mode === 'light' ? '#e6edf8' : '#1e2535') : t.bgInput,
+              color: active ? '#4f8ef7' : t.text,
+              borderColor: active ? (t.mode === 'light' ? '#a8c8e8' : '#2c4070') : t.border,
+              fontWeight: active ? 600 : 400,
             }}
             title={`Set zoom to ${Math.round(preset * 100)}%`}
           >
             {Math.round(preset * 100)}%
           </button>
-        ))}
+          );
+        })}
 
         <button
           onClick={() => {
@@ -1713,7 +1725,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
         {/* Current zoom indicator */}
         <div style={{
-          minWidth: 46, fontSize: 11, color: '#888',
+          minWidth: 46, fontSize: 11, color: t.textMuted,
           fontVariantNumeric: 'tabular-nums', textAlign: 'right',
           paddingLeft: 4,
         }}>
@@ -1724,10 +1736,3 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   );
 }
 
-const zoomBtnStyle = {
-  background: '#181818', border: '1px solid #2a2a2a',
-  borderRadius: 4, color: '#bbb',
-  fontSize: 14, padding: '4px 9px',
-  cursor: 'pointer', lineHeight: 1,
-  minWidth: 28, textAlign: 'center',
-};

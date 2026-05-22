@@ -32,24 +32,24 @@ export const DARK = {
 
 export const LIGHT = {
   mode:        'light',
-  bg:          '#f3f3f3',
-  bgPanel:     '#ffffff',
-  bgPanel2:    '#fafafa',
-  bgCanvas:    '#e6e6e6',
-  bgInput:     '#ffffff',
+  bg:          '#f5f6f8',   // App shell — very subtle warm gray
+  bgPanel:     '#ffffff',   // Toolbar / spreads rail / layouts rail
+  bgPanel2:    '#fafbfc',   // PhotoPanel — slightly off-white for separation
+  bgCanvas:    '#eceef2',   // Editor backdrop around the spread
+  bgInput:     '#f6f8fa',   // Inputs + buttons — subtle tint vs pure-white toolbar
   bgMenu:      '#ffffff',
-  bgHover:     '#eeeeee',
-  border:      '#d4d4d4',
-  borderSoft:  '#e4e4e4',
-  borderHard:  '#dddddd',
-  text:        '#1f1f1f',
-  textStrong:  '#222',
-  textHeading: '#333',
-  textMuted:   '#666',
-  textDim:     '#777',
-  textFaint:   '#999',
-  divider:     '#dcdcdc',
-  shadow:      'rgba(0,0,0,0.12)',
+  bgHover:     '#f0f2f5',
+  border:      '#d8dbe0',   // Default control borders
+  borderSoft:  '#e6e8ec',
+  borderHard:  '#dadde2',
+  text:        '#1f2328',
+  textStrong:  '#24292f',
+  textHeading: '#1f2328',
+  textMuted:   '#656d76',
+  textDim:     '#848d97',
+  textFaint:   '#9ba3ad',
+  divider:     '#e1e4e8',
+  shadow:      'rgba(15,20,30,0.08)',
 };
 
 export function getThemeMode() {

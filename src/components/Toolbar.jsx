@@ -283,9 +283,15 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       minHeight: 44,
       background: t.bgPanel,
       borderBottom: `1px solid ${t.borderHard}`,
+      // Subtle drop shadow in light mode adds visual depth between
+      // the toolbar and the canvas below. No-op in dark mode where
+      // the border already provides enough separation.
+      boxShadow: t.mode === 'light' ? '0 1px 0 rgba(15,20,30,0.04), 0 2px 6px rgba(15,20,30,0.04)' : 'none',
       display: 'flex',
       flexWrap: 'wrap',           // wrap to multiple rows on narrow screens
       alignItems: 'center',
+      position: 'relative',
+      zIndex: 5,
       // Extra left padding on Electron/Mac to clear the traffic-light buttons.
       padding: isElectronMac ? '4px 10px 4px 82px' : '4px 10px',
       gap: 5,
@@ -320,20 +326,20 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         placeholder="Project name"
       />
 
-      {/* Theme toggle — bright + labeled so it's always findable */}
+      {/* Theme toggle — refined pill, always in the first toolbar row */}
       <button
         onClick={toggleTheme}
         style={{
           padding: '5px 10px',
-          border: `1px solid ${themeMode === 'light' ? '#3a2a08' : '#f6c90e'}`,
-          borderRadius: 4,
-          fontSize: 12,
+          border: `1px solid ${t.border}`,
+          borderRadius: 999,
+          fontSize: 11,
           cursor: 'pointer',
-          background: themeMode === 'light' ? '#fff8d6' : '#181208',
-          color: themeMode === 'light' ? '#7a5c00' : '#f6c90e',
+          background: t.bgInput,
+          color: t.text,
           whiteSpace: 'nowrap',
           lineHeight: 1,
-          fontWeight: 600,
+          fontWeight: 500,
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
@@ -341,8 +347,8 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         }}
         title={themeMode === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
       >
-        <span style={{ fontSize: 14 }}>{themeMode === 'light' ? '🌙' : '🌞'}</span>
-        <span>{themeMode === 'light' ? 'Dark' : 'Light'}</span>
+        <span style={{ fontSize: 13 }}>{themeMode === 'light' ? '🌙' : '🌞'}</span>
+        <span style={{ color: t.textMuted }}>{themeMode === 'light' ? 'Dark' : 'Light'}</span>
       </button>
 
       <Divider t={t} />
@@ -395,9 +401,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {/* Redesign current spread with a new high-density template */}
       <button data-tour="redesign" onClick={handleRedesign}
         style={btnStyle({
-          background: redesigned ? '#1a1230' : '#181818',
-          color: redesigned ? '#c084fc' : '#888',
-          border: `1px solid ${redesigned ? '#4a2a70' : '#252525'}`,
+          background: redesigned ? (t.mode === 'light' ? '#f0e6ff' : '#1a1230') : t.bgInput,
+          color: redesigned ? '#7a3fc8' : t.text,
+          border: `1px solid ${redesigned ? (t.mode === 'light' ? '#c8a8e8' : '#4a2a70') : t.border}`,
         })}
         title="Pick a new high-density template for this spread and fill it with photos">
         {redesigned ? '✓ Redesigned' : '⟳ Redesign'}
@@ -406,9 +412,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {/* Auto design all — headline action */}
       <button data-tour="design-all" onClick={handleAutoDesignAll}
         style={btnStyle({
-          background: designed ? '#1a1230' : '#181818',
-          color: designed ? '#b89fff' : '#888',
-          border: `1px solid ${designed ? '#352260' : '#252525'}`,
+          background: designed ? (t.mode === 'light' ? '#f0e6ff' : '#1a1230') : t.bgInput,
+          color: designed ? '#7a3fc8' : t.text,
+          border: `1px solid ${designed ? (t.mode === 'light' ? '#c8a8e8' : '#352260') : t.border}`,
         })}
         title="Fill all spreads. Auto-adds spreads if needed.">
         {designed ? '✓ Designed' : '⚡ Design All'}
@@ -417,9 +423,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {/* Reshuffle current spread */}
       <button data-tour="reshuffle" onClick={handleReshuffle}
         style={btnStyle({
-          background: reshuffled ? '#1a2a1a' : '#181818',
-          color: reshuffled ? '#6fcf97' : '#888',
-          border: `1px solid ${reshuffled ? '#2a4a2a' : '#252525'}`,
+          background: reshuffled ? (t.mode === 'light' ? '#e6f5ec' : '#1a2a1a') : t.bgInput,
+          color: reshuffled ? '#2f9e5f' : t.text,
+          border: `1px solid ${reshuffled ? (t.mode === 'light' ? '#a8d8b8' : '#2a4a2a') : t.border}`,
         })}
         title="Reshuffle current spread — fills empty cells with the next unplaced photos, otherwise shuffles photos already on this spread">
         {reshuffled ? '✓ Shuffled' : '⇄ Reshuffle'}
@@ -448,8 +454,20 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         const eff = getEffectiveTier(authUser);
         const trial = trialStatus(authUser);
         const starter = starterStatus(authUser);
-        const avatarBg = eff === 'pro' ? '#3a2a08' : eff === 'starter' ? '#0e2a3a' : eff === 'trial' ? '#1a3a2a' : '#1a3580';
-        const avatarColor = eff === 'pro' ? '#f6c90e' : eff === 'starter' ? '#6fb8d8' : eff === 'trial' ? '#6fcf97' : '#fff';
+        const avatarBg = eff === 'pro'
+          ? (t.mode === 'light' ? '#fdf3c4' : '#3a2a08')
+          : eff === 'starter'
+            ? (t.mode === 'light' ? '#dcecf5' : '#0e2a3a')
+            : eff === 'trial'
+              ? (t.mode === 'light' ? '#e3f3e3' : '#1a3a2a')
+              : '#1a3580';
+        const avatarColor = eff === 'pro'
+          ? (t.mode === 'light' ? '#7a5c00' : '#f6c90e')
+          : eff === 'starter'
+            ? (t.mode === 'light' ? '#2a6580' : '#6fb8d8')
+            : eff === 'trial'
+              ? (t.mode === 'light' ? '#2f7a4a' : '#6fcf97')
+              : '#fff';
         const displayName = authUser.email.split('@')[0];
         return (
         <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -478,7 +496,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
               {displayName.slice(0, 1).toUpperCase()}
             </span>
             <span style={{
-              fontSize: 11, color: '#ccc', fontWeight: 500,
+              fontSize: 11, color: t.textStrong, fontWeight: 500,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               maxWidth: 180,
             }}>
@@ -512,21 +530,31 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     </div>
                   )}
                   {eff === 'starter' && starter && (
-                    <div style={{ marginTop: 6, padding: '6px 8px', background: '#0e1a26', border: '1px solid #2a4a6a', borderRadius: 4 }}>
-                      <div style={{ color: '#6fb8d8', fontSize: 10, fontWeight: 600, letterSpacing: 0.3 }}>
+                    <div style={{
+                      marginTop: 6, padding: '6px 8px',
+                      background: t.mode === 'light' ? '#e6f0f7' : '#0e1a26',
+                      border: `1px solid ${t.mode === 'light' ? '#a8c8dc' : '#2a4a6a'}`,
+                      borderRadius: 4,
+                    }}>
+                      <div style={{ color: t.mode === 'light' ? '#2a6580' : '#6fb8d8', fontSize: 10, fontWeight: 600, letterSpacing: 0.3 }}>
                         STARTER
                       </div>
-                      <div style={{ color: '#aaa', fontSize: 10, marginTop: 3, lineHeight: 1.4 }}>
+                      <div style={{ color: t.textMuted, fontSize: 10, marginTop: 3, lineHeight: 1.4 }}>
                         {starter.remaining} of {starter.quota} export{starter.quota === 1 ? '' : 's'} left
                       </div>
                     </div>
                   )}
                   {eff === 'trial' && trial?.isActive && (
-                    <div style={{ marginTop: 6, padding: '6px 8px', background: '#0e1a10', border: '1px solid #2a4a2a', borderRadius: 4 }}>
-                      <div style={{ color: '#6fcf97', fontSize: 10, fontWeight: 600, letterSpacing: 0.3 }}>
+                    <div style={{
+                      marginTop: 6, padding: '6px 8px',
+                      background: t.mode === 'light' ? '#e6f5ec' : '#0e1a10',
+                      border: `1px solid ${t.mode === 'light' ? '#a8d8b8' : '#2a4a2a'}`,
+                      borderRadius: 4,
+                    }}>
+                      <div style={{ color: t.mode === 'light' ? '#2f7a4a' : '#6fcf97', fontSize: 10, fontWeight: 600, letterSpacing: 0.3 }}>
                         ✦ Trial active
                       </div>
-                      <div style={{ color: '#aaa', fontSize: 10, marginTop: 3, lineHeight: 1.4 }}>
+                      <div style={{ color: t.textMuted, fontSize: 10, marginTop: 3, lineHeight: 1.4 }}>
                         {trial.exportsLeft} export{trial.exportsLeft === 1 ? '' : 's'} left ·{' '}
                         {trial.daysLeft} day{trial.daysLeft === 1 ? '' : 's'} remaining
                       </div>
@@ -621,7 +649,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         <>
           <button
             onClick={() => setUpgradeReason('plans')}
-            style={btnStyle({ color: '#f6c90e', padding: '4px 12px', border: '1px solid #3a2a08', background: '#181208' })}
+            style={btnStyle({
+              color: t.mode === 'light' ? '#7a5c00' : '#f6c90e',
+              padding: '4px 12px',
+              border: `1px solid ${t.mode === 'light' ? '#e8d27a' : '#3a2a08'}`,
+              background: t.mode === 'light' ? '#fff8d6' : '#181208',
+            })}
             title="See pricing and plans"
           >
             ✦ Plans
@@ -629,7 +662,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
           <button
             data-tour="profile"
             onClick={() => setSignup({ action: 'signin' })}
-            style={btnStyle({ color: '#aaa', padding: '4px 12px' })}
+            style={btnStyle({ color: t.text, padding: '4px 12px' })}
             title="Sign in or sign up"
           >
             Sign in
@@ -642,13 +675,17 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       {/* Preview */}
       <button data-tour="preview" onClick={onPreview}
-        style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
+        style={btnStyle({ color: t.text, border: `1px solid ${t.border}` })}
         title="Full-screen book preview">
         ▶ Preview
       </button>
 
       <button data-tour="share" onClick={() => setShowShare(true)}
-        style={btnStyle({ color: '#9fb88b', border: '1px solid #2a3a20', background: '#0e1408' })}
+        style={btnStyle({
+          color: t.mode === 'light' ? '#3a6020' : '#9fb88b',
+          border: `1px solid ${t.mode === 'light' ? '#a8c890' : '#2a3a20'}`,
+          background: t.mode === 'light' ? '#f0f7e8' : '#0e1408',
+        })}
         title="Share a read-only preview link with your client (Premium)">
         ✦ Share
       </button>
@@ -657,7 +694,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       {/* My Projects — switch / create / duplicate / delete · also holds backup */}
       <button data-tour="projects" onClick={() => setShowProjects(true)}
-        style={btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' })}
+        style={btnStyle({ color: t.text, border: `1px solid ${t.border}` })}
         title="Switch between projects · create new · duplicate · delete · backup/restore">
         📁 Projects
       </button>
