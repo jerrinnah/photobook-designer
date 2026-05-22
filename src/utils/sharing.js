@@ -18,9 +18,8 @@ import { getEffectiveTier } from './premium';
 const BUCKET = 'share-previews';
 const MAX_SPREAD_LONG_EDGE = 1800; // hard cap so a 12×24 spread doesn't blow up
 const SHARE_QUALITY = 0.72;
-const UPLOAD_CONCURRENCY = 4;
+const UPLOAD_CONCURRENCY = 6;      // bumped from 4 — saturate the upload link better
 const UPLOAD_TIMEOUT_MS = 180_000; // 3 min per spread — generous for slow uploads
-const CAPTURE_SETTLE_MS = 220;     // time for Konva stage to repaint after spread switch
 const SHARE_CACHE_KEY = 'photobook-share-cache-v1';
 
 // ── Content-addressed cache ─────────────────────────────────────────
@@ -72,10 +71,24 @@ const _webpProbe = (() => {
 const SHARE_MIME = _webpProbe ? 'image/webp' : 'image/jpeg';
 const SHARE_EXT  = _webpProbe ? 'webp' : 'jpg';
 
+// Wait for the React + Konva pipeline to actually paint after a
+// setActiveSpread call. Two rAFs guarantee at least one full frame
+// of layout + composite; the small trailing buffer covers Konva's
+// async image-draw queue. ~80ms typical, vs the old fixed 220ms wait.
+function waitForRepaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeout(resolve, 60);
+      });
+    });
+  });
+}
+
 // ── Capture: render one spread to a WebP Blob ───────────────────────
 async function captureOneSpread(stageRef, spread, setActiveSpread, index) {
   setActiveSpread(spread.id);
-  await new Promise((r) => setTimeout(r, CAPTURE_SETTLE_MS));
+  await waitForRepaint();
   const stage = stageRef.current;
   if (!stage) throw new Error('Editor stage disappeared mid-capture.');
   const w = stage.width();
