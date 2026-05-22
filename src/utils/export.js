@@ -181,19 +181,32 @@ async function withOriginalPhotos(callback) {
   }
 }
 
+// A spread is "designed" iff at least one cell has a photo placed.
+// We skip undesigned spreads (including an empty cover) on export so
+// users don't get blank pages in their PDF / numbered blank JPGs.
+function isSpreadDesigned(spread) {
+  if (!spread?.cells || !Array.isArray(spread.cells)) return false;
+  return spread.cells.some((c) => c?.photoId != null);
+}
+
 // Render each spread in sequence, collect data URLs, restore active spread.
+// Empty spreads (no photos placed) are skipped — including an empty cover.
 async function captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize) {
   const origId = activeSpreadId;
   const { w: screenW } = getScreenDims(spreadSizeId, customSize);
   const pixelRatio = getExportPixelRatio(spreadSizeId, screenW, customSize);
+
+  // Filter to designed spreads only. Renumber so output is "01, 02, …"
+  // contiguously rather than "01, 03, 05, …" with gaps.
+  const designed = spreads.filter(isSpreadDesigned);
   const frames = [];
 
-  for (let i = 0; i < spreads.length; i++) {
-    setActiveSpread(spreads[i].id);
+  for (let i = 0; i < designed.length; i++) {
+    setActiveSpread(designed[i].id);
     await new Promise((r) => setTimeout(r, 220));
     let dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
     dataURL = await maybeWatermark(dataURL);
-    frames.push({ idx: i + 1, dataURL, role: spreads[i].role });
+    frames.push({ idx: i + 1, dataURL, role: designed[i].role });
   }
 
   setActiveSpread(origId);
@@ -210,10 +223,15 @@ function dataURLtoBytes(dataURL) {
 
 // Export all spreads as JPGs into a user-chosen folder (File System Access API).
 // Falls back to individual browser downloads if the API is unavailable.
+// Empty spreads (no photos placed) are skipped — including an empty cover.
 export async function exportToFolder(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName) {
   const frames = await withOriginalPhotos(() =>
     captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize)
   );
+  if (frames.length === 0) {
+    alert('Nothing to export — add photos to at least one spread first. (Try Design All to fill every spread in one click.)');
+    return;
+  }
   const bookSlug = slug(bookName);
 
   // Try folder-picker first
@@ -272,7 +290,10 @@ export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSp
   const frames = await withOriginalPhotos(() =>
     captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize)
   );
-  if (frames.length === 0) return;
+  if (frames.length === 0) {
+    alert('Nothing to export — add photos to at least one spread first. (Try Design All to fill every spread in one click.)');
+    return;
+  }
 
   // Compute physical page size from the export-resolution pixels at 300 DPI.
   const { exportW: pxW, exportH: pxH } = getEffectiveExportSize(spreadSizeId, customSize);
