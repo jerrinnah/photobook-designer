@@ -45,39 +45,40 @@ export default function ShareModal({ open, onClose, stageRef }) {
   const handleCreate = async () => {
     if (!isPremium) { setShowUpgrade(true); return; }
     if (!stageRef?.current) { setError('Editor not ready. Try again in a moment.'); return; }
-    setCreating(true);
     setError(null);
-    setProgress({ stage: 'capture', done: 0, total: state.spreads?.length || 0 });
-    try {
-      const token = await createShare(
-        {
-          bookName: state.bookName,
-          spreadSizeId: state.spreadSizeId,
-          customSize: state.customSize,
-          gap: state.gap,
-          blendEdges: state.blendEdges,
-          spreads: state.spreads,
-        },
-        {
-          stageRef,
-          setActiveSpread,
-          originalActiveId: state.activeSpreadId,
-        },
-        (p) => setProgress(p),
-      );
-      const url = buildShareUrl(token);
-      setLastLink(url);
-      await refresh();
-      try {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-      } catch { /* user can copy manually */ }
-    } catch (err) {
-      setError(err.message || 'Failed to create share.');
-    } finally {
-      setCreating(false);
-      setProgress(null);
-    }
+
+    // Background share: close the modal IMMEDIATELY (zero perceived
+    // wait time) and let ShareProgressToast take over reporting from
+    // here on. The actual work continues running in the background
+    // and emits window events the toast subscribes to.
+    onClose?.();
+
+    // Fire the share off without awaiting (don't block the close).
+    // Errors get surfaced via the toast too.
+    createShare(
+      {
+        bookName: state.bookName,
+        spreadSizeId: state.spreadSizeId,
+        customSize: state.customSize,
+        gap: state.gap,
+        blendEdges: state.blendEdges,
+        spreads: state.spreads,
+      },
+      {
+        stageRef,
+        setActiveSpread,
+        originalActiveId: state.activeSpreadId,
+      },
+      () => {/* progress flows through window events to the toast */},
+    ).then(() => {
+      // Refresh the shares list in the background for the next time
+      // the modal opens. No user-visible action here.
+      refresh().catch(() => {});
+    }).catch((err) => {
+      // ShareProgressToast surfaces the error too; no need to do
+      // anything else here.
+      console.warn('[Share] failed:', err.message);
+    });
   };
 
   const handleCopy = async (url) => {

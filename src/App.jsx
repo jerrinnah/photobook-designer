@@ -13,6 +13,7 @@ import ClientProofingView from './components/ClientProofingView';
 import Tour, { hasSeenTour } from './components/Tour';
 import NameProjectHint from './components/NameProjectHint';
 import LandingPage from './components/LandingPage';
+import ShareProgressToast from './components/ShareProgressToast';
 import { hasEngaged } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 
@@ -78,6 +79,7 @@ export default function App() {
       {previewing && <PreviewMode onClose={() => setPreviewing(false)} />}
       {printPreviewing && <PrintPreview onClose={() => setPrintPreviewing(false)} />}
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
+      <ShareProgressToast />
     </div>
   );
 }

@@ -105,8 +105,27 @@ async function captureOneSpread(stageRef, spread, setActiveSpread, index) {
 }
 
 // Upload one blob to the user's content-addressed slot.
-async function uploadBlob(userBucketKey, hash, blob, spreadIdx) {
+//
+// Optimization: do a HEAD pre-check ONLY when the local cache is empty
+// (e.g. first share from a fresh browser). Since storage is content-
+// addressed by hash, the file may already exist from a previous device
+// — HEAD lets us skip the upload entirely. When the local cache is
+// populated, we trust it and skip the HEAD (avoiding a wasted round
+// trip on the common-case "new content" path).
+async function uploadBlob(userBucketKey, hash, blob, spreadIdx, opts = {}) {
   const path = `${userBucketKey}/${hash}.${SHARE_EXT}`;
+  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+  if (opts.headCheck) {
+    try {
+      const head = await fetch(publicUrl, { method: 'HEAD', cache: 'no-store' });
+      if (head.ok) {
+        console.info(`[Share] spread ${spreadIdx + 1} already in storage — skipping upload`);
+        return publicUrl;
+      }
+    } catch { /* HEAD failed — proceed with upload as if missing */ }
+  }
+
   const startedAt = Date.now();
   console.info(`[Share] uploading spread ${spreadIdx + 1} → ${path} (${(blob.size / 1024).toFixed(0)} KB)…`);
   const { error } = await withTimeout(
@@ -120,8 +139,18 @@ async function uploadBlob(userBucketKey, hash, blob, spreadIdx) {
   );
   if (error) throw new Error(`Upload failed for spread ${spreadIdx + 1}: ${error.message}`);
   console.info(`[Share] spread ${spreadIdx + 1} uploaded in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
-  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return publicUrl;
+}
+
+// Broadcast share progress to any subscribers (ShareProgressToast)
+function emitProgress(detail) {
+  try { window.dispatchEvent(new CustomEvent('autobook:share-progress', { detail })); } catch { /* ignore */ }
+}
+function emitComplete(detail) {
+  try { window.dispatchEvent(new CustomEvent('autobook:share-complete', { detail })); } catch { /* ignore */ }
+}
+function emitError(message) {
+  try { window.dispatchEvent(new CustomEvent('autobook:share-error', { detail: { message } })); } catch { /* ignore */ }
 }
 
 // Promise wrapper with a timeout — if `promise` doesn't settle in
@@ -170,6 +199,10 @@ export async function createShare(state, stage, onProgress) {
   const userBucketKey = session.user.id;
   const cache = loadShareCache();
   const userCache = cache[userBucketKey] || {};
+  // When local cache is empty, the user may still have files in Storage
+  // from another browser. HEAD-check before each upload to take advantage
+  // of those — saves real upload time on cross-device re-shares.
+  const useHeadCheck = Object.keys(userCache).length === 0;
 
   // Hash each spread first so we know what's cached vs needs work.
   const tasks = spreads.map((sp, i) => {
@@ -194,6 +227,8 @@ export async function createShare(state, stage, onProgress) {
   let bytes = 0;
 
   for (const task of tasks) {
+    const fire = (data) => { onProgress?.(data); emitProgress(data); };
+
     // Cache hit — finalize immediately, no work
     if (task.cachedUrl) {
       finalized[task.idx] = {
@@ -202,14 +237,14 @@ export async function createShare(state, stage, onProgress) {
       };
       captureDone++;
       uploadDone++;
-      onProgress?.({ stage: 'capture', done: captureDone, total: tasks.length, cached: cachedCount });
+      fire({ stage: 'capture', done: captureDone, total: tasks.length, cached: cachedCount });
       continue;
     }
 
     // Sequential capture (waits for paint)
     const { w, h, blob } = await captureOneSpread(stage.stageRef, task.spread, stage.setActiveSpread, task.idx);
     captureDone++;
-    onProgress?.({ stage: 'capture', done: captureDone, total: tasks.length, cached: cachedCount });
+    fire({ stage: 'capture', done: captureDone, total: tasks.length, cached: cachedCount });
 
     // Throttle: if upload pool is saturated, wait for any one to finish
     while (inFlight.size >= UPLOAD_CONCURRENCY) {
@@ -218,14 +253,14 @@ export async function createShare(state, stage, onProgress) {
 
     // Fire upload concurrently — DON'T await
     const uploadPromise = (async () => {
-      const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx);
+      const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx, { headCheck: useHeadCheck });
       userCache[task.hash] = url;
       cache[userBucketKey] = userCache;
       saveShareCache(cache);
       finalized[task.idx] = { id: task.spread.id, role: task.spread.role, w, h, imageUrl: url };
       bytes += blob.size;
       uploadDone++;
-      onProgress?.({ stage: 'upload', done: uploadDone, total: tasks.length, cached: cachedCount, bytes });
+      fire({ stage: 'upload', done: uploadDone, total: tasks.length, cached: cachedCount, bytes });
     })();
     inFlight.add(uploadPromise);
     uploadPromise.finally(() => inFlight.delete(uploadPromise));
@@ -252,9 +287,10 @@ export async function createShare(state, stage, onProgress) {
     p_share_key: userBucketKey,
     p_snapshot: snapshot,
   });
-  if (error) throw new Error(error.message);
+  if (error) { emitError(error.message); throw new Error(error.message); }
   const token = typeof data === 'string' ? data : data?.[0];
-  if (!token) throw new Error('Failed to create share');
+  if (!token) { emitError('Failed to create share'); throw new Error('Failed to create share'); }
+  emitComplete({ token });
   return token;
 }
 
