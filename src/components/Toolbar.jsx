@@ -15,6 +15,7 @@ import SetPasswordModal from './SetPasswordModal';
 import UpgradeModal from './UpgradeModal';
 import DesktopAppModal from './DesktopAppModal';
 import SupportModal from './SupportModal';
+import SpreadExportPicker from './SpreadExportPicker';
 
 const btnStyle = (extra = {}) => ({
   padding: '5px 11px',
@@ -210,6 +211,27 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     setExportingPDF(false);
   };
   const handleExportPDF = withSignupGate('export', doExportPDF);
+
+  // Picker-driven export — runs only the user-selected spread IDs in
+  // the chosen format. Filters the full spreads array down to the
+  // picked set before handing off to the same export utils.
+  const [showSpreadPicker, setShowSpreadPicker] = useState(false);
+  const openSpreadPicker = withSignupGate('export', async () => setShowSpreadPicker(true));
+  const handleSpreadPickerExport = async ({ ids, format }) => {
+    setShowSpreadPicker(false);
+    if (!ids || ids.length === 0) return;
+    const idSet = new Set(ids);
+    const subset = spreads.filter((s) => idSet.has(s.id));
+    if (format === 'pdf') {
+      setExportingPDF(true);
+      await exportAsPDF(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+      setExportingPDF(false);
+    } else {
+      setExporting(true);
+      await exportToFolder(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+      setExporting(false);
+    }
+  };
 
   const handleSaveGated = withSignupGate('save', saveProject);
 
@@ -589,11 +611,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         📁 Projects
       </button>
 
-      {/* Export — single button with JPG / PDF options */}
+      {/* Export — single button with JPG / PDF / Choose-spreads options */}
       <div data-tour="export">
         <ExportMenu
           onExportJPGs={handleExportAll}
           onExportPDF={handleExportPDF}
+          onChooseSpreads={openSpreadPicker}
           exporting={exporting}
           exportingPDF={exportingPDF}
         />
@@ -636,13 +659,18 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         }}
       />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} stageRef={stageRef} />
+      <SpreadExportPicker
+        open={showSpreadPicker}
+        onClose={() => setShowSpreadPicker(false)}
+        onExport={handleSpreadPickerExport}
+      />
     </header>
   );
 }
 
-// Combined export dropdown — replaces the old Export All JPGs + Print PDF
-// pair. Single button, click to open menu with both options.
-function ExportMenu({ onExportJPGs, onExportPDF, exporting, exportingPDF }) {
+// Combined export dropdown — All JPGs / Print PDF fast paths plus a
+// "Choose spreads…" option that opens a picker for partial exports.
+function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exportingPDF }) {
   const [open, setOpen] = useState(false);
   const busy = exporting || exportingPDF;
   const label = exporting ? 'Exporting JPGs…' : exportingPDF ? 'Preparing PDF…' : '↓ Export ▾';
@@ -688,6 +716,15 @@ function ExportMenu({ onExportJPGs, onExportPDF, exporting, exportingPDF }) {
             >
               <span style={{ color: '#d4843a', fontWeight: 600 }}>⬡ Print PDF</span>
               <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Single PDF for print shops</span>
+            </button>
+            <div style={{ height: 1, background: '#1a1a1a', margin: '4px 0' }} />
+            <button
+              onClick={() => { setOpen(false); onChooseSpreads?.(); }}
+              style={exportMenuItem}
+              title="Pick specific spreads and choose format"
+            >
+              <span style={{ color: '#b89fff', fontWeight: 600 }}>✂ Choose spreads…</span>
+              <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Pick which to export + format</span>
             </button>
           </div>
         </>
