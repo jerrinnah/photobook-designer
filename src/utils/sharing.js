@@ -16,10 +16,11 @@ import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 import { getEffectiveTier } from './premium';
 
 const BUCKET = 'share-previews';
-const MAX_SPREAD_LONG_EDGE = 1500; // 1500 px is still crisp on retina; smaller = faster upload
-const SHARE_QUALITY = 0.68;        // 0.68 is visually indistinguishable from 0.72 on screen
+const MAX_SPREAD_LONG_EDGE = 1200; // Crisp enough for retina previews; smaller = faster capture + upload
+const SHARE_QUALITY = 0.62;        // 0.62 keeps perceptual quality at preview size, smaller files
 const UPLOAD_CONCURRENCY = 6;      // semaphore cap — too high causes HOL blocking on slow uplinks
-const UPLOAD_TIMEOUT_MS = 180_000; // 3 min per spread — generous for slow uploads
+const UPLOAD_TIMEOUT_MS = 60_000;  // 60s per spread — anything slower indicates a real problem
+const HEAD_CHECK_TIMEOUT_MS = 4_000; // remote cache probe; never block long
 const SHARE_CACHE_KEY = 'photobook-share-cache-v1';
 
 // ── Content-addressed cache ─────────────────────────────────────────
@@ -73,14 +74,14 @@ const SHARE_EXT  = _webpProbe ? 'webp' : 'jpg';
 
 // Wait for the React + Konva pipeline to actually paint after a
 // setActiveSpread call. Two rAFs guarantee at least one full frame
-// of layout + composite; the small trailing buffer covers Konva's
-// async image-draw queue. ~80ms typical, vs the old fixed 220ms wait.
+// of layout + composite. Konva's image-draw queue resolves within
+// the same frame for cached `useImage` hits (which is the common
+// case after the editor has loaded), so no trailing setTimeout is
+// needed — saving ~60ms × N spreads per share.
 function waitForRepaint() {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTimeout(resolve, 60);
-      });
+      requestAnimationFrame(resolve);
     });
   });
 }
@@ -104,27 +105,29 @@ async function captureOneSpread(stageRef, spread, setActiveSpread, index) {
   return { w, h, blob };
 }
 
+// Probe Storage for a content-addressed object in parallel before any
+// captures run. If it's already there, we skip both capture and upload
+// for that spread. Returns a Map<hash, publicUrl>.
+async function batchHeadCheck(userBucketKey, hashes) {
+  const found = new Map();
+  await Promise.all(hashes.map(async (hash) => {
+    const path = `${userBucketKey}/${hash}.${SHARE_EXT}`;
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), HEAD_CHECK_TIMEOUT_MS);
+      const head = await fetch(publicUrl, { method: 'HEAD', cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(timer);
+      if (head.ok) found.set(hash, publicUrl);
+    } catch { /* missing or timeout — treat as not present */ }
+  }));
+  return found;
+}
+
 // Upload one blob to the user's content-addressed slot.
-//
-// Optimization: do a HEAD pre-check ONLY when the local cache is empty
-// (e.g. first share from a fresh browser). Since storage is content-
-// addressed by hash, the file may already exist from a previous device
-// — HEAD lets us skip the upload entirely. When the local cache is
-// populated, we trust it and skip the HEAD (avoiding a wasted round
-// trip on the common-case "new content" path).
-async function uploadBlob(userBucketKey, hash, blob, spreadIdx, opts = {}) {
+async function uploadBlob(userBucketKey, hash, blob, spreadIdx) {
   const path = `${userBucketKey}/${hash}.${SHARE_EXT}`;
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
-
-  if (opts.headCheck) {
-    try {
-      const head = await fetch(publicUrl, { method: 'HEAD', cache: 'no-store' });
-      if (head.ok) {
-        console.info(`[Share] spread ${spreadIdx + 1} already in storage — skipping upload`);
-        return publicUrl;
-      }
-    } catch { /* HEAD failed — proceed with upload as if missing */ }
-  }
 
   const startedAt = Date.now();
   console.info(`[Share] uploading spread ${spreadIdx + 1} → ${path} (${(blob.size / 1024).toFixed(0)} KB)…`);
@@ -199,16 +202,33 @@ export async function createShare(state, stage, onProgress) {
   const userBucketKey = session.user.id;
   const cache = loadShareCache();
   const userCache = cache[userBucketKey] || {};
-  // When local cache is empty, the user may still have files in Storage
-  // from another browser. HEAD-check before each upload to take advantage
-  // of those — saves real upload time on cross-device re-shares.
-  const useHeadCheck = Object.keys(userCache).length === 0;
 
   // Hash each spread first so we know what's cached vs needs work.
   const tasks = spreads.map((sp, i) => {
     const hash = hashSpread(sp);
     return { idx: i, spread: sp, hash, cachedUrl: userCache[hash] || null };
   });
+
+  // Batch HEAD-check unresolved hashes in parallel. A fresh browser on
+  // a re-share will have no local cache but Storage still has the
+  // content-addressed files — this turns N serial HEAD-probes into one
+  // parallel sweep, so unchanged spreads skip capture entirely.
+  const unresolved = tasks.filter((t) => !t.cachedUrl);
+  if (unresolved.length > 0) {
+    const remoteHits = await batchHeadCheck(userBucketKey, unresolved.map((t) => t.hash));
+    for (const task of unresolved) {
+      const hit = remoteHits.get(task.hash);
+      if (hit) {
+        task.cachedUrl = hit;
+        userCache[task.hash] = hit;
+      }
+    }
+    if (remoteHits.size > 0) {
+      cache[userBucketKey] = userCache;
+      saveShareCache(cache);
+    }
+  }
+
   const cachedCount = tasks.filter((t) => t.cachedUrl).length;
   console.info(`[Share] ${cachedCount} of ${tasks.length} spreads cached — capturing ${tasks.length - cachedCount}`);
 
@@ -253,7 +273,7 @@ export async function createShare(state, stage, onProgress) {
 
     // Fire upload concurrently — DON'T await
     const uploadPromise = (async () => {
-      const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx, { headCheck: useHeadCheck });
+      const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx);
       userCache[task.hash] = url;
       cache[userBucketKey] = userCache;
       saveShareCache(cache);
