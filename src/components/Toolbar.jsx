@@ -212,25 +212,29 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   };
   const handleExportPDF = withSignupGate('export', doExportPDF);
 
-  // Picker-driven export — runs only the user-selected spread IDs in
-  // the chosen format. Filters the full spreads array down to the
-  // picked set before handing off to the same export utils.
+  // Picker-driven export — opens unconditionally (no paywall gate at
+  // open time, since browsing the picker shouldn't burn a trial export
+  // or hit a network call). The export action inside the picker is
+  // gated via withSignupGate, same as the All-JPGs / Print-PDF paths.
   const [showSpreadPicker, setShowSpreadPicker] = useState(false);
-  const openSpreadPicker = withSignupGate('export', async () => setShowSpreadPicker(true));
+  const openSpreadPicker = () => setShowSpreadPicker(true);
   const handleSpreadPickerExport = async ({ ids, format }) => {
     setShowSpreadPicker(false);
     if (!ids || ids.length === 0) return;
     const idSet = new Set(ids);
     const subset = spreads.filter((s) => idSet.has(s.id));
-    if (format === 'pdf') {
-      setExportingPDF(true);
-      await exportAsPDF(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
-      setExportingPDF(false);
-    } else {
-      setExporting(true);
-      await exportToFolder(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
-      setExporting(false);
-    }
+    const fn = format === 'pdf'
+      ? async () => {
+          setExportingPDF(true);
+          await exportAsPDF(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+          setExportingPDF(false);
+        }
+      : async () => {
+          setExporting(true);
+          await exportToFolder(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+          setExporting(false);
+        };
+    await withSignupGate('export', fn)();
   };
 
   const handleSaveGated = withSignupGate('save', saveProject);
