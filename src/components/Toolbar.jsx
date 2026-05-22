@@ -351,17 +351,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       <Divider />
 
-      {/* Gap control */}
-      <span style={{ fontSize: 10, color: '#444', flexShrink: 0 }}>Gap</span>
-      <input type="range" min={0} max={20} step={1} value={gap}
-        onChange={(e) => setGap(Number(e.target.value))}
-        style={{ width: 54, flexShrink: 0, accentColor: '#4f8ef7' }}
-        title={`Cell gap: ${gap}px`}
-      />
-      <span style={{ fontSize: 10, color: '#444', minWidth: 16, flexShrink: 0 }}>{gap}</span>
-
-      <Divider />
-
       {/* Redesign current spread with a new high-density template */}
       <button data-tour="redesign" onClick={handleRedesign}
         style={btnStyle({
@@ -373,17 +362,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         {redesigned ? '✓ Redesigned' : '⟳ Redesign'}
       </button>
 
-      {/* Auto arrange (current spread) */}
-      <button onClick={handleAutoArrange}
-        style={btnStyle({
-          background: arranged ? '#162616' : '#181818',
-          color: arranged ? '#6fcf97' : '#888',
-          border: `1px solid ${arranged ? '#2a4a2a' : '#252525'}`,
-        })}>
-        {arranged ? '✓ Done' : '⟐ Arrange'}
-      </button>
-
-      {/* Auto design all */}
+      {/* Auto design all — headline action */}
       <button data-tour="design-all" onClick={handleAutoDesignAll}
         style={btnStyle({
           background: designed ? '#1a1230' : '#181818',
@@ -394,7 +373,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         {designed ? '✓ Designed' : '⚡ Design All'}
       </button>
 
-      {/* Reshuffle */}
+      {/* Reshuffle current spread */}
       <button data-tour="reshuffle" onClick={handleReshuffle}
         style={btnStyle({
           background: reshuffled ? '#1a2a1a' : '#181818',
@@ -405,36 +384,20 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         {reshuffled ? '✓ Shuffled' : '⇄ Reshuffle'}
       </button>
 
-      {/* Repeated photos — click to highlight, click again to auto-fix */}
-      <button onClick={handleRepeated}
-        style={btnStyle({
-          background: repeatedPhotoIds.size > 0 ? '#2a0808' : '#181818',
-          color: repeatedPhotoIds.size > 0 ? '#e05c5c' : '#888',
-          border: `1px solid ${repeatedPhotoIds.size > 0 ? '#5a1a1a' : '#252525'}`,
-        })}
-        title={repeatedPhotoIds.size > 0 ? 'Clear highlight' : 'Highlight photos used in multiple cells'}>
-        {repeatedPhotoIds.size > 0 ? `⚠ ${repeatedPhotoIds.size} Repeated` : '⚠ Repeated'}
-      </button>
-      {repeatedPhotoIds.size > 0 && (
-        <button onClick={dedupePhotos}
-          style={btnStyle({
-            background: '#2a1a08', color: '#f6c90e', border: '1px solid #5a3a10',
-          })}
-          title="Auto-fix: keep first use of each photo, clear duplicates">
-          ✓ Fix
-        </button>
-      )}
-
-      {/* Blend edges */}
-      <button onClick={() => setBlendEdges(!blendEdges)}
-        title="Fade photo edges for a soft, editorial look"
-        style={btnStyle({
-          background: blendEdges ? '#1a1230' : '#181818',
-          color: blendEdges ? '#b89fff' : '#555',
-          border: `1px solid ${blendEdges ? '#352260' : '#252525'}`,
-        })}>
-        ◈ Blend {blendEdges ? 'On' : 'Off'}
-      </button>
+      {/* Secondary tools — Arrange, Repeated, Blend, Gap, Print preview */}
+      <ToolsMenu
+        anchorTop={headerBottom}
+        onArrange={handleAutoArrange}
+        onRepeated={handleRepeated}
+        onDedupe={dedupePhotos}
+        onPrintPreview={onPrintPreview}
+        repeatedCount={repeatedPhotoIds.size}
+        arranged={arranged}
+        blendEdges={blendEdges}
+        setBlendEdges={setBlendEdges}
+        gap={gap}
+        setGap={setGap}
+      />
 
       <div style={{ flex: 1, minWidth: 4 }} />
 
@@ -635,12 +598,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         ▶ Preview
       </button>
 
-      <button onClick={onPrintPreview}
-        style={btnStyle({ color: '#d4843a', border: '1px solid #3a2a1a', background: '#181008' })}
-        title="Print preview with CMYK simulation and DPI specs">
-        ⬡ Print
-      </button>
-
       <button data-tour="share" onClick={() => setShowShare(true)}
         style={btnStyle({ color: '#9fb88b', border: '1px solid #2a3a20', background: '#0e1408' })}
         title="Share a read-only preview link with your client (Premium)">
@@ -716,6 +673,124 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
 // Combined export dropdown — All JPGs / Print PDF fast paths plus a
 // "Choose spreads…" option that opens a picker for partial exports.
+// Secondary-tools dropdown — Arrange / Repeated / Blend / Gap / Print.
+// Consolidates less-frequently-used buttons so the toolbar stays
+// compact even on narrow screens.
+function ToolsMenu({
+  anchorTop = 48,
+  onArrange, onRepeated, onDedupe, onPrintPreview,
+  repeatedCount = 0, arranged = false,
+  blendEdges, setBlendEdges,
+  gap, setGap,
+}) {
+  const [open, setOpen] = useState(false);
+  const hasAlert = repeatedCount > 0; // red dot on the button when there's something to notice
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          ...btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' }),
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}
+        title="Arrange, repeated photos, blend edges, gap, print preview"
+      >
+        ✨ Tools ▾
+        {hasAlert && (
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#e05c5c', display: 'inline-block',
+          }} />
+        )}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
+          />
+          <div style={{
+            position: 'fixed', right: 10, top: anchorTop,
+            zIndex: 31,
+            background: '#0e0e0e', border: '1px solid #1f1f1f',
+            borderRadius: 6, padding: 6, minWidth: 240,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          }}>
+            <button
+              onClick={() => { setOpen(false); onArrange(); }}
+              style={toolMenuItem}
+              title="Fill empty cells on the current spread with unplaced photos"
+            >
+              <span style={{ color: arranged ? '#6fcf97' : '#ddd' }}>
+                {arranged ? '✓ Done' : '⟐ Arrange'} <span style={toolMenuSub}>current spread</span>
+              </span>
+            </button>
+
+            <button
+              onClick={() => { onRepeated(); /* stay open so user can hit Fix */ }}
+              style={toolMenuItem}
+              title={repeatedCount > 0 ? 'Clear highlight' : 'Highlight photos used in multiple cells'}
+            >
+              <span style={{ color: repeatedCount > 0 ? '#e05c5c' : '#ddd' }}>
+                ⚠ {repeatedCount > 0 ? `${repeatedCount} repeated` : 'Repeated photos'}
+                <span style={toolMenuSub}>{repeatedCount > 0 ? 'click to clear' : 'find duplicates'}</span>
+              </span>
+            </button>
+
+            {repeatedCount > 0 && (
+              <button
+                onClick={() => { setOpen(false); onDedupe(); }}
+                style={{ ...toolMenuItem, background: '#1a1408' }}
+                title="Keep first use of each photo, clear duplicates"
+              >
+                <span style={{ color: '#f6c90e' }}>
+                  ✓ Auto-fix duplicates <span style={toolMenuSub}>keep first use</span>
+                </span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setBlendEdges(!blendEdges)}
+              style={toolMenuItem}
+              title="Fade photo edges for a soft, editorial look"
+            >
+              <span style={{ color: blendEdges ? '#b89fff' : '#ddd' }}>
+                ◈ Blend edges: {blendEdges ? 'On' : 'Off'}
+                <span style={toolMenuSub}>soft editorial look</span>
+              </span>
+            </button>
+
+            <div style={{ height: 1, background: '#1a1a1a', margin: '6px 4px' }} />
+
+            <div style={{ padding: '8px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, color: '#888' }}>Cell gap</span>
+                <span style={{ fontSize: 11, color: '#666', fontVariantNumeric: 'tabular-nums' }}>{gap}px</span>
+              </div>
+              <input type="range" min={0} max={20} step={1} value={gap}
+                onChange={(e) => setGap(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#4f8ef7' }}
+              />
+            </div>
+
+            <div style={{ height: 1, background: '#1a1a1a', margin: '6px 4px' }} />
+
+            <button
+              onClick={() => { setOpen(false); onPrintPreview(); }}
+              style={toolMenuItem}
+              title="Print preview with CMYK simulation and DPI specs"
+            >
+              <span style={{ color: '#d4843a' }}>
+                ⬡ Print preview <span style={toolMenuSub}>CMYK + DPI specs</span>
+              </span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exportingPDF, anchorTop = 48 }) {
   const [open, setOpen] = useState(false);
   const busy = exporting || exportingPDF;
@@ -778,6 +853,18 @@ function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exp
     </div>
   );
 }
+
+const toolMenuItem = {
+  display: 'flex', alignItems: 'flex-start',
+  width: '100%', textAlign: 'left',
+  padding: '8px 12px',
+  background: 'none', border: 'none',
+  fontSize: 12, cursor: 'pointer',
+  borderRadius: 4,
+};
+const toolMenuSub = {
+  display: 'block', fontSize: 9, color: '#666', marginTop: 2, fontWeight: 400,
+};
 
 const exportMenuItem = {
   display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
