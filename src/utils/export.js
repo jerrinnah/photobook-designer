@@ -224,7 +224,28 @@ function dataURLtoBytes(dataURL) {
 // Export all spreads as JPGs into a user-chosen folder (File System Access API).
 // Falls back to individual browser downloads if the API is unavailable.
 // Empty spreads (no photos placed) are skipped — including an empty cover.
+//
+// Order is intentional: ASK FOR THE FOLDER FIRST while the user gesture
+// from the export click is still active. Then capture all spreads (which
+// can take 5-10s for big books). Capturing first would consume the
+// gesture and showDirectoryPicker() would get rejected as "not user-
+// activated".
 export async function exportToFolder(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName) {
+  const bookSlug = slug(bookName);
+
+  // 1. Folder picker FIRST while user gesture is fresh.
+  let dirHandle = null;
+  if (typeof window.showDirectoryPicker === 'function') {
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user cancelled the picker
+      // API available but failed for another reason — fall through to download fallback
+      dirHandle = null;
+    }
+  }
+
+  // 2. Capture every spread (with original-res photos swapped in).
   const frames = await withOriginalPhotos(() =>
     captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize)
   );
@@ -232,28 +253,17 @@ export async function exportToFolder(stageRef, spreads, activeSpreadId, setActiv
     alert('Nothing to export — add photos to at least one spread first. (Try Design All to fill every spread in one click.)');
     return;
   }
-  const bookSlug = slug(bookName);
 
-  // Try folder-picker first
-  if (typeof window.showDirectoryPicker === 'function') {
-    let dirHandle;
-    try {
-      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
-    } catch (e) {
-      if (e.name === 'AbortError') return; // user cancelled
-      // API available but failed — fall through to download
+  // 3. Write to the chosen directory if we got one; otherwise download.
+  if (dirHandle) {
+    for (const { idx, dataURL } of frames) {
+      const filename = `${bookSlug}-spread-${String(idx).padStart(2, '0')}.jpg`;
+      const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(dataURLtoBytes(dataURL));
+      await writable.close();
     }
-
-    if (dirHandle) {
-      for (const { idx, dataURL } of frames) {
-        const filename = `${bookSlug}-spread-${String(idx).padStart(2, '0')}.jpg`;
-        const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(dataURLtoBytes(dataURL));
-        await writable.close();
-      }
-      return;
-    }
+    return;
   }
 
   // Fallback: trigger browser download for each spread

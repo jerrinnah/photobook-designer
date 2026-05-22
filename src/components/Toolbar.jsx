@@ -153,12 +153,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     // Export path: tier or per-book unlock required
     const tier = getEffectiveTier(user);
     if (tier === 'pro' || tier === 'starter' || tier === 'trial') {
-      // Increment photobook_count THEN refresh the cached profile so
-      // the trial chip ("4 exports left") updates immediately, not on
-      // the next reload. trackEvent itself is awaited so the count is
-      // already +1 by the time refreshUserTier reads it.
-      try { await trackEvent('photobook_export'); } catch { /* ignore */ }
-      refreshUserTier(); // fire-and-forget — cacheListeners fire when it lands
+      // Fire-and-forget telemetry. Awaiting these RPC calls would consume
+      // the user-gesture token, so showDirectoryPicker() / a.click() in
+      // the actual export would be rejected by the browser. Trial counter
+      // still updates within ~1s via cacheListeners.
+      trackEvent('photobook_export').catch(() => {});
+      Promise.resolve().then(() => refreshUserTier()).catch(() => {});
       await fn();
       return;
     }
