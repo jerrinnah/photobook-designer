@@ -15,6 +15,7 @@ export const SPREAD_SIZES = [
   { id: 'ls-8x6',     label: 'Landscape 8×6"  (Storybook)',        exportW: inToPx(16),  exportH: inToPx(6),   group: 'Landscape' },
   { id: 'ls-11x85',   label: 'Landscape 11×8.5"  (Travel / Yearbook)', exportW: inToPx(22),  exportH: inToPx(8.5), group: 'Landscape' },
   { id: 'ls-14x11',   label: 'Landscape 14×11"  (Fine-art)',       exportW: inToPx(28),  exportH: inToPx(11),  group: 'Landscape' },
+  { id: 'ls-15x12',   label: 'Landscape 15×12"  (Studio book)',    exportW: inToPx(30),  exportH: inToPx(12),  group: 'Landscape' },
   { id: 'ls-16x12',   label: 'Landscape 16×12"  (Coffee table)',   exportW: inToPx(32),  exportH: inToPx(12),  group: 'Landscape' },
   { id: 'ls-30x12',   label: 'Landscape 30×12"  (Wide editorial)', exportW: inToPx(60),  exportH: inToPx(12),  group: 'Landscape' },
 
