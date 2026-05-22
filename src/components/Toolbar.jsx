@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportToFolder, exportAsPDF } from '../utils/export';
@@ -75,6 +75,16 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
+  // On macOS Electron the traffic-light buttons (red/yellow/green) float
+  // in the top-left because we use titleBarStyle:'hiddenInset'. Reserve
+  // ~80px of left padding so they don't overlap the logo + project name.
+  // Web browsers don't need this — title bar lives in the browser chrome.
+  const isElectronMac = useMemo(() => {
+    if (typeof window === 'undefined' || !window.navigator) return false;
+    const ua = window.navigator.userAgent || '';
+    const platform = window.navigator.platform || '';
+    return /Electron/i.test(ua) && /Mac/i.test(platform || ua);
+  }, []);
   // Dynamically track where the toolbar ends so dropdowns anchor below
   // it correctly even when buttons wrap to a second row on narrow screens.
   const headerRef = useRef(null);
@@ -271,7 +281,8 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       display: 'flex',
       flexWrap: 'wrap',           // wrap to multiple rows on narrow screens
       alignItems: 'center',
-      padding: '4px 10px',
+      // Extra left padding on Electron/Mac to clear the traffic-light buttons.
+      padding: isElectronMac ? '4px 10px 4px 82px' : '4px 10px',
       gap: 5,
       rowGap: 4,
       flexShrink: 0,
