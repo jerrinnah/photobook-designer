@@ -320,6 +320,31 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         placeholder="Project name"
       />
 
+      {/* Theme toggle — bright + labeled so it's always findable */}
+      <button
+        onClick={toggleTheme}
+        style={{
+          padding: '5px 10px',
+          border: `1px solid ${themeMode === 'light' ? '#3a2a08' : '#f6c90e'}`,
+          borderRadius: 4,
+          fontSize: 12,
+          cursor: 'pointer',
+          background: themeMode === 'light' ? '#fff8d6' : '#181208',
+          color: themeMode === 'light' ? '#7a5c00' : '#f6c90e',
+          whiteSpace: 'nowrap',
+          lineHeight: 1,
+          fontWeight: 600,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+        }}
+        title={themeMode === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+      >
+        <span style={{ fontSize: 14 }}>{themeMode === 'light' ? '🌙' : '🌞'}</span>
+        <span>{themeMode === 'light' ? 'Dark' : 'Light'}</span>
+      </button>
+
       <Divider t={t} />
 
       {/* Undo / Redo */}
@@ -417,15 +442,6 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
 
       <div style={{ flex: 1, minWidth: 4 }} />
-
-      {/* Theme toggle — always visible */}
-      <button
-        onClick={toggleTheme}
-        style={btnStyle({ padding: '4px 9px', fontSize: 15, lineHeight: 1, color: t.text })}
-        title={themeMode === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-      >
-        {themeMode === 'light' ? '🌙' : '🌞'}
-      </button>
 
       {/* Profile / sign-in */}
       {authUser?.email ? (() => {
