@@ -16,9 +16,9 @@ import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 import { getEffectiveTier } from './premium';
 
 const BUCKET = 'share-previews';
-const MAX_SPREAD_LONG_EDGE = 1800; // hard cap so a 12×24 spread doesn't blow up
-const SHARE_QUALITY = 0.72;
-const UPLOAD_CONCURRENCY = 6;      // bumped from 4 — saturate the upload link better
+const MAX_SPREAD_LONG_EDGE = 1500; // 1500 px is still crisp on retina; smaller = faster upload
+const SHARE_QUALITY = 0.68;        // 0.68 is visually indistinguishable from 0.72 on screen
+const UPLOAD_CONCURRENCY = 6;      // semaphore cap — too high causes HOL blocking on slow uplinks
 const UPLOAD_TIMEOUT_MS = 180_000; // 3 min per spread — generous for slow uploads
 const SHARE_CACHE_KEY = 'photobook-share-cache-v1';
 
@@ -179,34 +179,62 @@ export async function createShare(state, stage, onProgress) {
   const cachedCount = tasks.filter((t) => t.cachedUrl).length;
   console.info(`[Share] ${cachedCount} of ${tasks.length} spreads cached — capturing ${tasks.length - cachedCount}`);
 
-  // Walk spreads in order. Cached ones resolve instantly; uncached ones
-  // need a Konva render + upload. Renders must be sequential because
-  // they share the single editor stage.
-  let done = 0;
+  // PIPELINE: captures must be sequential (one shared Konva stage), but
+  // uploads run in the background as captures complete. So while spread
+  // N+1 is rendering, spread N is already uploading. Net effect: total
+  // time ≈ max(capture_seq, upload_concurrent) instead of the sum.
+  //
+  // The inFlight semaphore caps concurrent uploads at UPLOAD_CONCURRENCY
+  // to avoid head-of-line blocking on slower uplinks.
+  const finalized = new Array(tasks.length);
+  const uploadPromises = [];
+  const inFlight = new Set();
+  let captureDone = 0;
+  let uploadDone = 0;
   let bytes = 0;
-  const finalized = [];
+
   for (const task of tasks) {
+    // Cache hit — finalize immediately, no work
     if (task.cachedUrl) {
-      finalized.push({
+      finalized[task.idx] = {
         id: task.spread.id, role: task.spread.role,
         w: null, h: null, imageUrl: task.cachedUrl,
-      });
-      done++;
-      onProgress?.({ stage: 'capture', done, total: tasks.length, cached: cachedCount });
+      };
+      captureDone++;
+      uploadDone++;
+      onProgress?.({ stage: 'capture', done: captureDone, total: tasks.length, cached: cachedCount });
       continue;
     }
-    // Not cached — render + upload
+
+    // Sequential capture (waits for paint)
     const { w, h, blob } = await captureOneSpread(stage.stageRef, task.spread, stage.setActiveSpread, task.idx);
-    const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx);
-    userCache[task.hash] = url;
-    cache[userBucketKey] = userCache;
-    saveShareCache(cache);
-    bytes += blob.size;
-    finalized.push({ id: task.spread.id, role: task.spread.role, w, h, imageUrl: url });
-    done++;
-    onProgress?.({ stage: 'upload', done, total: tasks.length, cached: cachedCount, bytes });
+    captureDone++;
+    onProgress?.({ stage: 'capture', done: captureDone, total: tasks.length, cached: cachedCount });
+
+    // Throttle: if upload pool is saturated, wait for any one to finish
+    while (inFlight.size >= UPLOAD_CONCURRENCY) {
+      await Promise.race(inFlight);
+    }
+
+    // Fire upload concurrently — DON'T await
+    const uploadPromise = (async () => {
+      const url = await uploadBlob(userBucketKey, task.hash, blob, task.idx);
+      userCache[task.hash] = url;
+      cache[userBucketKey] = userCache;
+      saveShareCache(cache);
+      finalized[task.idx] = { id: task.spread.id, role: task.spread.role, w, h, imageUrl: url };
+      bytes += blob.size;
+      uploadDone++;
+      onProgress?.({ stage: 'upload', done: uploadDone, total: tasks.length, cached: cachedCount, bytes });
+    })();
+    inFlight.add(uploadPromise);
+    uploadPromise.finally(() => inFlight.delete(uploadPromise));
+    uploadPromises.push(uploadPromise);
   }
   stage.setActiveSpread(stage.originalActiveId);
+
+  // Wait for any in-flight uploads to finish before we create the share row
+  await Promise.all(uploadPromises);
 
   // Build snapshot — URLs only, no template state.
   const snapshot = {
