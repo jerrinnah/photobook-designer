@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
+import { useTheme } from '../utils/theme';
 
 const THUMB_W = 110;
 const THUMB_H = 56;
@@ -9,6 +10,7 @@ const THUMB_H = 56;
 const ROLE_COLORS = { cover: '#f6c90e', back: '#888' };
 
 function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDrop, isDragTarget }) {
+  const { t } = useTheme();
   const { photos, setActiveSpread, removeSpread, duplicateSpread, setSpreadRole, setSpreadBgColor } = useBookStore();
   const geo = spread.cellGeometry || [];
   const colorInputRef = useRef(null);
@@ -27,7 +29,7 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
         position: 'relative',
         padding: '6px 8px 4px',
         cursor: 'pointer',
-        background: active ? '#1e2535' : isDragTarget ? '#1a2a1a' : 'transparent',
+        background: active ? (t.mode === 'light' ? '#e6edf8' : '#1e2535') : isDragTarget ? (t.mode === 'light' ? '#e3f3e3' : '#1a2a1a') : 'transparent',
         borderLeft: active ? '2px solid #4f8ef7' : isDragTarget ? '2px solid #4a8a4a' : '2px solid transparent',
         marginBottom: 2,
         userSelect: 'none',
@@ -77,7 +79,7 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
         )}
       </svg>
 
-      <div style={{ fontSize: 10, color: '#3a3a3a', marginTop: 3 }}>
+      <div style={{ fontSize: 10, color: t.textMuted, marginTop: 3 }}>
         {displayNum === 1 ? 'Cover' : `Spread ${displayNum}`}
       </div>
 
@@ -91,7 +93,7 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
           style={{
             width: 14, height: 14,
             background: spread.bgColor || '#111',
-            border: '1px solid #333',
+            border: `1px solid ${t.border}`,
             borderRadius: 2,
             cursor: 'pointer',
             flexShrink: 0,
@@ -113,9 +115,9 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
             fontSize: 8,
             fontWeight: 'bold',
             background: 'none',
-            border: `1px solid ${spread.role ? (ROLE_COLORS[spread.role] || '#555') : '#2a2a2a'}`,
+            border: `1px solid ${spread.role ? (ROLE_COLORS[spread.role] || t.textMuted) : t.border}`,
             borderRadius: 2,
-            color: spread.role ? (ROLE_COLORS[spread.role] || '#aaa') : '#333',
+            color: spread.role ? (ROLE_COLORS[spread.role] || t.text) : t.textMuted,
             cursor: 'pointer',
             padding: '1px 4px',
             lineHeight: 1.4,
@@ -134,7 +136,7 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
             fontSize: 11,
             background: 'none',
             border: 'none',
-            color: '#3a3a3a',
+            color: t.textMuted,
             cursor: 'pointer',
             padding: '0 2px',
             lineHeight: 1,
@@ -151,7 +153,7 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
             fontSize: 11,
             background: 'none',
             border: 'none',
-            color: '#3a3a3a',
+            color: t.textMuted,
             cursor: 'pointer',
             padding: 0,
             lineHeight: 1,
@@ -165,6 +167,7 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
 }
 
 export default function SpreadNav({ mobile = false }) {
+  const { t } = useTheme();
   const { spreads, activeSpreadId, addSpread, addMultipleSpreads, reorderSpreads } = useBookStore();
   const [count, setCount] = useState(1);
   const [draggedId, setDraggedId] = useState(null);
@@ -181,11 +184,14 @@ export default function SpreadNav({ mobile = false }) {
   }
 
   return (
-    <div style={{ width: mobile ? '100%' : 130, height: mobile ? '100%' : undefined, background: '#111', borderRight: mobile ? 'none' : '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: mobile ? '100%' : 130, height: mobile ? '100%' : undefined, background: t.bgPanel, borderRight: mobile ? 'none' : `1px solid ${t.divider}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 6px 6px 10px' }}>
-        <span style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>Spreads</span>
+        <span style={{ fontSize: 10, color: t.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>Spreads</span>
         {!mobile && (
-          <button onClick={() => setCollapsed(true)} title="Collapse panel" style={collapseBtn}>‹</button>
+          <button onClick={() => setCollapsed(true)} title="Collapse panel" style={{
+            background: 'none', border: 'none', color: t.textFaint,
+            fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+          }}>‹</button>
         )}
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -219,29 +225,29 @@ export default function SpreadNav({ mobile = false }) {
       </div>
 
       {/* Add spreads controls */}
-      <div style={{ padding: '8px', borderTop: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ padding: '8px', borderTop: `1px solid ${t.divider}`, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: '#444', whiteSpace: 'nowrap' }}>Add</span>
+          <span style={{ fontSize: 10, color: t.textMuted, whiteSpace: 'nowrap' }}>Add</span>
           <input
             type="number" value={count} min={1} max={50}
             onChange={(e) => setCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
             style={{
               flex: 1, width: 0,
-              background: '#181818', border: '1px solid #252525',
-              borderRadius: 4, color: '#888', fontSize: 11,
+              background: t.bgInput, border: `1px solid ${t.border}`,
+              borderRadius: 4, color: t.text, fontSize: 11,
               padding: '3px 5px', outline: 'none',
             }}
           />
-          <span style={{ fontSize: 10, color: '#444', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 10, color: t.textMuted, whiteSpace: 'nowrap' }}>
             spread{count !== 1 ? 's' : ''}
           </span>
         </div>
         <button
           onClick={handleAdd}
           style={{
-            padding: '6px 0', background: '#1a1a1a',
-            border: '1px solid #252525', borderRadius: 4,
-            color: '#666', fontSize: 11, cursor: 'pointer', width: '100%',
+            padding: '6px 0', background: t.bgInput,
+            border: `1px solid ${t.border}`, borderRadius: 4,
+            color: t.textStrong, fontSize: 11, cursor: 'pointer', width: '100%',
           }}
         >
           + Add
@@ -251,7 +257,3 @@ export default function SpreadNav({ mobile = false }) {
   );
 }
 
-const collapseBtn = {
-  background: 'none', border: 'none', color: '#555',
-  fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
-};

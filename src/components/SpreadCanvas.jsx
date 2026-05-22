@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Rect, Image as KImage, Group, Line, Text as KText } from 'react-konva';
+import { Stage, Layer, Rect, Image as KImage, Group, Line, Text as KText, Circle } from 'react-konva';
 import Konva from 'konva';
 import { useBookStore } from '../store/useBookStore';
 import { getScreenDims, getEffectiveExportSize } from '../layouts/spreadSizes';
@@ -839,10 +839,11 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               />
             ))}
 
-            <Line
-              points={[SPREAD_W / 2, 0, SPREAD_W / 2, SPREAD_H]}
-              stroke="#252525" strokeWidth={1} dash={[5, 5]} listening={false}
-            />
+            {/* Spread-center indicator: two small dots near the top + bottom
+                edges of the spine, instead of a full dashed line down the
+                middle. Less visual noise while the user is composing. */}
+            <Circle x={SPREAD_W / 2} y={6}             radius={2} fill="#3a3a3a" listening={false} />
+            <Circle x={SPREAD_W / 2} y={SPREAD_H - 6}  radius={2} fill="#3a3a3a" listening={false} />
 
             {dragOver !== null && cellGeometry[dragOver] && (() => {
               const c = cellGeometry[dragOver];

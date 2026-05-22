@@ -16,35 +16,40 @@ import UpgradeModal from './UpgradeModal';
 import DesktopAppModal from './DesktopAppModal';
 import SupportModal from './SupportModal';
 import SpreadExportPicker from './SpreadExportPicker';
+import { useTheme } from '../utils/theme';
 
-const btnStyle = (extra = {}) => ({
+const makeBtnStyle = (t) => (extra = {}) => ({
   padding: '5px 11px',
-  border: '1px solid #252525',
+  border: `1px solid ${t.border}`,
   borderRadius: 4,
   fontSize: 11,
   cursor: 'pointer',
-  background: '#181818',
-  color: '#888',
+  background: t.bgInput,
+  color: t.textMuted,
   whiteSpace: 'nowrap',
   lineHeight: 1,
   ...extra,
 });
 
-const inputStyle = {
-  background: '#181818',
-  border: '1px solid #252525',
+const makeInputStyle = (t) => ({
+  background: t.bgInput,
+  border: `1px solid ${t.border}`,
   borderRadius: 4,
-  color: '#999',
+  color: t.textMuted,
   fontSize: 11,
   padding: '4px 7px',
   outline: 'none',
-};
+});
 
-const Divider = () => (
-  <div style={{ width: 1, height: 20, background: '#222', margin: '0 2px', flexShrink: 0 }} />
+const Divider = ({ t }) => (
+  <div style={{ width: 1, height: 20, background: t.divider, margin: '0 2px', flexShrink: 0 }} />
 );
 
 export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
+  const { t, mode: themeMode, toggle: toggleTheme } = useTheme();
+  const btnStyle = makeBtnStyle(t);
+  const inputStyle = makeInputStyle(t);
+  const menuItem = makeMenuItem(t);
   const {
     spreads, activeSpreadId, setActiveSpread,
     spreadSizeId, setSpreadSize,
@@ -276,8 +281,8 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   return (
     <header ref={headerRef} style={{
       minHeight: 44,
-      background: '#0c0c0c',
-      borderBottom: '1px solid #1a1a1a',
+      background: t.bgPanel,
+      borderBottom: `1px solid ${t.borderHard}`,
       display: 'flex',
       flexWrap: 'wrap',           // wrap to multiple rows on narrow screens
       alignItems: 'center',
@@ -310,12 +315,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         value={bookName}
         onChange={(e) => setBookName(e.target.value)}
         onBlur={(e) => setBookName(e.target.value.trim() || 'Untitled photobook')}
-        style={{ ...inputStyle, width: 140, fontWeight: 600, color: '#ccc', fontSize: 12, flexShrink: 0 }}
+        style={{ ...inputStyle, width: 140, fontWeight: 600, color: t.textHeading, fontSize: 12, flexShrink: 0 }}
         title="Project name — used in export filenames and shown in the Projects list"
         placeholder="Project name"
       />
 
-      <Divider />
+      <Divider t={t} />
 
       {/* Undo / Redo */}
       <button onClick={undo} disabled={past.length === 0}
@@ -325,7 +330,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         style={btnStyle({ opacity: future.length === 0 ? 0.3 : 1, padding: '5px 8px' })}
         title="Redo (⌘⇧Z)">↪</button>
 
-      <Divider />
+      <Divider t={t} />
 
       {/* Canvas size */}
       <select
@@ -353,14 +358,14 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
           <input type="number" value={customSize.w} min={400} max={8000} step={10}
             onChange={(e) => setCustomSize({ ...customSize, w: Math.max(400, parseInt(e.target.value) || 1920) })}
             style={{ ...inputStyle, width: 58 }} title="Export width (px)" />
-          <span style={{ color: '#333', fontSize: 11 }}>×</span>
+          <span style={{ color: t.textFaint, fontSize: 11 }}>×</span>
           <input type="number" value={customSize.h} min={400} max={8000} step={10}
             onChange={(e) => setCustomSize({ ...customSize, h: Math.max(400, parseInt(e.target.value) || 1080) })}
             style={{ ...inputStyle, width: 58 }} title="Export height (px)" />
         </>
       )}
 
-      <Divider />
+      <Divider t={t} />
 
       {/* Redesign current spread with a new high-density template */}
       <button data-tour="redesign" onClick={handleRedesign}
@@ -397,6 +402,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
       {/* Secondary tools — Arrange, Repeated, Blend, Gap, Print preview */}
       <ToolsMenu
+        t={t}
         anchorTop={headerBottom}
         onArrange={handleAutoArrange}
         onRepeated={handleRepeated}
@@ -411,6 +417,15 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       />
 
       <div style={{ flex: 1, minWidth: 4 }} />
+
+      {/* Theme toggle — always visible */}
+      <button
+        onClick={toggleTheme}
+        style={btnStyle({ padding: '4px 9px', fontSize: 15, lineHeight: 1, color: t.text })}
+        title={themeMode === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+      >
+        {themeMode === 'light' ? '🌙' : '🌞'}
+      </button>
 
       {/* Profile / sign-in */}
       {authUser?.email ? (() => {
@@ -466,13 +481,13 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
               <div style={{
                 position: 'fixed', right: 10, top: headerBottom,
                 zIndex: 31,
-                background: '#0e0e0e', border: '1px solid #1f1f1f',
+                background: t.bgMenu, border: `1px solid ${t.borderSoft}`,
                 borderRadius: 6, padding: 6, minWidth: 220,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                boxShadow: `0 8px 24px ${t.shadow}`,
               }}>
-                <div style={{ padding: '8px 10px', fontSize: 10, color: '#555' }}>
+                <div style={{ padding: '8px 10px', fontSize: 10, color: t.textFaint }}>
                   Signed in as
-                  <div style={{ color: '#ddd', fontSize: 12, marginTop: 2, fontWeight: 500 }}>
+                  <div style={{ color: t.textStrong, fontSize: 12, marginTop: 2, fontWeight: 500 }}>
                     {authUser.email}
                   </div>
                   {eff === 'pro' && (
@@ -502,21 +517,21 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     </div>
                   )}
                   {eff === 'free' && (
-                    <div style={{ color: '#888', fontSize: 9, marginTop: 4 }}>
+                    <div style={{ color: t.textMuted, fontSize: 9, marginTop: 4 }}>
                       Free tier
                     </div>
                   )}
                 </div>
-                <div style={{ borderTop: '1px solid #1a1a1a', marginTop: 4, paddingTop: 4 }}>
+                <div style={{ borderTop: `1px solid ${t.borderHard}`, marginTop: 4, paddingTop: 4 }}>
                   <button
                     onClick={() => { setShowBrand(true); setProfileOpen(false); }}
-                    style={menuItemStyle}
+                    style={menuItem}
                   >
                     Brand settings
                   </button>
                   <button
                     onClick={() => { setShowPassword(true); setProfileOpen(false); }}
-                    style={menuItemStyle}
+                    style={menuItem}
                   >
                     Set / change password
                   </button>
@@ -525,13 +540,13 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                       setProfileOpen(false);
                       window.dispatchEvent(new CustomEvent('autobook:start-tour'));
                     }}
-                    style={menuItemStyle}
+                    style={menuItem}
                   >
                     Take the tour
                   </button>
                   <button
                     onClick={() => { setShowDesktop(true); setProfileOpen(false); }}
-                    style={menuItemStyle}
+                    style={menuItem}
                   >
                     ↓ Download desktop app
                   </button>
@@ -548,19 +563,26 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                         alert("Couldn't refresh account. Try signing out and back in.");
                       }
                     }}
-                    style={menuItemStyle}
+                    style={menuItem}
                   >
                     ↻ Refresh account
                   </button>
                   <button
                     onClick={() => { setShowSupport(true); setProfileOpen(false); }}
-                    style={menuItemStyle}
+                    style={menuItem}
                   >
                     ✉ Contact support
                   </button>
                   <button
+                    onClick={() => { toggleTheme(); }}
+                    style={menuItem}
+                    title="Switch between light and dark interface"
+                  >
+                    {themeMode === 'light' ? '🌙 Switch to dark theme' : '🌞 Switch to light theme'}
+                  </button>
+                  <button
                     onClick={() => { setUpgradeReason('plans'); setProfileOpen(false); }}
-                    style={{ ...menuItemStyle, color: eff === 'free' ? '#f6c90e' : '#bbb' }}
+                    style={{ ...menuItem, color: eff === 'free' ? '#f6c90e' : t.textStrong }}
                   >
                     {eff === 'pro' ? 'View plans'
                      : eff === 'starter' ? 'Upgrade to Pro'
@@ -569,7 +591,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                   </button>
                   <button
                     onClick={handleSignOut}
-                    style={{ ...menuItemStyle, color: '#e05c5c' }}
+                    style={{ ...menuItem, color: '#e05c5c' }}
                   >
                     Sign out
                   </button>
@@ -600,7 +622,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       )}
 
       {/* Autosave status */}
-      <AutosaveBadge status={autosaveStatus.status} meta={autosaveStatus.meta} />
+      <AutosaveBadge t={t} status={autosaveStatus.status} meta={autosaveStatus.meta} />
 
       {/* Preview */}
       <button data-tour="preview" onClick={onPreview}
@@ -615,7 +637,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         ✦ Share
       </button>
 
-      <Divider />
+      <Divider t={t} />
 
       {/* My Projects — switch / create / duplicate / delete · also holds backup */}
       <button data-tour="projects" onClick={() => setShowProjects(true)}
@@ -627,6 +649,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {/* Export — single button with JPG / PDF / Choose-spreads options */}
       <div data-tour="export">
         <ExportMenu
+          t={t}
           onExportJPGs={handleExportAll}
           onExportPDF={handleExportPDF}
           onChooseSpreads={openSpreadPicker}
@@ -688,6 +711,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 // Consolidates less-frequently-used buttons so the toolbar stays
 // compact even on narrow screens.
 function ToolsMenu({
+  t,
   anchorTop = 48,
   onArrange, onRepeated, onDedupe, onPrintPreview,
   repeatedCount = 0, arranged = false,
@@ -696,13 +720,16 @@ function ToolsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const hasAlert = repeatedCount > 0; // red dot on the button when there's something to notice
+  const btnStyle = makeBtnStyle(t);
+  const toolMenuItem = makeToolMenuItem(t);
+  const toolMenuSub = makeToolMenuSub(t);
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <button
         onClick={() => setOpen((v) => !v)}
         style={{
-          ...btnStyle({ color: '#aaa', border: '1px solid #2a2a2a' }),
+          ...btnStyle({ color: t.text, border: `1px solid ${t.border}` }),
           display: 'flex', alignItems: 'center', gap: 5,
         }}
         title="Arrange, repeated photos, blend edges, gap, print preview"
@@ -723,16 +750,16 @@ function ToolsMenu({
           <div style={{
             position: 'fixed', right: 10, top: anchorTop,
             zIndex: 31,
-            background: '#0e0e0e', border: '1px solid #1f1f1f',
+            background: t.bgMenu, border: `1px solid ${t.borderSoft}`,
             borderRadius: 6, padding: 6, minWidth: 240,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+            boxShadow: `0 8px 24px ${t.shadow}`,
           }}>
             <button
               onClick={() => { setOpen(false); onArrange(); }}
               style={toolMenuItem}
               title="Fill empty cells on the current spread with unplaced photos"
             >
-              <span style={{ color: arranged ? '#6fcf97' : '#ddd' }}>
+              <span style={{ color: arranged ? '#6fcf97' : t.textStrong }}>
                 {arranged ? '✓ Done' : '⟐ Arrange'} <span style={toolMenuSub}>current spread</span>
               </span>
             </button>
@@ -742,7 +769,7 @@ function ToolsMenu({
               style={toolMenuItem}
               title={repeatedCount > 0 ? 'Clear highlight' : 'Highlight photos used in multiple cells'}
             >
-              <span style={{ color: repeatedCount > 0 ? '#e05c5c' : '#ddd' }}>
+              <span style={{ color: repeatedCount > 0 ? '#e05c5c' : t.textStrong }}>
                 ⚠ {repeatedCount > 0 ? `${repeatedCount} repeated` : 'Repeated photos'}
                 <span style={toolMenuSub}>{repeatedCount > 0 ? 'click to clear' : 'find duplicates'}</span>
               </span>
@@ -751,7 +778,7 @@ function ToolsMenu({
             {repeatedCount > 0 && (
               <button
                 onClick={() => { setOpen(false); onDedupe(); }}
-                style={{ ...toolMenuItem, background: '#1a1408' }}
+                style={{ ...toolMenuItem, background: t.bgHover }}
                 title="Keep first use of each photo, clear duplicates"
               >
                 <span style={{ color: '#f6c90e' }}>
@@ -765,18 +792,18 @@ function ToolsMenu({
               style={toolMenuItem}
               title="Fade photo edges for a soft, editorial look"
             >
-              <span style={{ color: blendEdges ? '#b89fff' : '#ddd' }}>
+              <span style={{ color: blendEdges ? '#b89fff' : t.textStrong }}>
                 ◈ Blend edges: {blendEdges ? 'On' : 'Off'}
                 <span style={toolMenuSub}>soft editorial look</span>
               </span>
             </button>
 
-            <div style={{ height: 1, background: '#1a1a1a', margin: '6px 4px' }} />
+            <div style={{ height: 1, background: t.borderHard, margin: '6px 4px' }} />
 
             <div style={{ padding: '8px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 11, color: '#888' }}>Cell gap</span>
-                <span style={{ fontSize: 11, color: '#666', fontVariantNumeric: 'tabular-nums' }}>{gap}px</span>
+                <span style={{ fontSize: 11, color: t.textMuted }}>Cell gap</span>
+                <span style={{ fontSize: 11, color: t.textDim, fontVariantNumeric: 'tabular-nums' }}>{gap}px</span>
               </div>
               <input type="range" min={0} max={20} step={1} value={gap}
                 onChange={(e) => setGap(Number(e.target.value))}
@@ -784,7 +811,7 @@ function ToolsMenu({
               />
             </div>
 
-            <div style={{ height: 1, background: '#1a1a1a', margin: '6px 4px' }} />
+            <div style={{ height: 1, background: t.borderHard, margin: '6px 4px' }} />
 
             <button
               onClick={() => { setOpen(false); onPrintPreview(); }}
@@ -802,10 +829,12 @@ function ToolsMenu({
   );
 }
 
-function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exportingPDF, anchorTop = 48 }) {
+function ExportMenu({ t, onExportJPGs, onExportPDF, onChooseSpreads, exporting, exportingPDF, anchorTop = 48 }) {
   const [open, setOpen] = useState(false);
   const busy = exporting || exportingPDF;
   const label = exporting ? 'Exporting JPGs…' : exportingPDF ? 'Preparing PDF…' : '↓ Export ▾';
+  const btnStyle = makeBtnStyle(t);
+  const exportMenuItem = makeExportMenuItem(t);
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <button
@@ -829,9 +858,9 @@ function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exp
           <div style={{
             position: 'fixed', right: 10, top: anchorTop,
             zIndex: 31,
-            background: '#0e0e0e', border: '1px solid #1f1f1f',
+            background: t.bgMenu, border: `1px solid ${t.borderSoft}`,
             borderRadius: 6, padding: 4, minWidth: 200,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+            boxShadow: `0 8px 24px ${t.shadow}`,
           }}>
             <button
               onClick={() => { setOpen(false); onExportJPGs(); }}
@@ -839,7 +868,7 @@ function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exp
               title="All spreads saved as numbered JPGs to a folder"
             >
               <span style={{ color: '#6a9fd8', fontWeight: 600 }}>↓ All JPGs</span>
-              <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Numbered images, one per spread</span>
+              <span style={{ fontSize: 9, color: t.textFaint, marginTop: 2 }}>Numbered images, one per spread</span>
             </button>
             <button
               onClick={() => { setOpen(false); onExportPDF(); }}
@@ -847,16 +876,16 @@ function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exp
               title="Print-ready PDF with all spreads"
             >
               <span style={{ color: '#d4843a', fontWeight: 600 }}>⬡ Print PDF</span>
-              <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Single PDF for print shops</span>
+              <span style={{ fontSize: 9, color: t.textFaint, marginTop: 2 }}>Single PDF for print shops</span>
             </button>
-            <div style={{ height: 1, background: '#1a1a1a', margin: '4px 0' }} />
+            <div style={{ height: 1, background: t.borderHard, margin: '4px 0' }} />
             <button
               onClick={() => { setOpen(false); onChooseSpreads?.(); }}
               style={exportMenuItem}
               title="Pick specific spreads and choose format"
             >
               <span style={{ color: '#b89fff', fontWeight: 600 }}>✂ Choose spreads…</span>
-              <span style={{ fontSize: 9, color: '#555', marginTop: 2 }}>Pick which to export + format</span>
+              <span style={{ fontSize: 9, color: t.textFaint, marginTop: 2 }}>Pick which to export + format</span>
             </button>
           </div>
         </>
@@ -865,34 +894,34 @@ function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exp
   );
 }
 
-const toolMenuItem = {
+const makeToolMenuItem = (_t) => ({
   display: 'flex', alignItems: 'flex-start',
   width: '100%', textAlign: 'left',
   padding: '8px 12px',
   background: 'none', border: 'none',
   fontSize: 12, cursor: 'pointer',
   borderRadius: 4,
-};
-const toolMenuSub = {
-  display: 'block', fontSize: 9, color: '#666', marginTop: 2, fontWeight: 400,
-};
+});
+const makeToolMenuSub = (t) => ({
+  display: 'block', fontSize: 9, color: t.textDim, marginTop: 2, fontWeight: 400,
+});
 
-const exportMenuItem = {
+const makeExportMenuItem = (_t) => ({
   display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
   width: '100%', textAlign: 'left',
   padding: '8px 12px',
   background: 'none', border: 'none',
   fontSize: 12, cursor: 'pointer',
   borderRadius: 4,
-};
+});
 
-function AutosaveBadge({ status, meta }) {
+function AutosaveBadge({ t, status, meta }) {
   const map = {
-    idle:        { label: '',                color: '#333',   bg: 'transparent' },
-    saving:      { label: '⋯ Saving',        color: '#888',   bg: '#181818' },
-    saved:       { label: '✓ Saved',         color: '#6fcf97', bg: '#0e1a10' },
-    'too-large': { label: '⚠ Layout saved (photos too large)', color: '#f6c90e', bg: '#1a1408' },
-    error:       { label: '⚠ Autosave failed', color: '#e05c5c', bg: '#1a0808' },
+    idle:        { label: '',                color: t.textFaint, bg: 'transparent' },
+    saving:      { label: '⋯ Saving',        color: t.textMuted, bg: t.bgInput },
+    saved:       { label: '✓ Saved',         color: '#6fcf97',   bg: t.mode === 'light' ? '#e8f5ec' : '#0e1a10' },
+    'too-large': { label: '⚠ Layout saved (photos too large)', color: '#c9a227', bg: t.mode === 'light' ? '#fdf6e3' : '#1a1408' },
+    error:       { label: '⚠ Autosave failed', color: '#e05c5c', bg: t.mode === 'light' ? '#fde8e8' : '#1a0808' },
   };
   const s = map[status] || map.idle;
   if (!s.label) return null;
@@ -907,22 +936,22 @@ function AutosaveBadge({ status, meta }) {
       style={{
         fontSize: 10, color: s.color, background: s.bg,
         padding: '3px 8px', borderRadius: 4,
-        border: s.bg === 'transparent' ? 'none' : '1px solid #252525',
+        border: s.bg === 'transparent' ? 'none' : `1px solid ${t.border}`,
         flexShrink: 0, whiteSpace: 'nowrap',
       }}
     >{s.label}</span>
   );
 }
 
-const menuItemStyle = {
+const makeMenuItem = (t) => ({
   display: 'block',
   width: '100%',
   textAlign: 'left',
   padding: '7px 10px',
   background: 'none',
   border: 'none',
-  color: '#bbb',
+  color: t.textStrong,
   fontSize: 11,
   cursor: 'pointer',
   borderRadius: 3,
-};
+});

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Stage, Layer, Rect, Image as KImage, Group, Text as KText, Line } from 'react-konva';
+import { Stage, Layer, Rect, Image as KImage, Group, Text as KText, Circle } from 'react-konva';
 import { useBookStore } from '../store/useBookStore';
 import { getScreenDims } from '../layouts/spreadSizes';
 import useImage from '../hooks/useImage';
@@ -194,10 +194,10 @@ function SpreadPreview({ spread, width }) {
             bgColor={spread.bgColor || '#1a1a1a'}
           />
         ))}
-        <Line
-          points={[width / 2, 0, width / 2, height]}
-          stroke="#252525" strokeWidth={1} dash={[5, 5]} listening={false}
-        />
+        {/* Spread-center indicator: small dots at the spine tips
+            instead of a dashed line down the middle. */}
+        <Circle x={width / 2} y={6}          radius={2} fill="#3a3a3a" listening={false} />
+        <Circle x={width / 2} y={height - 6} radius={2} fill="#3a3a3a" listening={false} />
         {spread.captions.map((cap) => (
           <KText
             key={cap.id}

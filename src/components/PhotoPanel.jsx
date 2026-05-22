@@ -5,6 +5,7 @@ import { loadPhoto } from '../utils/photoLoader';
 import { assignPhotoWithPrompt } from '../utils/photoAssign';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
+import { useTheme } from '../utils/theme';
 
 // ── Perceptual hashing (dHash 8×8 = 64-bit fingerprint) ──────────────
 // Resizes image to 9×8 greyscale, compares adjacent horizontal pixels.
@@ -76,6 +77,8 @@ function clusterSimilar(photos, hashes, threshold = 10) {
 }
 
 export default function PhotoPanel({ mobile = false }) {
+  const { t } = useTheme();
+  const importBtnStyle = makeImportBtnStyle(t);
   const {
     photos, spreads, addPhotos, removePhoto,
     selectedPhotoIds, togglePhotoSelection, setPhotoSelection, selectAllPhotos, clearPhotoSelection,
@@ -237,17 +240,17 @@ export default function PhotoPanel({ mobile = false }) {
     <aside data-tour="photos" style={{
       width: mobile ? '100%' : 180,
       height: mobile ? '100%' : undefined,
-      background: '#141414',
-      borderRight: mobile ? 'none' : '1px solid #222',
+      background: t.bgPanel2,
+      borderRight: mobile ? 'none' : `1px solid ${t.divider}`,
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px 6px 12px' }}>
-        <span style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase' }}>Photos</span>
+        <span style={{ fontSize: 10, color: t.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>Photos</span>
         {!mobile && (
           <button onClick={() => setCollapsed(true)} title="Collapse panel" style={{
-            background: 'none', border: 'none', color: '#555',
+            background: 'none', border: 'none', color: t.textFaint,
             fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
           }}>‹</button>
         )}
@@ -255,13 +258,13 @@ export default function PhotoPanel({ mobile = false }) {
 
       {/* Counters + hard reset */}
       <div style={{ padding: '0 12px 4px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: '#555' }}>{photos.length} total</span>
+        <span style={{ fontSize: 10, color: t.textMuted }}>{photos.length} total</span>
         <span style={{ fontSize: 10, color: '#3a5a3a' }}>· {usedIds.size} placed</span>
         {photos.length - usedIds.size > 0 && (
-          <span style={{ fontSize: 10, color: '#5a4a1a' }}>· {photos.length - usedIds.size} unused</span>
+          <span style={{ fontSize: 10, color: '#8a6a1a' }}>· {photos.length - usedIds.size} unused</span>
         )}
         {orphanCount > 0 && (
-          <span style={{ fontSize: 10, color: '#7a3a3a' }} title="Cells reference photos that are no longer in the library (often after a reload that dropped large photos). Click ↺ Reset to clear them.">
+          <span style={{ fontSize: 10, color: '#a55' }} title="Cells reference photos that are no longer in the library (often after a reload that dropped large photos). Click ↺ Reset to clear them.">
             · ⚠ {orphanCount} orphan
           </span>
         )}
@@ -276,9 +279,9 @@ export default function PhotoPanel({ mobile = false }) {
           style={{
             marginLeft: 'auto',
             fontSize: 9, padding: '2px 7px',
-            background: orphanCount > 0 ? '#2a0808' : '#181818',
-            border: `1px solid ${orphanCount > 0 ? '#5a1a1a' : '#252525'}`,
-            color: orphanCount > 0 ? '#e05c5c' : '#666',
+            background: orphanCount > 0 ? (t.mode === 'light' ? '#fde8e8' : '#2a0808') : t.bgInput,
+            border: `1px solid ${orphanCount > 0 ? '#a55' : t.border}`,
+            color: orphanCount > 0 ? '#e05c5c' : t.textDim,
             borderRadius: 3, cursor: 'pointer',
             letterSpacing: 0.3,
           }}
@@ -295,8 +298,8 @@ export default function PhotoPanel({ mobile = false }) {
             onChange={(e) => setPhotoSearch(e.target.value)}
             style={{
               width: '100%', boxSizing: 'border-box',
-              background: '#181818', border: '1px solid #252525', borderRadius: 4,
-              color: '#aaa', fontSize: 10, padding: '4px 7px', outline: 'none',
+              background: t.bgInput, border: `1px solid ${t.border}`, borderRadius: 4,
+              color: t.text, fontSize: 10, padding: '4px 7px', outline: 'none',
             }}
           />
         </div>
@@ -304,16 +307,16 @@ export default function PhotoPanel({ mobile = false }) {
 
       {/* Filter tabs */}
       {photos.length > 0 && (
-        <div style={{ display: 'flex', borderBottom: '1px solid #1a1a1a', marginBottom: 4 }}>
+        <div style={{ display: 'flex', borderBottom: `1px solid ${t.borderHard}`, marginBottom: 4 }}>
           {[['all','All'],['used','Used'],['unused','Free'],['favorites','★']].map(([key, label]) => (
             <button key={key}
               onClick={() => setPhotoFilter(key)}
               style={{
                 flex: 1, padding: '4px 0', fontSize: 9, letterSpacing: 0.3,
-                background: photoFilter === key ? '#1e2535' : 'transparent',
-                color: photoFilter === key ? '#4f8ef7' : '#444',
+                background: photoFilter === key ? (t.mode === 'light' ? '#e6edf8' : '#1e2535') : 'transparent',
+                color: photoFilter === key ? '#4f8ef7' : t.textMuted,
                 border: 'none',
-                borderBottom: photoFilter === key ? '1px solid #4f8ef7' : '1px solid #222',
+                borderBottom: photoFilter === key ? '1px solid #4f8ef7' : `1px solid ${t.divider}`,
                 cursor: 'pointer',
                 textTransform: 'uppercase',
               }}
@@ -325,18 +328,18 @@ export default function PhotoPanel({ mobile = false }) {
       {/* Sort */}
       {photos.length > 0 && (
         <div style={{ padding: '0 10px 5px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 9, color: '#444' }}>Sort</span>
+          <span style={{ fontSize: 9, color: t.textMuted }}>Sort</span>
           <select
             value={photoSort}
             onChange={(e) => setPhotoSort(e.target.value)}
-            style={{ flex: 1, background: '#181818', border: '1px solid #252525', borderRadius: 3, color: '#777', fontSize: 9, padding: '2px 4px', cursor: 'pointer', outline: 'none' }}
+            style={{ flex: 1, background: t.bgInput, border: `1px solid ${t.border}`, borderRadius: 3, color: t.textDim, fontSize: 9, padding: '2px 4px', cursor: 'pointer', outline: 'none' }}
           >
             <option value="name">Name</option>
             <option value="newest">Newest</option>
             <option value="portrait">Portrait first</option>
             <option value="landscape">Landscape first</option>
           </select>
-          <span style={{ fontSize: 9, color: '#333' }}>{sorted.length}</span>
+          <span style={{ fontSize: 9, color: t.textFaint }}>{sorted.length}</span>
         </div>
       )}
 
@@ -350,10 +353,10 @@ export default function PhotoPanel({ mobile = false }) {
               style={{
                 width: '100%',
                 padding: '5px 0',
-                background: '#181818',
-                border: '1px solid #2a2a2a',
+                background: t.bgInput,
+                border: `1px solid ${t.border}`,
                 borderRadius: 4,
-                color: computing ? '#444' : '#888',
+                color: computing ? t.textFaint : t.textMuted,
                 fontSize: 10,
                 cursor: computing ? 'wait' : 'pointer',
               }}
@@ -369,8 +372,8 @@ export default function PhotoPanel({ mobile = false }) {
               ) : (
                 <div style={{
                   padding: '5px 7px',
-                  background: '#1a1a0e',
-                  border: '1px solid #3a3a1a',
+                  background: t.mode === 'light' ? '#fdf6e3' : '#1a1a0e',
+                  border: `1px solid ${t.mode === 'light' ? '#e8d27a' : '#3a3a1a'}`,
                   borderRadius: 4,
                   fontSize: 10,
                   color: '#c9a227',
@@ -378,7 +381,7 @@ export default function PhotoPanel({ mobile = false }) {
                 }}>
                   <strong>{groupCount}</strong> similar group{groupCount !== 1 ? 's' : ''} found
                   <br />
-                  <span style={{ color: '#888' }}>{dupCount} duplicate{dupCount !== 1 ? 's' : ''} selected</span>
+                  <span style={{ color: t.textMuted }}>{dupCount} duplicate{dupCount !== 1 ? 's' : ''} selected</span>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 4 }}>
@@ -393,8 +396,8 @@ export default function PhotoPanel({ mobile = false }) {
                     style={{
                       flex: 1,
                       padding: '4px 0',
-                      background: '#2a1010',
-                      border: '1px solid #4a1a1a',
+                      background: t.mode === 'light' ? '#fde8e8' : '#2a1010',
+                      border: `1px solid ${t.mode === 'light' ? '#e8a0a0' : '#4a1a1a'}`,
                       borderRadius: 4,
                       color: '#e05c5c',
                       fontSize: 10,
@@ -410,9 +413,9 @@ export default function PhotoPanel({ mobile = false }) {
                     flex: 1,
                     padding: '4px 0',
                     background: 'transparent',
-                    border: '1px solid #252525',
+                    border: `1px solid ${t.border}`,
                     borderRadius: 4,
-                    color: '#555',
+                    color: t.textMuted,
                     fontSize: 10,
                     cursor: 'pointer',
                   }}
@@ -430,8 +433,8 @@ export default function PhotoPanel({ mobile = false }) {
         <div style={{
           margin: '0 8px 6px',
           padding: '5px 8px',
-          background: '#0d1a2e',
-          border: '1px solid #1e3a5f',
+          background: t.mode === 'light' ? '#e6edf8' : '#0d1a2e',
+          border: `1px solid ${t.mode === 'light' ? '#a5bfe6' : '#1e3a5f'}`,
           borderRadius: 4,
           fontSize: 10,
           color: '#4f8ef7',
@@ -453,11 +456,11 @@ export default function PhotoPanel({ mobile = false }) {
         <div style={{ padding: '0 12px 8px', display: 'flex', gap: 6, alignItems: 'center' }}>
           <button
             onClick={selectAllPhotos}
-            style={{ fontSize: 9, color: '#555', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            style={{ fontSize: 9, color: t.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >All</button>
           <button
             onClick={clearPhotoSelection}
-            style={{ fontSize: 9, color: selCount > 0 ? '#555' : '#333', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            style={{ fontSize: 9, color: selCount > 0 ? t.textMuted : t.textFaint, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >None</button>
           {selCount > 0 && (
             <span style={{ fontSize: 10, color: '#4f8ef7', marginLeft: 'auto' }}>{selCount} selected</span>
@@ -469,12 +472,12 @@ export default function PhotoPanel({ mobile = false }) {
         {...getRootProps()}
         style={{
           margin: '0 10px 10px',
-          border: `1px dashed ${loadProgress ? '#4f8ef7' : isDragActive ? '#4f8ef7' : '#2a2a2a'}`,
+          border: `1px dashed ${loadProgress ? '#4f8ef7' : isDragActive ? '#4f8ef7' : t.border}`,
           borderRadius: 6,
           padding: '8px 6px',
           textAlign: 'center',
           fontSize: 11,
-          color: isDragActive ? '#4f8ef7' : '#555',
+          color: isDragActive ? '#4f8ef7' : t.textMuted,
           transition: 'all 0.15s',
         }}
       >
@@ -493,7 +496,7 @@ export default function PhotoPanel({ mobile = false }) {
               }} />
               <span>Loading {loadProgress.done} / {loadProgress.total}</span>
             </div>
-            <div style={{ width: '100%', height: 3, background: '#1a1a1a', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: 3, background: t.borderHard, borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
                 width: `${(loadProgress.done / Math.max(1, loadProgress.total)) * 100}%`,
                 height: '100%', background: '#4f8ef7',
@@ -685,13 +688,13 @@ export default function PhotoPanel({ mobile = false }) {
   );
 }
 
-const importBtnStyle = {
+const makeImportBtnStyle = (t) => ({
   flex: 1,
   padding: '6px 4px',
-  background: '#181818',
-  border: '1px solid #2a2a2a',
+  background: t.bgInput,
+  border: `1px solid ${t.border}`,
   borderRadius: 4,
-  color: '#aaa',
+  color: t.text,
   fontSize: 11,
   cursor: 'pointer',
-};
+});

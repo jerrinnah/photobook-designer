@@ -16,8 +16,10 @@ import LandingPage from './components/LandingPage';
 import ShareProgressToast from './components/ShareProgressToast';
 import { hasEngaged } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
+import { useTheme } from './utils/theme';
 
 export default function App() {
+  const { t } = useTheme();
   const stageRef = useRef(null);
   const [previewing, setPreviewing] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
@@ -64,13 +66,13 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0d0d0d', color: '#e0e0e0', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, color: t.text, fontFamily: 'system-ui, sans-serif' }}>
       <Toolbar stageRef={stageRef} onPreview={() => setPreviewing(true)} onPrintPreview={() => setPrintPreviewing(true)} />
       <NameProjectHint />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SpreadNav />
         <PhotoPanel />
-        <main style={{ flex: 1, display: 'flex', overflow: 'hidden', background: '#181818' }}>
+        <main style={{ flex: 1, display: 'flex', overflow: 'hidden', background: t.bgCanvas }}>
           <SpreadCanvas stageRef={stageRef} />
         </main>
         <LayoutPicker />
