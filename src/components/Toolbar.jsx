@@ -75,6 +75,30 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
+  // Dynamically track where the toolbar ends so dropdowns anchor below
+  // it correctly even when buttons wrap to a second row on narrow screens.
+  const headerRef = useRef(null);
+  const [headerBottom, setHeaderBottom] = useState(48);
+  useEffect(() => {
+    const measure = () => {
+      if (headerRef.current) {
+        setHeaderBottom(Math.round(headerRef.current.getBoundingClientRect().bottom) + 4);
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    // Also re-measure when the toolbar's content changes (e.g. a button
+    // appears, project name grows). ResizeObserver fires on layout shifts.
+    let ro;
+    if (typeof ResizeObserver !== 'undefined' && headerRef.current) {
+      ro = new ResizeObserver(measure);
+      ro.observe(headerRef.current);
+    }
+    return () => {
+      window.removeEventListener('resize', measure);
+      if (ro) ro.disconnect();
+    };
+  }, []);
   const [upgradeReason, setUpgradeReason] = useState(null); // 'export' | 'plans' | null
   // The export action queued behind a paywall — runs after per-book unlock.
   const pendingExportRef = useRef(null);
@@ -240,17 +264,17 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const handleSaveGated = withSignupGate('save', saveProject);
 
   return (
-    <header style={{
-      height: 44,
+    <header ref={headerRef} style={{
+      minHeight: 44,
       background: '#0c0c0c',
       borderBottom: '1px solid #1a1a1a',
       display: 'flex',
+      flexWrap: 'wrap',           // wrap to multiple rows on narrow screens
       alignItems: 'center',
-      padding: '0 10px',
+      padding: '4px 10px',
       gap: 5,
+      rowGap: 4,
       flexShrink: 0,
-      overflowX: 'auto',
-      overflowY: 'hidden',
     }}>
       {/* Studio logo — overridden by user's brand logo if premium has set one */}
       <img
@@ -466,7 +490,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                 style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
               />
               <div style={{
-                position: 'fixed', right: 10, top: 48,
+                position: 'fixed', right: 10, top: headerBottom,
                 zIndex: 31,
                 background: '#0e0e0e', border: '1px solid #1f1f1f',
                 borderRadius: 6, padding: 6, minWidth: 220,
@@ -640,6 +664,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
           onChooseSpreads={openSpreadPicker}
           exporting={exporting}
           exportingPDF={exportingPDF}
+          anchorTop={headerBottom}
         />
       </div>
 
@@ -691,7 +716,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
 // Combined export dropdown — All JPGs / Print PDF fast paths plus a
 // "Choose spreads…" option that opens a picker for partial exports.
-function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exportingPDF }) {
+function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exportingPDF, anchorTop = 48 }) {
   const [open, setOpen] = useState(false);
   const busy = exporting || exportingPDF;
   const label = exporting ? 'Exporting JPGs…' : exportingPDF ? 'Preparing PDF…' : '↓ Export ▾';
@@ -716,7 +741,7 @@ function ExportMenu({ onExportJPGs, onExportPDF, onChooseSpreads, exporting, exp
             style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'transparent' }}
           />
           <div style={{
-            position: 'fixed', right: 10, top: 48,
+            position: 'fixed', right: 10, top: anchorTop,
             zIndex: 31,
             background: '#0e0e0e', border: '1px solid #1f1f1f',
             borderRadius: 6, padding: 4, minWidth: 200,
