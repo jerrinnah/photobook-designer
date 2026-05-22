@@ -112,6 +112,14 @@ export function hasEngaged() {
 // reload is intentional: it's the simplest guarantee that sign-out is
 // always a clean break, regardless of which component subscribed where.
 export async function signOut() {
+  // Flush any pending project autosave to IDB BEFORE we reload — so a
+  // signed-in user who just made an edit doesn't lose it on the way out.
+  // Lazy import to avoid a circular dep (autosave doesn't depend on auth).
+  try {
+    const { flushAutosave } = await import('../store/autosave');
+    await flushAutosave();
+  } catch { /* ignore — never block sign-out on autosave errors */ }
+
   try { await supabase?.auth.signOut(); } catch { /* ignore — proceed anyway */ }
 
   // Belt-and-braces: manually purge any Supabase auth keys in case

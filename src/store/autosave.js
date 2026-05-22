@@ -16,12 +16,15 @@ const KEY = 'photobook-autosave-v2';
 const META_KEY = 'photobook-autosave-meta-v2';
 const LEGACY_KEY = 'photobook-autosave-v1';
 const LEGACY_META = 'photobook-autosave-meta-v1';
-const DEBOUNCE_MS = 1500;
+const DEBOUNCE_MS = 500;
 
 let timer = null;
 let lastStatus = 'idle'; // 'idle' | 'saving' | 'saved' | 'error'
 let listeners = new Set();
 let lastMeta = null;
+// Exposed module-level flush so explicit callers (signOut, etc.) can
+// guarantee the latest state hits IDB before navigating away.
+let _flushFn = null;
 
 const notify = (status, extra) => {
   lastStatus = status;
@@ -111,20 +114,49 @@ export const startAutosave = (store) => {
     ) trigger();
   });
 
-  // Flush on tab close — best-effort, browsers may not wait on async writes.
-  const flush = () => {
+  // Awaitable flush — cancels any pending debounce timer and writes
+  // synchronously so callers (signOut, explicit flushAutosave) can be
+  // sure nothing is in flight before they navigate away.
+  const flush = async () => {
     if (timer) {
       clearTimeout(timer);
-      writeIDB(store.getState());
+      timer = null;
     }
+    try { await writeIDB(store.getState()); } catch { /* notify already reported */ }
   };
-  window.addEventListener('beforeunload', flush);
+  _flushFn = flush;
+
+  // Save signals — fire on every "user might be leaving" event the
+  // browser exposes. visibilitychange catches tab switches + mobile
+  // backgrounding; pagehide catches Safari navigation; beforeunload
+  // catches desktop close / refresh. Belt-and-braces redundancy.
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden' && timer) flush();
+  };
+  const onPageHide = () => { if (timer) flush(); };
+  const onBeforeUnload = () => { if (timer) flush(); };
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('beforeunload', onBeforeUnload);
 
   return () => {
     unsub();
-    window.removeEventListener('beforeunload', flush);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    _flushFn = null;
   };
 };
+
+// Explicit synchronous flush for callers that want to make absolutely
+// sure pending state has hit IDB before they navigate (e.g. signOut).
+// Safe to call when no autosave is registered — resolves immediately.
+export async function flushAutosave() {
+  if (_flushFn) {
+    try { await _flushFn(); } catch { /* ignore */ }
+  }
+}
 
 // ── Loading ─────────────────────────────────────────────────────────
 // SYNCHRONOUS — called from useBookStore's initial state factory before
