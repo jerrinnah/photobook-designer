@@ -850,4 +850,77 @@ export const TEMPLATES = [
       { x: 0.30, y: 0.58, w: 0.40, text: 'A holiday photobook\nDecember 2025', fontSize: 15, color: '#ddd', align: 'center', fontFamily: 'Georgia, serif', italic: true, lineHeight: 1.55, shadow: true },
     ],
   },
+
+  // 7. Photo Collage — green-themed mood-board cover with 4 photos arranged
+  //    around a tall hero column. Inspired by botanical / wedding mood-boards.
+  { id: 'cover-photo-collage', name: 'Photo Collage', category: 'Cover',
+    bgColor: '#ffffff',
+    cells: [
+      { x: 0.32, y: 0.04, w: 0.30, h: 0.92, hint: '34' },   // tall hero center
+      { x: 0.04, y: 0.32, w: 0.26, h: 0.36, hint: '11' },   // mid-left
+      { x: 0.66, y: 0.16, w: 0.30, h: 0.30, hint: '43' },   // upper-right
+      { x: 0.66, y: 0.50, w: 0.30, h: 0.34, hint: '11' },   // lower-right
+    ],
+    captions: [
+      { x: 0.04, y: 0.06, w: 0.24, text: 'PHOTO', fontSize: 38, color: '#2a3a2a', align: 'left', fontFamily: 'Helvetica, sans-serif', bold: true, letterSpacing: 1 },
+      { x: 0.04, y: 0.14, w: 0.24, text: 'Collage', fontSize: 28, color: '#5a8a5a', align: 'left', fontFamily: 'Great Vibes, cursive', italic: true },
+      { x: 0.04, y: 0.86, w: 0.24, text: '●  ●  ●  ●', fontSize: 24, color: '#5a8a5a', align: 'left', letterSpacing: 6 },
+      { x: 0.78, y: 0.06, w: 0.18, text: '△ ▽ △ ▽', fontSize: 14, color: '#9bb89b', align: 'right', fontFamily: 'Helvetica, sans-serif', letterSpacing: 3 },
+      { x: 0.78, y: 0.90, w: 0.18, text: '△ ▽ △ ▽', fontSize: 14, color: '#9bb89b', align: 'right', fontFamily: 'Helvetica, sans-serif', letterSpacing: 3 },
+    ],
+  },
+
+  // 8. The Millers — family snapshot album. Single hero photo on top,
+  //    surname + tagline on a single line below with a thin divider.
+  { id: 'cover-family-millers', name: 'Family Album', category: 'Cover',
+    bgColor: '#ffffff',
+    cells: [{ x: 0.08, y: 0.10, w: 0.84, h: 0.62, hint: '43' }],
+    captions: [
+      { x: 0.10, y: 0.80, w: 0.40, text: 'THE MILLERS', fontSize: 30, color: '#3a3a3a', align: 'left', fontFamily: 'Cormorant Garamond, serif', letterSpacing: 4 },
+      { x: 0.52, y: 0.82, w: 0.10, text: '——', fontSize: 22, color: '#aaaaaa', align: 'left' },
+      { x: 0.62, y: 0.83, w: 0.32, text: 'our life in snapshots', fontSize: 16, color: '#7a7a7a', align: 'left', fontFamily: 'Cormorant Garamond, serif', italic: true },
+    ],
+  },
+
+  // 9. Erin (Baby) — newborn cover. Photo fills the top 2/3, peach band
+  //    fills the bottom 1/3 carrying the name in script + a soft subtitle.
+  { id: 'cover-newborn-erin', name: 'Newborn', category: 'Cover',
+    bgColor: '#f4dcc8',
+    cells: [{ x: 0, y: 0, w: 1, h: 0.66, hint: '169' }],
+    captions: [
+      { x: 0.20, y: 0.74, w: 0.60, text: 'Erin', fontSize: 80, color: '#5a4a3a', align: 'center', fontFamily: 'Great Vibes, cursive', italic: true },
+      { x: 0.20, y: 0.90, w: 0.60, text: 'Our dearest baby bear', fontSize: 16, color: '#7a6a5a', align: 'center', fontFamily: 'Cormorant Garamond, serif', italic: true, letterSpacing: 1 },
+    ],
+  },
+
+  // 10. Island Escape — travel cover. 6 photos in a 3×2 grid framing a
+  //     white band that carries the destination title + subtitle.
+  { id: 'cover-island-escape', name: 'Travel Grid', category: 'Cover',
+    bgColor: '#ffffff',
+    cells: [
+      // Top row
+      { x: 0.04, y: 0.06, w: 0.30, h: 0.32, hint: '43' },
+      { x: 0.35, y: 0.06, w: 0.30, h: 0.32, hint: '43' },
+      { x: 0.66, y: 0.06, w: 0.30, h: 0.32, hint: '43' },
+      // Bottom row
+      { x: 0.04, y: 0.62, w: 0.30, h: 0.32, hint: '43' },
+      { x: 0.35, y: 0.62, w: 0.30, h: 0.32, hint: '43' },
+      { x: 0.66, y: 0.62, w: 0.30, h: 0.32, hint: '43' },
+    ],
+    captions: [
+      { x: 0.10, y: 0.45, w: 0.80, text: 'Island Escape', fontSize: 56, color: '#2a3540', align: 'center', fontFamily: 'Helvetica, sans-serif' },
+      { x: 0.20, y: 0.55, w: 0.60, text: 'Backpacking in the Philippines', fontSize: 18, color: '#5a6570', align: 'center', fontFamily: 'Helvetica, sans-serif', letterSpacing: 1 },
+    ],
+  },
+
+  // 11. Europe — bold-typography travel cover. Huge destination name at
+  //     the top, single hero photo centered, soft tagline below.
+  { id: 'cover-europe-bold', name: 'Bold Destination', category: 'Cover',
+    bgColor: '#d8d2c4',
+    cells: [{ x: 0.10, y: 0.32, w: 0.80, h: 0.52, hint: '43' }],
+    captions: [
+      { x: 0.05, y: 0.06, w: 0.90, text: 'EUROPE', fontSize: 140, color: '#8a8478', align: 'center', fontFamily: 'Helvetica, sans-serif', bold: false, letterSpacing: 6 },
+      { x: 0.20, y: 0.90, w: 0.60, text: 'A Tour of the Old World', fontSize: 18, color: '#6a6458', align: 'center', fontFamily: 'Cormorant Garamond, serif', italic: true, letterSpacing: 2 },
+    ],
+  },
 ];
