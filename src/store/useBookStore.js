@@ -303,7 +303,8 @@ export const useBookStore = create((set, get) => ({
   ...buildInitialState(),
   selectedPhotoIds: new Set(),
   repeatedPhotoIds: new Set(),
-  selectedCellIndex: null,
+  selectedCellIndex: null,         // "Primary" cell — drives the floating cell toolbar / panels
+  selectedCellIndices: new Set(),  // Full multi-selection (always includes primary when set)
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
@@ -322,6 +323,7 @@ export const useBookStore = create((set, get) => ({
       past: s.past.slice(0, -1),
       future: [current, ...s.future.slice(0, 49)],
       selectedCellIndex: null,
+      selectedCellIndices: new Set(),
     };
   }),
 
@@ -335,6 +337,7 @@ export const useBookStore = create((set, get) => ({
       past: [...s.past, current],
       future: s.future.slice(1),
       selectedCellIndex: null,
+      selectedCellIndices: new Set(),
     };
   }),
 
@@ -342,7 +345,7 @@ export const useBookStore = create((set, get) => ({
   nextPhotoId: () => String(photoIdCounter++),
 
   // ── Settings ───────────────────────────────────────────────────────
-  setActiveSpread: (id) => set({ activeSpreadId: id, selectedCellIndex: null }),
+  setActiveSpread: (id) => set({ activeSpreadId: id, selectedCellIndex: null, selectedCellIndices: new Set() }),
   setSpreadSize: (id) => set({ spreadSizeId: id }),
   setCustomSize: (size) => set({ customSize: size }),
   setBlendEdges: (val) => set(h(() => ({ blendEdges: val }))),
@@ -579,6 +582,7 @@ export const useBookStore = create((set, get) => ({
       };
     }),
     selectedCellIndex: null,
+    selectedCellIndices: new Set(),
   }))),
 
   setCellGeometry: (spreadId, cellGeometry) => set(h((s) => ({
@@ -644,7 +648,84 @@ export const useBookStore = create((set, get) => ({
     };
   })),
 
-  setSelectedCell: (idx) => set({ selectedCellIndex: idx }),
+  // Plain click: replace selection with this single cell (idx=null clears).
+  setSelectedCell: (idx) => set({
+    selectedCellIndex: idx,
+    selectedCellIndices: idx == null ? new Set() : new Set([idx]),
+  }),
+
+  // Shift/Cmd click: add or remove idx from selection. The "primary" cell
+  // (selectedCellIndex) only changes if idx is added (becomes new primary)
+  // or if the primary itself is removed (next remaining cell takes over).
+  toggleCellSelection: (idx) => set((s) => {
+    if (idx == null) return s;
+    const next = new Set(s.selectedCellIndices);
+    let primary = s.selectedCellIndex;
+    if (next.has(idx)) {
+      next.delete(idx);
+      if (primary === idx) primary = next.size > 0 ? [...next][0] : null;
+    } else {
+      next.add(idx);
+      primary = idx;
+    }
+    return { selectedCellIndex: primary, selectedCellIndices: next };
+  }),
+
+  // Move every selected cell by the same normalized delta. Clamped so no
+  // cell escapes the spread; if any would go out of bounds the whole
+  // group's delta is reduced uniformly to keep relative offsets intact.
+  multiMoveCells: (spreadId, indices, dx, dy) => set(h((s) => ({
+    spreads: s.spreads.map((sp) => {
+      if (sp.id !== spreadId) return sp;
+      const set = new Set(indices);
+      // Find the maximum delta that keeps every cell on-spread.
+      let cdx = dx, cdy = dy;
+      sp.cellGeometry.forEach((g, i) => {
+        if (!set.has(i)) return;
+        if (g.x + cdx < 0) cdx = -g.x;
+        if (g.x + g.w + cdx > 1) cdx = 1 - g.x - g.w;
+        if (g.y + cdy < 0) cdy = -g.y;
+        if (g.y + g.h + cdy > 1) cdy = 1 - g.y - g.h;
+      });
+      return {
+        ...sp,
+        cellGeometry: sp.cellGeometry.map((g, i) => set.has(i)
+          ? { ...g, x: round4(g.x + cdx), y: round4(g.y + cdy) }
+          : g),
+        cells: sp.cells.map((c, i) => set.has(i) ? { ...c, manualCrop: true } : c),
+      };
+    }),
+  }))),
+
+  // Scale every selected cell proportionally inside a new union bounding box.
+  // before/after are normalized {x,y,w,h} of the union before and after the
+  // user's drag. Each cell's geometry is reprojected from before-space into
+  // after-space so relative position + proportion are preserved.
+  multiResizeCells: (spreadId, indices, before, after) => set(h((s) => {
+    const MIN = 0.04;
+    const sx = before.w > 0 ? after.w / before.w : 1;
+    const sy = before.h > 0 ? after.h / before.h : 1;
+    const set = new Set(indices);
+    return {
+      spreads: s.spreads.map((sp) => {
+        if (sp.id !== spreadId) return sp;
+        return {
+          ...sp,
+          cellGeometry: sp.cellGeometry.map((g, i) => {
+            if (!set.has(i)) return g;
+            const relX = (g.x - before.x) * sx;
+            const relY = (g.y - before.y) * sy;
+            const w = Math.max(MIN, g.w * sx);
+            const h = Math.max(MIN, g.h * sy);
+            const x = Math.max(0, Math.min(1 - w, after.x + relX));
+            const y = Math.max(0, Math.min(1 - h, after.y + relY));
+            return { ...g, x: round4(x), y: round4(y), w: round4(w), h: round4(h) };
+          }),
+          cells: sp.cells.map((c, i) => set.has(i) ? { ...c, manualCrop: true } : c),
+        };
+      }),
+    };
+  })),
 
   // Wipe autosave and reset to a blank project
   resetProject: () => {
@@ -662,6 +743,7 @@ export const useBookStore = create((set, get) => ({
       selectedPhotoIds: new Set(),
       repeatedPhotoIds: new Set(),
       selectedCellIndex: null,
+      selectedCellIndices: new Set(),
       bookName: 'photobook',
       past: [],
       future: [],
@@ -770,6 +852,7 @@ export const useBookStore = create((set, get) => ({
         cells: [...sp.cells, newCell],
       } : sp),
       selectedCellIndex: spread.cells.length, // select the new copy
+      selectedCellIndices: new Set([spread.cells.length]),
     };
   })),
 
@@ -812,6 +895,7 @@ export const useBookStore = create((set, get) => ({
     return {
       spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cellGeometry: newGeo, cells: newCells } : sp),
       selectedCellIndex: cellIndex,
+      selectedCellIndices: new Set([cellIndex]),
     };
   })),
 
@@ -832,6 +916,7 @@ export const useBookStore = create((set, get) => ({
         ? new Set([...s.selectedPhotoIds].filter((id) => id !== removedPhotoId))
         : s.selectedPhotoIds,
       selectedCellIndex: null,
+      selectedCellIndices: new Set(),
     };
   })),
 
@@ -863,6 +948,7 @@ export const useBookStore = create((set, get) => ({
         return sp;
       }),
       selectedCellIndex: null,
+      selectedCellIndices: new Set(),
     };
   })),
 
@@ -1053,6 +1139,7 @@ export const useBookStore = create((set, get) => ({
         }
       ),
       selectedCellIndex: null,
+      selectedCellIndices: new Set(),
     };
   })),
 
@@ -1179,6 +1266,7 @@ export const useBookStore = create((set, get) => ({
         future: [],
         activeSpreadId: normalizedSpreads[0]?.id ?? 1,
         selectedCellIndex: null,
+        selectedCellIndices: new Set(),
         selectedPhotoIds: new Set(),
       });
     } catch (e) {

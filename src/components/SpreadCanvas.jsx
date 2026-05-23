@@ -201,7 +201,7 @@ function BlendOverlays({ x, y, w, h }) {
 }
 
 function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blendEdges, bgColor, onPhotoDragStart, onPhotoDragEnd }) {
-  const { photos, selectedCellIndex, setSelectedCell, adjustCell } = useBookStore();
+  const { photos, selectedCellIndex, selectedCellIndices, setSelectedCell, toggleCellSelection, adjustCell } = useBookStore();
   const photo = photos.find((p) => p.id === cell.photoId);
   const [img] = useImage(photo?.src);
   const kImgRef = useRef(null);
@@ -226,7 +226,9 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
   const y = geo.y * spreadH + gap / 2;
   const w = Math.max(1, geo.w * spreadW - gap);
   const h = Math.max(1, geo.h * spreadH - gap);
-  const isSelected = selectedCellIndex === cellIndex;
+  const isPrimary = selectedCellIndex === cellIndex;
+  const isInMultiSelection = selectedCellIndices?.has?.(cellIndex);
+  const isSelected = isPrimary || isInMultiSelection;
   if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return null;
   const rotation = cell.rotation || 0;
 
@@ -262,7 +264,13 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
   })();
 
   return (
-    <Group clipX={x} clipY={y} clipWidth={w} clipHeight={h} onClick={() => { setSelectedCell(cellIndex); }}>
+    <Group clipX={x} clipY={y} clipWidth={w} clipHeight={h} onClick={(e) => {
+      const ev = e?.evt;
+      // Shift / Cmd (Mac) / Ctrl (Win) toggles the cell in/out of the
+      // multi-selection. Plain click replaces selection with this cell.
+      if (ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)) toggleCellSelection(cellIndex);
+      else setSelectedCell(cellIndex);
+    }}>
       <Rect x={x} y={y} width={w} height={h} fill={bgColor || '#1a1a1a'} />
 
       {img && imgProps && (
@@ -390,6 +398,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     spreads, activeSpreadId, assignPhoto, addPhotos, addCellAt,
     spreadSizeId, customSize, blendEdges, gap,
     selectedCellIndex, setSelectedCell,
+    selectedCellIndices, multiMoveCells, multiResizeCells,
     splitCell, duplicateCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
     commitResizeCell, setCellGradient, transferCell, setCellEffects,
     addCaption, updateCaption, removeCaption, duplicateCaption,
@@ -402,6 +411,10 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const resizeDragRef = useRef(null);
   const ghostResizeRef = useRef(null);
   const moveDragRef = useRef(null);
+  // Drag state for group move/resize across a multi-selection.
+  const groupMoveDragRef = useRef(null);
+  const groupResizeDragRef = useRef(null);
+  const groupGhostRef = useRef(null);
   const [snapGuides, setSnapGuides] = useState({ v: [], h: [] });
   const [zoom, setZoom] = useLocalStorage('canvas-zoom', 1);
   const zoomContainerRef = useRef(null);
@@ -940,8 +953,31 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               spreadH={SPREAD_H}
             />
 
-            {/* Cell resize handles — shown when a cell is selected */}
-            {selectedCellIndex !== null && cellGeometry[selectedCellIndex] && (() => {
+            {/* Faint outline for every cell in the multi-selection — both
+                primary and additional. Primary still gets its handles below
+                when only one cell is selected; in group mode (size > 1)
+                the per-cell single-resize block is hidden and a group
+                bbox is drawn instead. */}
+            {selectedCellIndices && selectedCellIndices.size > 1 && Array.from(selectedCellIndices).map((idx) => {
+              const g = cellGeometry[idx];
+              if (!g) return null;
+              const primary = idx === selectedCellIndex;
+              return (
+                <Rect
+                  key={`multi-out-${idx}`}
+                  x={g.x * SPREAD_W} y={g.y * SPREAD_H}
+                  width={g.w * SPREAD_W} height={g.h * SPREAD_H}
+                  fill="transparent"
+                  stroke={primary ? '#4f8ef7' : '#6aa8ff'}
+                  strokeWidth={primary ? 1.5 : 1}
+                  dash={primary ? undefined : [4, 3]}
+                  listening={false}
+                />
+              );
+            })}
+
+            {/* Cell resize handles — shown when EXACTLY one cell is selected */}
+            {selectedCellIndex !== null && cellGeometry[selectedCellIndex] && (!selectedCellIndices || selectedCellIndices.size <= 1) && (() => {
               const rGeo = cellGeometry[selectedCellIndex];
               return (
                 <>
@@ -1053,6 +1089,139 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                           commitResizeCell(activeSpreadId, selectedCellIndex, snap.geo);
                           resizeDragRef.current = null;
                           setSnapGuides({ v: [], h: [] });
+                        }}
+                      />
+                    );
+                  })}
+                </>
+              );
+            })()}
+
+            {/* Group bbox handles — shown when 2+ cells are selected.
+                Drag the move grip to translate every selected cell by the
+                same delta; drag a corner/edge handle to scale them all
+                proportionally inside a new union bounding box. */}
+            {selectedCellIndices && selectedCellIndices.size > 1 && (() => {
+              const indices = Array.from(selectedCellIndices).filter((i) => cellGeometry[i]);
+              if (indices.length < 2) return null;
+              // Union bbox in normalized coords
+              let minX = 1, minY = 1, maxX = 0, maxY = 0;
+              for (const i of indices) {
+                const g = cellGeometry[i];
+                if (g.x < minX) minX = g.x;
+                if (g.y < minY) minY = g.y;
+                if (g.x + g.w > maxX) maxX = g.x + g.w;
+                if (g.y + g.h > maxY) maxY = g.y + g.h;
+              }
+              const bbox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+              const px = (g) => ({ x: g.x * SPREAD_W, y: g.y * SPREAD_H, w: g.w * SPREAD_W, h: g.h * SPREAD_H });
+              const b = px(bbox);
+
+              return (
+                <>
+                  {/* Group ghost outline — updated imperatively during drag */}
+                  <Rect
+                    ref={groupGhostRef}
+                    x={b.x} y={b.y} width={b.w} height={b.h}
+                    fill="transparent" stroke="#f6c90e" strokeWidth={1.5}
+                    dash={[6, 4]} listening={false}
+                  />
+
+                  {/* Move grip — yellow square at top-center of group bbox */}
+                  {(() => {
+                    const MH = 18;
+                    const hx = b.x + b.w / 2 - MH / 2;
+                    const hy = b.y - MH - 4;
+                    return (
+                      <Rect
+                        x={hx} y={hy} width={MH} height={MH}
+                        fill="#f6c90e" stroke="#fff" strokeWidth={1.5} cornerRadius={3}
+                        draggable
+                        onMouseEnter={() => { document.body.style.cursor = 'move'; }}
+                        onMouseLeave={() => { document.body.style.cursor = 'default'; }}
+                        onDragStart={(e) => {
+                          groupMoveDragRef.current = {
+                            startX: e.target.x(), startY: e.target.y(),
+                            bbox: { ...bbox }, indices: [...indices],
+                          };
+                        }}
+                        onDragMove={(e) => {
+                          if (!groupMoveDragRef.current || !groupGhostRef.current) return;
+                          const { startX, startY, bbox: b0 } = groupMoveDragRef.current;
+                          let dx = (e.target.x() - startX) / SPREAD_W;
+                          let dy = (e.target.y() - startY) / SPREAD_H;
+                          // Clamp so the whole bbox stays on-spread
+                          if (b0.x + dx < 0) dx = -b0.x;
+                          if (b0.x + b0.w + dx > 1) dx = 1 - b0.x - b0.w;
+                          if (b0.y + dy < 0) dy = -b0.y;
+                          if (b0.y + b0.h + dy > 1) dy = 1 - b0.y - b0.h;
+                          groupGhostRef.current.setAttrs({
+                            x: (b0.x + dx) * SPREAD_W, y: (b0.y + dy) * SPREAD_H,
+                            width: b0.w * SPREAD_W, height: b0.h * SPREAD_H,
+                          });
+                          groupGhostRef.current.getLayer().batchDraw();
+                        }}
+                        onDragEnd={(e) => {
+                          if (!groupMoveDragRef.current) return;
+                          const { startX, startY, bbox: b0, indices: idxs } = groupMoveDragRef.current;
+                          const dx = (e.target.x() - startX) / SPREAD_W;
+                          const dy = (e.target.y() - startY) / SPREAD_H;
+                          multiMoveCells(activeSpreadId, idxs, dx, dy);
+                          groupMoveDragRef.current = null;
+                          // Snap grip back to its anchored position
+                          e.target.position({ x: hx, y: hy });
+                          e.target.getLayer().batchDraw();
+                        }}
+                      />
+                    );
+                  })()}
+
+                  {/* Group resize handles — 8 directions on the bbox */}
+                  {RH_DEFS.map(({ id, xe, ye }) => {
+                    // Convert handle position to pixels using bbox edges.
+                    // xe ∈ 'left' | 'mid' | 'right',  ye ∈ 'top' | 'mid' | 'bottom'
+                    const hx = b.x + (xe === 'left' ? 0 : xe === 'mid' ? b.w / 2 : b.w);
+                    const hy = b.y + (ye === 'top'  ? 0 : ye === 'mid' ? b.h / 2 : b.h);
+                    return (
+                      <Rect
+                        key={`grp-${id}`}
+                        x={hx - RH_SIZE / 2} y={hy - RH_SIZE / 2}
+                        width={RH_SIZE} height={RH_SIZE}
+                        fill="#f6c90e" stroke="#fff" strokeWidth={1.5}
+                        cornerRadius={2}
+                        draggable
+                        dragBoundFunc={(pos) => ({
+                          x: xe === 'mid' ? hx - RH_SIZE / 2 : Math.max(-RH_SIZE / 2, Math.min(SPREAD_W - RH_SIZE / 2, pos.x)),
+                          y: ye === 'mid' ? hy - RH_SIZE / 2 : Math.max(-RH_SIZE / 2, Math.min(SPREAD_H - RH_SIZE / 2, pos.y)),
+                        })}
+                        onMouseEnter={(e) => { document.body.style.cursor = rhCursors[id]; e.target.fill('#ffd84a'); e.target.getLayer().batchDraw(); }}
+                        onMouseLeave={(e) => { document.body.style.cursor = 'default'; e.target.fill('#f6c90e'); e.target.getLayer().batchDraw(); }}
+                        onDragStart={(e) => {
+                          groupResizeDragRef.current = {
+                            startX: e.target.x(), startY: e.target.y(),
+                            bbox: { ...bbox }, indices: [...indices], xe, ye,
+                            anchor: { x: hx, y: hy },
+                          };
+                        }}
+                        onDragMove={(e) => {
+                          if (!groupResizeDragRef.current || !groupGhostRef.current) return;
+                          const { startX, startY, bbox: b0, xe: ex, ye: ey } = groupResizeDragRef.current;
+                          const next = applyResize(b0, ex, ey, e.target.x() - startX, e.target.y() - startY);
+                          groupGhostRef.current.setAttrs({
+                            x: next.x * SPREAD_W, y: next.y * SPREAD_H,
+                            width: next.w * SPREAD_W, height: next.h * SPREAD_H,
+                          });
+                          groupGhostRef.current.getLayer().batchDraw();
+                        }}
+                        onDragEnd={(e) => {
+                          if (!groupResizeDragRef.current) return;
+                          const { startX, startY, bbox: b0, xe: ex, ye: ey, indices: idxs, anchor } = groupResizeDragRef.current;
+                          const next = applyResize(b0, ex, ey, e.target.x() - startX, e.target.y() - startY);
+                          multiResizeCells(activeSpreadId, idxs, b0, next);
+                          groupResizeDragRef.current = null;
+                          // Snap handle back to its anchored screen position
+                          e.target.position({ x: anchor.x - RH_SIZE / 2, y: anchor.y - RH_SIZE / 2 });
+                          e.target.getLayer().batchDraw();
                         }}
                       />
                     );
