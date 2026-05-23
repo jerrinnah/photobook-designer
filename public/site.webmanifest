@@ -1,0 +1,17 @@
+{
+  "name": "AutoBook by NEJ — Photobook Designer",
+  "short_name": "AutoBook",
+  "description": "The fastest way for wedding, portrait, and event photographers to design print-ready photobooks. Drop in hundreds of photos, get a complete album in minutes.",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0c0c0c",
+  "theme_color": "#0c0c0c",
+  "lang": "en",
+  "categories": ["photo", "design", "graphics", "productivity", "business"],
+  "icons": [
+    { "src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

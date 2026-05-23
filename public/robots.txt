@@ -1,0 +1,13 @@
+# AutoBook by NEJ — photobook designer
+# Allow all reputable crawlers; only block server-internal paths.
+
+User-agent: *
+Allow: /
+
+# Don't index private share-proofing URLs or the editor app route.
+# (Public marketing pages, screenshots, and copy stay indexed.)
+Disallow: /?share=
+Disallow: /?admin
+Disallow: /?app=1
+
+Sitemap: https://autobookbynej.online/sitemap.xml

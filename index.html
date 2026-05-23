@@ -3,12 +3,135 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0c0c0c" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Photobook Designer</title>
+
+    <!-- ─── Primary SEO ────────────────────────────────────────────────── -->
+    <title>AutoBook by NEJ — Design Wedding & Event Photobooks in Minutes</title>
+    <meta name="description" content="AutoBook is the fastest way for wedding, portrait, and event photographers to design print-ready photobooks. Drop in hundreds of photos, get a complete, beautifully laid-out album in minutes — not days. Free trial. No design skills needed." />
+    <meta name="keywords" content="photobook designer, photobook software, wedding album builder, wedding photo book maker, event photographer software, photo album designer, design photobook online, automatic photo book layout, AI photo album, fast photobook design, portrait photographer tools, wedding photographer software, photo book editor, print-ready photo album, square photobook, landscape photobook, panoramic album, studio book, client proofing tool" />
+    <meta name="author" content="OctaveDev — AutoBook by NEJ" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow" />
+    <link rel="canonical" href="https://autobookbynej.online/" />
+
+    <!-- ─── Open Graph (Facebook, LinkedIn, WhatsApp, iMessage) ───────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AutoBook by NEJ" />
+    <meta property="og:url" content="https://autobookbynej.online/" />
+    <meta property="og:title" content="AutoBook by NEJ — Design Wedding & Event Photobooks in Minutes" />
+    <meta property="og:description" content="The fastest photobook designer for wedding, portrait, and event photographers. Drop in hundreds of photos, get a print-ready album in minutes. Free trial. Used by studios worldwide." />
+    <meta property="og:image" content="https://autobookbynej.online/og-image.png" />
+    <meta property="og:image:alt" content="AutoBook by NEJ — drag, drop, design photobooks fast" />
+    <!-- og:image:width / height intentionally omitted until a real 1200×630
+         banner replaces the logo fallback. Wrong hints reflow social cards. -->
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ─── Twitter / X cards ─────────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AutoBook by NEJ — Design Wedding & Event Photobooks in Minutes" />
+    <meta name="twitter:description" content="The fastest photobook designer for wedding, portrait, and event photographers. Drop in hundreds of photos, get a print-ready album in minutes." />
+    <meta name="twitter:image" content="https://autobookbynej.online/og-image.png" />
+    <meta name="twitter:image:alt" content="AutoBook by NEJ — drag, drop, design photobooks fast" />
+
+    <!-- ─── Structured data: SoftwareApplication schema ──────────────────
+         Helps Google show the app in rich results with category, pricing,
+         operating systems, and the parent organization. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "AutoBook by NEJ",
+          "alternateName": ["AutoBook", "AutoBook Photobook Designer"],
+          "url": "https://autobookbynej.online/",
+          "applicationCategory": "DesignApplication",
+          "applicationSubCategory": "Photobook Designer",
+          "operatingSystem": "Web, macOS, Windows",
+          "description": "The fastest photobook designer for wedding, portrait, and event photographers. Auto-layouts hundreds of photos into print-ready albums in minutes.",
+          "image": "https://autobookbynej.online/og-image.png",
+          "screenshot": "https://autobookbynej.online/og-image.png",
+          "softwareVersion": "1.0",
+          "inLanguage": "en",
+          "offers": [
+            { "@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD" },
+            { "@type": "Offer", "name": "Starter", "price": "5", "priceCurrency": "USD" },
+            { "@type": "Offer", "name": "Pro (one-time)", "price": "29", "priceCurrency": "USD" }
+          ],
+          "featureList": [
+            "Auto-layout — fill a whole book from a folder of photos in one click",
+            "Templates for wedding, portrait, event, and studio books",
+            "Square, Landscape, Portrait, and Panoramic spread sizes up to 30×12 inches",
+            "Print-ready 300 DPI JPG and PDF export with bleed + crop marks",
+            "Per-spread client proofing share links with feedback notes",
+            "Multi-currency Paystack checkout (USD, NGN, ZAR, GHS, KES)",
+            "Desktop apps for macOS and Windows",
+            "Offline-first autosave to IndexedDB — never lose work on refresh"
+          ],
+          "publisher": {
+            "@type": "Organization",
+            "name": "OctaveDev",
+            "url": "https://autobookbynej.online/",
+            "description": "OctaveDev builds production-grade software, websites, and apps for brands. AutoBook by NEJ is OctaveDev's photobook designer for studio photographers."
+          }
+        },
+        {
+          "@type": "WebSite",
+          "name": "AutoBook by NEJ",
+          "url": "https://autobookbynej.online/",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://autobookbynej.online/?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is the fastest way to design a wedding photobook?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "AutoBook by NEJ designs an entire wedding album from a folder of photos in one click. The auto-layout engine picks templates per spread, places photos by orientation and composition, and produces print-ready output in minutes instead of days."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can clients leave feedback on each spread?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Share a read-only proofing link with your client. They can leave a note on any spread; you receive each note by email and see them grouped by spread inside the editor."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does AutoBook export print-ready files?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Every export is 300 DPI with bleed and crop marks. Choose JPGs (one per spread) for print labs that take images, or a single PDF for print shops that need a multi-page document."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is there a desktop app?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Pro subscribers can install native apps for macOS (Apple Silicon and Intel) and Windows. The desktop apps run fully offline once installed."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+
     <!-- Wedding / editorial fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

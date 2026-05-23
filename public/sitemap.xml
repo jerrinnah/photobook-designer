@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://autobookbynej.online/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://autobookbynej.online/og-image.png</image:loc>
+      <image:title>AutoBook by NEJ — design wedding and event photobooks in minutes</image:title>
+      <image:caption>Auto-layout photobook designer for wedding, portrait, and event photographers worldwide.</image:caption>
+    </image:image>
+  </url>
+</urlset>
