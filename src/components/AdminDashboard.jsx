@@ -281,7 +281,7 @@ export default function AdminDashboard() {
                   <td style={{ ...cellStyle, color: '#888' }}>{formatDate(u.last_used_at)}</td>
                   <td style={{ ...cellStyle, color: '#666' }}>{formatDate(u.created_at)}</td>
                   <td style={cellStyle}>
-                    <UserRowActions email={u.email} />
+                    <UserRowActions email={u.email} adminPassword={password} />
                   </td>
                 </tr>
               ))}
@@ -332,14 +332,18 @@ export default function AdminDashboard() {
 // Inline form: grant a tier to ANY email (creates the public.users
 // row if it doesn't exist yet — useful for pre-loading paid customers
 // who haven't signed up yet, or unverified magic-link recipients).
-// Per-row admin actions — currently just password reset. Triggers
-// Supabase's built-in recovery email (resetPasswordForEmail), which
-// sends the user a one-time link back to /?reset=1. The existing
-// SetPasswordModal handles the recovery callback and lets them set
-// a new password.
-function UserRowActions({ email }) {
+// Per-row admin actions:
+//   🔑 Reset PW  — sends the user a recovery email via Supabase Auth
+//   🔒 Set PW    — admin directly sets a new password (no email round
+//                  trip) via the SECURITY DEFINER RPC in
+//                  SUPABASE_ADMIN_PASSWORD.sql. Useful for support
+//                  cases where the user can't access their inbox.
+function UserRowActions({ email, adminPassword }) {
   const [state, setState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
   const [errMsg, setErrMsg] = useState('');
+  const [mode, setMode] = useState('idle'); // 'idle' | 'setting'
+  const [newPw, setNewPw] = useState('');
+  const [setOk, setSetOk] = useState(null); // last successfully set password (so admin can WhatsApp it)
 
   const sendReset = async () => {
     if (state === 'sending') return;
@@ -359,31 +363,172 @@ function UserRowActions({ email }) {
     }
   };
 
-  const label =
+  const generatePassword = () => {
+    // 12 chars, mixed alphanum, no ambiguous 0/O/1/l/I. Easy to read
+    // over the phone or paste into WhatsApp.
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let out = '';
+    const arr = new Uint32Array(12);
+    crypto.getRandomValues(arr);
+    for (const n of arr) out += alphabet[n % alphabet.length];
+    setNewPw(out);
+  };
+
+  const savePassword = async () => {
+    const pw = newPw.trim();
+    if (pw.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    if (!confirm(`Set ${email}'s password to:\n\n  ${pw}\n\nThe user will be able to sign in with this password immediately.`)) return;
+    setState('sending');
+    setErrMsg('');
+    try {
+      const { data, error } = await supabase.rpc('set_user_password_admin', {
+        p_password: adminPassword,
+        p_email: email,
+        p_new_password: pw,
+      });
+      if (error) throw new Error(error.message);
+      if (data !== true) throw new Error('Server returned an unexpected response.');
+      setSetOk(pw);
+      setMode('idle');
+      setNewPw('');
+      setState('sent');
+      setTimeout(() => setState('idle'), 6000);
+    } catch (err) {
+      setErrMsg(err.message || 'Failed to set password');
+      setState('error');
+      setTimeout(() => setState('idle'), 6000);
+    }
+  };
+
+  // Inline "set password" composer
+  if (mode === 'setting') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input
+          type="text"
+          value={newPw}
+          onChange={(e) => setNewPw(e.target.value)}
+          placeholder="New password (6+ chars)"
+          autoFocus
+          style={{
+            background: '#0c0c0c', border: '1px solid #2a2a2a', color: '#ddd',
+            fontSize: 11, padding: '4px 8px', borderRadius: 3, outline: 'none',
+            width: 150,
+          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') savePassword(); if (e.key === 'Escape') { setMode('idle'); setNewPw(''); } }}
+        />
+        <button
+          onClick={generatePassword}
+          title="Generate a random 12-character password"
+          style={{
+            padding: '4px 8px', fontSize: 10, background: '#181818', color: '#b89fff',
+            border: '1px solid #2a2a2a', borderRadius: 3, cursor: 'pointer',
+          }}
+        >🎲</button>
+        <button
+          onClick={savePassword}
+          disabled={state === 'sending' || newPw.trim().length < 6}
+          style={{
+            padding: '4px 10px', fontSize: 10, fontWeight: 600,
+            background: '#1a3580', color: '#fff', border: 'none',
+            borderRadius: 3, cursor: state === 'sending' ? 'wait' : 'pointer',
+            opacity: newPw.trim().length < 6 ? 0.5 : 1,
+          }}
+        >{state === 'sending' ? 'Saving…' : 'Save'}</button>
+        <button
+          onClick={() => { setMode('idle'); setNewPw(''); }}
+          style={{
+            padding: '4px 8px', fontSize: 10, background: 'none',
+            color: '#666', border: 'none', cursor: 'pointer',
+          }}
+        >Cancel</button>
+      </div>
+    );
+  }
+
+  // Just-saved confirmation with WhatsApp / Copy quick-actions
+  if (setOk) {
+    const waMsg = `Your AutoBook account password has been set.\n\nEmail: ${email}\nPassword: ${setOk}\n\nSign in at https://autobookbynej.online/ — please change this password from the profile menu after signing in.`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span title={setOk} style={{
+          padding: '4px 8px', fontSize: 11,
+          background: '#0e1a10', color: '#6fcf97',
+          border: '1px solid #2a4a2a', borderRadius: 3,
+          fontFamily: 'ui-monospace, monospace',
+          maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{setOk}</span>
+        <button
+          onClick={() => { navigator.clipboard?.writeText(setOk); }}
+          title="Copy password"
+          style={{
+            padding: '4px 8px', fontSize: 10,
+            background: '#181818', color: '#aaa',
+            border: '1px solid #2a2a2a', borderRadius: 3, cursor: 'pointer',
+          }}
+        >📋</button>
+        <a
+          href={waUrl}
+          target="_blank" rel="noopener noreferrer"
+          title="Open WhatsApp with the credentials pre-filled"
+          style={{
+            padding: '4px 8px', fontSize: 10, fontWeight: 600,
+            background: '#0e1a10', color: '#25d366',
+            border: '1px solid #1d3a25', borderRadius: 3, textDecoration: 'none',
+          }}
+        >💬</a>
+        <button
+          onClick={() => setSetOk(null)}
+          title="Done"
+          style={{
+            padding: '4px 6px', fontSize: 10, background: 'none',
+            color: '#666', border: 'none', cursor: 'pointer',
+          }}
+        >✕</button>
+      </div>
+    );
+  }
+
+  const resetLabel =
     state === 'sending' ? 'Sending…' :
     state === 'sent'    ? '✓ Sent' :
     state === 'error'   ? '⚠ Failed' :
     '🔑 Reset PW';
-  const colors =
+  const resetColors =
     state === 'sent'  ? { bg: '#0e1a10', fg: '#6fcf97', border: '#2a4a2a' } :
     state === 'error' ? { bg: '#1a0808', fg: '#e05c5c', border: '#5a1a1a' } :
                         { bg: '#181818', fg: '#aaa',    border: '#2a2a2a' };
 
   return (
-    <button
-      onClick={sendReset}
-      disabled={state === 'sending'}
-      title={state === 'error' ? errMsg : `Email ${email} a password reset link`}
-      style={{
-        padding: '4px 10px', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
-        background: colors.bg, color: colors.fg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 3, cursor: state === 'sending' ? 'wait' : 'pointer',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {label}
-    </button>
+    <div style={{ display: 'flex', gap: 4 }}>
+      <button
+        onClick={sendReset}
+        disabled={state === 'sending'}
+        title={state === 'error' ? errMsg : `Email ${email} a password reset link`}
+        style={{
+          padding: '4px 10px', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+          background: resetColors.bg, color: resetColors.fg,
+          border: `1px solid ${resetColors.border}`,
+          borderRadius: 3, cursor: state === 'sending' ? 'wait' : 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {resetLabel}
+      </button>
+      <button
+        onClick={() => setMode('setting')}
+        title={`Set a new password for ${email} directly (no email round-trip)`}
+        style={{
+          padding: '4px 10px', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+          background: '#181818', color: '#b89fff',
+          border: '1px solid #2a2240',
+          borderRadius: 3, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        🔒 Set PW
+      </button>
+    </div>
   );
 }
 
