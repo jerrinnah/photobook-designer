@@ -172,6 +172,9 @@ export async function signInWithPassword(email, password) {
 // Sets (or changes) the current user's password. Requires an active
 // session (they had to magic-link in first). After this, the same email
 // can sign in via password OR magic link.
+//
+// Wrapped in a 15s timeout so a stalled network / unresponsive GoTrue
+// surfaces as a clear error instead of an infinite spinner.
 export async function setMyPassword(newPassword) {
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
   if (!newPassword || newPassword.length < 8) {
@@ -179,8 +182,19 @@ export async function setMyPassword(newPassword) {
   }
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) throw new Error('Sign in first via magic link, then set a password.');
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
-  if (error) throw new Error(error.message);
+
+  const updatePromise = supabase.auth.updateUser({ password: newPassword });
+  const timeoutPromise = new Promise((_, reject) => setTimeout(
+    () => reject(new Error("Password update timed out (15s). Check your network or try signing out and back in via magic link.")),
+    15_000,
+  ));
+
+  const result = await Promise.race([updatePromise, timeoutPromise]);
+  if (result?.error) {
+    // Log full error to console for debugging; show clean message to user.
+    console.error('[setMyPassword] Supabase error', result.error);
+    throw new Error(result.error.message || 'Supabase rejected the password change.');
+  }
 }
 
 // After a magic-link redirect, the auth state-change listener fires

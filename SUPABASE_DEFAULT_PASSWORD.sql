@@ -81,6 +81,10 @@ for each row execute function public.set_default_password_on_signup();
 -- different from the default we generated — wipe the plaintext from
 -- raw_user_meta_data so future magic-link emails don't keep echoing
 -- a stale credential.
+--
+-- Wrapped in EXCEPTION WHEN OTHERS so any unforeseen issue (NULL meta,
+-- type mismatch, schema drift) silently degrades to "skip cleanup"
+-- instead of blocking the password update the user actually wanted.
 create or replace function public.clear_default_password_on_change()
 returns trigger
 language plpgsql
@@ -88,11 +92,17 @@ security definer
 set search_path = public, auth
 as $$
 begin
-  if OLD.encrypted_password is distinct from NEW.encrypted_password
-     and NEW.raw_user_meta_data ? 'default_password'
-  then
-    NEW.raw_user_meta_data := NEW.raw_user_meta_data - 'default_password';
-  end if;
+  begin
+    if OLD.encrypted_password is distinct from NEW.encrypted_password
+       and NEW.raw_user_meta_data is not null
+       and NEW.raw_user_meta_data ? 'default_password'
+    then
+      NEW.raw_user_meta_data := NEW.raw_user_meta_data - 'default_password';
+    end if;
+  exception when others then
+    -- Never block the underlying UPDATE just because cleanup hiccuped.
+    null;
+  end;
   return NEW;
 end;
 $$;

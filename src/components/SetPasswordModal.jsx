@@ -30,7 +30,11 @@ export default function SetPasswordModal({ open, onClose }) {
       setDone(true);
       setTimeout(onClose, 1500);
     } catch (err) {
-      setError(err.message || 'Could not update password.');
+      // setMyPassword now logs full error to console; surface the
+      // message inline so the user sees something specific instead
+      // of just a stalled spinner.
+      console.error('[SetPasswordModal] save failed', err);
+      setError(err.message || 'Could not update password. Open the browser console for details.');
     } finally {
       setSaving(false);
     }
