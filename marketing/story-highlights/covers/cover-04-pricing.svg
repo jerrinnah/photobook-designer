@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+  <g transform="translate(540 960)">
+    <!-- Coin / one-time pay glyph: circle with "1x" inside -->
+    <circle cx="0" cy="-30" r="180" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <text x="0" y="10" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="180" font-weight="800" fill="#ffffff" letter-spacing="-4">1×</text>
+    <text x="0" y="240" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="64" font-weight="700" fill="#ffffff" letter-spacing="6">PRICING</text>
+  </g>
+</svg>

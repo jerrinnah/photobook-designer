@@ -13,6 +13,16 @@ import { useBookStore } from '../store/useBookStore';
 import { getActiveProjectId } from '../store/projects';
 import DesktopDownloads from './DesktopDownloads';
 
+// ── Direct-payment fallback ────────────────────────────────────────────
+// If the Paystack inline popup misbehaves (network glitch, popup blocked,
+// browser extension, etc.) the user can still pay through a static
+// Paystack pay-page. One URL handles all three paths because the page is
+// configured as "let customer enter amount" — the modal shows the exact
+// amount to type.
+const DIRECT_PAYSTACK_URL = 'https://paystack.shop/pay/rduw1so423';
+const SUPPORT_WHATSAPP = '+2347030077967';
+const SUPPORT_EMAIL = 'support@autobookbynej.online';
+
 export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSuccess }) {
   const [paying, setPaying] = useState(false); // 'starter' | 'pro' | 'book' | false
   const [error, setError] = useState(null);
@@ -215,6 +225,20 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
           </div>
         )}
 
+        {/* Direct-payment fallback — only shown when no success state.
+            Opens the static Paystack pay-page in a new tab and shows
+            the exact amount to enter. After payment, the user pings
+            support via WhatsApp/email with their email + plan; we
+            verify and unlock manually from the admin dashboard. */}
+        {!success && (
+          <DirectPaymentFallback
+            user={user}
+            currencyCode={currencyCode}
+            currency={currency}
+            bookPrice={bookPrice}
+          />
+        )}
+
         {/* Free tier reference */}
         <details style={{ marginTop: 8 }}>
           <summary style={{ fontSize: 11, color: '#666', cursor: 'pointer', padding: '4px 0' }}>
@@ -239,6 +263,163 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
           <button onClick={onClose} disabled={Boolean(paying)} style={btnGhost}>Not now</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Direct-payment fallback panel. Shown below the plan cards in the
+// upgrade modal. Each "Pay directly" button opens the static Paystack
+// pay-page in a new tab; the page is a "let customer enter amount"
+// link, so the modal displays the exact amount the user should type.
+// After payment they ping support (WhatsApp / email) with their account
+// email + plan choice; we verify on the admin dashboard and grant the
+// tier manually.
+function DirectPaymentFallback({ user, currencyCode, currency, bookPrice }) {
+  const [open, setOpen] = useState(false);
+
+  const buildPayMsg = (planLabel, amount) => {
+    const lines = [
+      `Hi AutoBook — I just paid for ${planLabel}.`,
+      `Amount: ${formatMoney(amount, currencyCode)} (${currencyCode})`,
+      `Account email: ${user?.email || '(not signed in)'}`,
+      '',
+      'My Paystack receipt is attached.',
+    ];
+    return lines.join('\n');
+  };
+
+  const whatsappUrl = (msg) =>
+    `https://wa.me/${SUPPORT_WHATSAPP.replace(/[^\d]/g, '')}?text=${encodeURIComponent(msg)}`;
+  const mailUrl = (subject, msg) =>
+    `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`;
+
+  return (
+    <div style={{ marginTop: 18, padding: '12px 14px', background: '#0e1218', border: '1px solid #1f2630', borderRadius: 8 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#9fb8d8', fontSize: 12, padding: 0,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}
+      >
+        <span>{open ? '▾' : '▸'}</span>
+        <span style={{ fontWeight: 600 }}>Trouble with the payment popup?</span>
+        <span style={{ color: '#666' }}>Pay directly via Paystack link instead</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 11, color: '#888', lineHeight: 1.5 }}>
+            Click any button below to open the Paystack payment page in a new tab.
+            Type the exact amount shown, complete payment, then send us your receipt
+            (WhatsApp or email) with your account email — we'll activate your plan within
+            a few hours.
+          </div>
+
+          <DirectPayRow
+            label="Starter"
+            amount={currency.starter}
+            currencyCode={currencyCode}
+            payMsg={buildPayMsg('Starter', currency.starter)}
+            whatsappUrl={whatsappUrl}
+            mailUrl={mailUrl}
+          />
+          <DirectPayRow
+            label="Pro"
+            amount={currency.pro}
+            currencyCode={currencyCode}
+            payMsg={buildPayMsg('Pro', currency.pro)}
+            whatsappUrl={whatsappUrl}
+            mailUrl={mailUrl}
+            highlight
+          />
+          {bookPrice.total > 0 && (
+            <DirectPayRow
+              label="This book"
+              sub={`${bookPrice.spreadCount} spread${bookPrice.spreadCount === 1 ? '' : 's'}${bookPrice.coverCount ? ` + ${bookPrice.coverCount} cover` : ''}`}
+              amount={bookPrice.total}
+              currencyCode={currencyCode}
+              payMsg={buildPayMsg(`Pay-per-book (${bookPrice.spreadCount} spreads${bookPrice.coverCount ? ` + ${bookPrice.coverCount} cover` : ''})`, bookPrice.total)}
+              whatsappUrl={whatsappUrl}
+              mailUrl={mailUrl}
+            />
+          )}
+
+          <div style={{
+            marginTop: 4, padding: '8px 10px',
+            background: '#08130b', border: '1px solid #1d3a25',
+            borderRadius: 5, fontSize: 11, color: '#6fcf97',
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          }}>
+            <span>Need help paying or stuck?</span>
+            <a
+              href={whatsappUrl(`Hi AutoBook — I need help with payment. My account email is ${user?.email || '(not signed in)'}.`)}
+              target="_blank" rel="noopener noreferrer"
+              style={{ color: '#25d366', fontWeight: 600, textDecoration: 'none' }}
+            >
+              💬 WhatsApp {SUPPORT_WHATSAPP}
+            </a>
+            <span style={{ color: '#445' }}>·</span>
+            <a
+              href={mailUrl('AutoBook — payment help', `Hi — I need help paying. My account email is ${user?.email || '(not signed in)'}.`)}
+              style={{ color: '#9fb8d8', textDecoration: 'none' }}
+            >
+              ✉ {SUPPORT_EMAIL}
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DirectPayRow({ label, sub, amount, currencyCode, payMsg, whatsappUrl, mailUrl, highlight }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      padding: '10px 12px',
+      background: highlight ? '#161208' : '#0a0d12',
+      border: `1px solid ${highlight ? '#3a2a08' : '#1a2030'}`,
+      borderRadius: 6,
+    }}>
+      <div style={{ flex: '1 1 140px', minWidth: 120 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: highlight ? '#f6c90e' : '#ddd' }}>
+          {highlight ? '✦ ' : ''}{label}
+        </div>
+        {sub && <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{sub}</div>}
+        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+          Enter <b style={{ color: '#ddd' }}>{formatMoney(amount, currencyCode)}</b> on the Paystack page
+        </div>
+      </div>
+      <a
+        href={DIRECT_PAYSTACK_URL}
+        target="_blank" rel="noopener noreferrer"
+        style={{
+          padding: '8px 14px', fontSize: 12, fontWeight: 600,
+          background: highlight ? '#3a2a08' : '#1a3580',
+          color: highlight ? '#f6c90e' : '#fff',
+          border: highlight ? '1px solid #5a4010' : 'none',
+          borderRadius: 5, textDecoration: 'none',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Pay {formatMoney(amount, currencyCode)} →
+      </a>
+      <a
+        href={whatsappUrl(payMsg)}
+        target="_blank" rel="noopener noreferrer"
+        title="Send your receipt on WhatsApp"
+        style={{
+          padding: '8px 12px', fontSize: 11,
+          background: '#0e1a10', color: '#25d366',
+          border: '1px solid #1d3a25',
+          borderRadius: 5, textDecoration: 'none',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        💬 Sent receipt
+      </a>
     </div>
   );
 }

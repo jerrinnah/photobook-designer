@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <!-- Index -->
+  <text x="120" y="330"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="32" font-weight="600" fill="#666" letter-spacing="4">01 / 03  ·  FEATURE</text>
+
+  <!-- Feature name (XL) -->
+  <text x="120" y="780"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="160" font-weight="800" fill="#ffffff" letter-spacing="-6">Design All.</text>
+
+  <!-- Dash -->
+  <line x1="120" y1="860" x2="280" y2="860" stroke="#ffffff" stroke-width="6"/>
+
+  <!-- Description -->
+  <g font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+     fill="#dddddd" font-size="50" font-weight="400">
+    <text x="120" y="990">Drop in 30 — or 300 —</text>
+    <text x="120" y="1060">photos. One tap, every</text>
+    <text x="120" y="1130">spread laid out for you.</text>
+  </g>
+
+  <!-- Mini visual: grid of photo placeholders -->
+  <g transform="translate(120 1250)">
+    <rect x="0"   y="0"   width="180" height="120" rx="8" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="200" y="0"   width="180" height="120" rx="8" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="400" y="0"   width="180" height="120" rx="8" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="600" y="0"   width="180" height="120" rx="8" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="0"   y="140" width="180" height="120" rx="8" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="200" y="140" width="180" height="120" rx="8" fill="#ffffff"/>
+    <rect x="400" y="140" width="180" height="120" rx="8" fill="#ffffff"/>
+    <rect x="600" y="140" width="180" height="120" rx="8" fill="none" stroke="#333" stroke-width="2"/>
+  </g>
+
+  <!-- Footer -->
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="32" font-weight="500" fill="#888">No layout decisions. No drag-and-drop labor.</text>
+</svg>

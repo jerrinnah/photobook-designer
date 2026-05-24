@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <text x="540" y="350" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="28" font-weight="600" fill="#888" letter-spacing="6">PRICING</text>
+
+  <!-- Crossed-out "subscription" line -->
+  <g transform="translate(540 780)" text-anchor="middle">
+    <text x="0" y="0"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="80" font-weight="600" fill="#555">$89 / month</text>
+    <line x1="-340" y1="-22" x2="340" y2="-22" stroke="#e0413c" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- Big anti-claim -->
+  <text x="540" y="1000" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="140" font-weight="800" fill="#ffffff" letter-spacing="-5">No subs.</text>
+  <text x="540" y="1140" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="140" font-weight="800" fill="#ffffff" letter-spacing="-5">No renewals.</text>
+  <text x="540" y="1280" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="140" font-weight="800" fill="#ffffff" letter-spacing="-5">No surprises.</text>
+
+  <!-- Why line -->
+  <g font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+     text-anchor="middle" fill="#aaa">
+    <text x="540" y="1470" font-size="38" font-weight="500">Pic-Time, Fundy, Pixieset all bill monthly.</text>
+    <text x="540" y="1520" font-size="38" font-weight="500">AutoBook doesn't. Ever.</text>
+  </g>
+
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="500" fill="#666" letter-spacing="4">TAP →  HERE'S WHAT YOU PAY</text>
+</svg>

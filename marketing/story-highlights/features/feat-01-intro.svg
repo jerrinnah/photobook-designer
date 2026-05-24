@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <text x="540" y="350" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="28" font-weight="600" fill="#888" letter-spacing="6">FEATURES</text>
+
+  <text x="540" y="820" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="110" font-weight="800" fill="#ffffff" letter-spacing="-4">Three things</text>
+  <text x="540" y="950" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="110" font-weight="800" fill="#ffffff" letter-spacing="-4">photographers</text>
+  <text x="540" y="1080" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="110" font-weight="800" fill="#ffffff" letter-spacing="-4">ask about most.</text>
+
+  <!-- Three labels -->
+  <g transform="translate(540 1380)" text-anchor="middle"
+     font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+     font-size="40" font-weight="600" fill="#aaa">
+    <text x="0" y="-60">Design All</text>
+    <text x="0" y="10">Reshuffle</text>
+    <text x="0" y="80">Client Proofing</text>
+  </g>
+
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="500" fill="#666" letter-spacing="4">TAP →  ONE PER SLIDE</text>
+</svg>

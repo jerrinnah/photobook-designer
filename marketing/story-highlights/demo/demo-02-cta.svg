@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <text x="540" y="350" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="28" font-weight="600" fill="#888" letter-spacing="6">YOUR TURN</text>
+
+  <!-- Headline -->
+  <text x="540" y="820" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="110" font-weight="800" fill="#ffffff" letter-spacing="-4">Try it on your</text>
+  <text x="540" y="950" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="110" font-weight="800" fill="#ffffff" letter-spacing="-4">next album.</text>
+
+  <text x="540" y="1110" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="42" font-weight="400" fill="#aaa">No signup. No card. Free trial.</text>
+
+  <!-- CTA pill -->
+  <g transform="translate(540 1340)">
+    <rect x="-340" y="-80" width="680" height="160" rx="80" fill="#ffffff"/>
+    <text x="0" y="20" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="52" font-weight="700" fill="#0a0a0a">autobookbynej.online</text>
+  </g>
+
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="500" fill="#666" letter-spacing="4">SWIPE UP  ·  LINK IN BIO</text>
+</svg>

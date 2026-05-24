@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <text x="540" y="350" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="28" font-weight="600" fill="#888" letter-spacing="6">SEE IT IN MOTION</text>
+
+  <!-- Big stat -->
+  <text x="540" y="780" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="92" font-weight="700" fill="#ffffff" letter-spacing="-3">A 20-spread album,</text>
+  <text x="540" y="900" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="92" font-weight="700" fill="#ffffff" letter-spacing="-3">designed in:</text>
+
+  <!-- Huge time -->
+  <text x="540" y="1240" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="360" font-weight="800" fill="#ffffff" letter-spacing="-12">5:00</text>
+
+  <!-- Strike-through old time -->
+  <g transform="translate(540 1360)" text-anchor="middle">
+    <text x="0" y="0"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="46" font-weight="500" fill="#666" text-decoration="line-through">was 5 hours in InDesign</text>
+  </g>
+
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="500" fill="#666" letter-spacing="4">TAP →  SEE THE FULL DEMO</text>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <!-- Top tag -->
+  <text x="540" y="350" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="28" font-weight="600" fill="#888" letter-spacing="6">WHAT IT IS</text>
+
+  <!-- 3-step list, big -->
+  <g font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" fill="#ffffff">
+    <text x="120" y="780" font-size="40" font-weight="500" fill="#666">01</text>
+    <text x="120" y="870" font-size="92" font-weight="700" letter-spacing="-3">Drop in your</text>
+    <text x="120" y="970" font-size="92" font-weight="700" letter-spacing="-3">photos.</text>
+
+    <text x="120" y="1140" font-size="40" font-weight="500" fill="#666">02</text>
+    <text x="120" y="1230" font-size="92" font-weight="700" letter-spacing="-3">Tap Design All.</text>
+
+    <text x="120" y="1400" font-size="40" font-weight="500" fill="#666">03</text>
+    <text x="120" y="1490" font-size="92" font-weight="700" letter-spacing="-3">Done.</text>
+  </g>
+
+  <!-- Footer line -->
+  <line x1="120" y1="1620" x2="960" y2="1620" stroke="#222" stroke-width="2"/>
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="32" font-weight="500" fill="#888">AI-assisted layouts, print-ready PDF.</text>
+</svg>

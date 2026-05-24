@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+  <g transform="translate(540 960)">
+    <!-- 5 small stars in a row centered above label -->
+    <g transform="translate(0 -30)" fill="#ffffff">
+      <g transform="translate(-280 0) scale(0.9)">
+        <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+      </g>
+      <g transform="translate(-140 0) scale(0.9)">
+        <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+      </g>
+      <g transform="translate(0 0) scale(0.9)">
+        <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+      </g>
+      <g transform="translate(140 0) scale(0.9)">
+        <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+      </g>
+      <g transform="translate(280 0) scale(0.9)">
+        <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+      </g>
+    </g>
+    <text x="0" y="240" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="62" font-weight="700" fill="#ffffff" letter-spacing="6">REVIEWS</text>
+  </g>
+</svg>

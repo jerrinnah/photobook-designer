@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+  <g transform="translate(540 960)">
+    <!-- Stacked spreads icon: 3 horizontal rounded rects (representing book spreads) -->
+    <rect x="-160" y="-150" width="320" height="60" rx="6" fill="none" stroke="#ffffff" stroke-width="5"/>
+    <rect x="-160" y="-60"  width="320" height="60" rx="6" fill="#ffffff"/>
+    <rect x="-160" y="30"   width="320" height="60" rx="6" fill="none" stroke="#ffffff" stroke-width="5"/>
+    <text x="0" y="240" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="60" font-weight="700" fill="#ffffff" letter-spacing="5">FEATURES</text>
+  </g>
+</svg>

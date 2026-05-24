@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <text x="540" y="350" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="28" font-weight="600" fill="#888" letter-spacing="6">REVIEWS</text>
+
+  <!-- Stars -->
+  <g transform="translate(540 700)" fill="#ffffff">
+    <g transform="translate(-280 0) scale(1.0)">
+      <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+    </g>
+    <g transform="translate(-140 0) scale(1.0)">
+      <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+    </g>
+    <g transform="translate(0 0) scale(1.0)">
+      <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+    </g>
+    <g transform="translate(140 0) scale(1.0)">
+      <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+    </g>
+    <g transform="translate(280 0) scale(1.0)">
+      <polygon points="0,-50 14,-15 52,-15 21,8 33,45 0,22 -33,45 -21,8 -52,-15 -14,-15"/>
+    </g>
+  </g>
+
+  <!-- Big invitation -->
+  <text x="540" y="970" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="100" font-weight="800" fill="#ffffff" letter-spacing="-4">Your album</text>
+  <text x="540" y="1090" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="100" font-weight="800" fill="#ffffff" letter-spacing="-4">could be here.</text>
+
+  <!-- Sub-explanation -->
+  <g font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+     text-anchor="middle" fill="#aaa">
+    <text x="540" y="1280" font-size="42" font-weight="500">We feature one customer book a week.</text>
+    <text x="540" y="1340" font-size="42" font-weight="500">Tag <tspan font-weight="700" fill="#fff">@autobookbynej</tspan> when you ship yours.</text>
+  </g>
+
+  <!-- Hashtag -->
+  <g transform="translate(540 1520)">
+    <rect x="-340" y="-60" width="680" height="120" rx="60" fill="none" stroke="#444" stroke-width="2"/>
+    <text x="0" y="20" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="44" font-weight="700" fill="#ffffff" letter-spacing="2">#MadeWithAutoBook</text>
+  </g>
+
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="500" fill="#666" letter-spacing="4">FILLING SOON  ·  STAY TUNED</text>
+</svg>

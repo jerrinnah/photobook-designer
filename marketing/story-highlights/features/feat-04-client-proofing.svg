@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <text x="120" y="330"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="32" font-weight="600" fill="#666" letter-spacing="4">03 / 03  ·  FEATURE</text>
+
+  <text x="120" y="780"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="150" font-weight="800" fill="#ffffff" letter-spacing="-6">Client</text>
+  <text x="120" y="930"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="150" font-weight="800" fill="#ffffff" letter-spacing="-6">Proofing.</text>
+
+  <line x1="120" y1="1010" x2="280" y2="1010" stroke="#ffffff" stroke-width="6"/>
+
+  <g font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+     fill="#dddddd" font-size="50" font-weight="400">
+    <text x="120" y="1140">Send a private link.</text>
+    <text x="120" y="1210">Your client leaves notes</text>
+    <text x="120" y="1280">on every spread.</text>
+  </g>
+
+  <!-- Mini visual: spread card with comment bubble -->
+  <g transform="translate(120 1370)">
+    <rect x="0" y="0" width="500" height="200" rx="10" fill="none" stroke="#333" stroke-width="2"/>
+    <rect x="20" y="20" width="220" height="160" fill="#444"/>
+    <rect x="260" y="20" width="220" height="160" fill="#444"/>
+
+    <!-- Comment bubble -->
+    <g transform="translate(540 30)">
+      <rect x="0" y="0" width="300" height="120" rx="14" fill="#ffffff"/>
+      <polygon points="-14,30 0,20 0,50" fill="#ffffff"/>
+      <text x="20" y="40"
+            font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+            font-size="24" font-weight="600" fill="#0a0a0a">Bride</text>
+      <text x="20" y="78"
+            font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+            font-size="22" font-weight="400" fill="#444">"Can we swap the</text>
+      <text x="20" y="104"
+            font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+            font-size="22" font-weight="400" fill="#444">left one with #12?"</text>
+    </g>
+  </g>
+
+  <text x="540" y="1670" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="32" font-weight="500" fill="#888">No more email back-and-forth.</text>
+</svg>

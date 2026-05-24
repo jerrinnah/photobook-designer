@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+
+  <!-- Top wordmark -->
+  <g transform="translate(540 320)">
+    <line x1="-60" y1="0" x2="60" y2="0" stroke="#666" stroke-width="2"/>
+    <text x="0" y="40" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="28" font-weight="600" fill="#888" letter-spacing="6">AUTOBOOK · NEJ</text>
+  </g>
+
+  <!-- Huge title -->
+  <text x="540" y="900" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="180" font-weight="800" fill="#ffffff" letter-spacing="-6">Meet</text>
+  <text x="540" y="1080" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="180" font-weight="800" fill="#ffffff" letter-spacing="-6">AutoBook.</text>
+
+  <!-- Subtitle -->
+  <text x="540" y="1280" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="44" font-weight="400" fill="#cccccc" letter-spacing="0">Wedding photobooks in 5 minutes.</text>
+  <text x="540" y="1340" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="44" font-weight="400" fill="#cccccc" letter-spacing="0">Not 5 hours.</text>
+
+  <!-- Bottom tap-hint -->
+  <text x="540" y="1620" text-anchor="middle"
+        font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="26" font-weight="500" fill="#666" letter-spacing="4">TAP →  KEEP READING</text>
+</svg>

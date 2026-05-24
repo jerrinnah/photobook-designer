@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+  <g transform="translate(540 960)">
+    <!-- Play triangle inside subtle ring -->
+    <circle cx="0" cy="-30" r="190" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <polygon points="-50,-115 -50,55 90,-30" fill="#ffffff"/>
+    <text x="0" y="240" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="68" font-weight="700" fill="#ffffff" letter-spacing="6">DEMO</text>
+  </g>
+</svg>

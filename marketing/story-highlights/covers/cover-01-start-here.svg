@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" width="1080" height="1920">
+  <rect width="1080" height="1920" fill="#0a0a0a"/>
+  <!-- Safe round-crop zone centered at 540,960; visible diameter ~720 -->
+  <g transform="translate(540 960)">
+    <!-- Outer ring -->
+    <circle cx="0" cy="-30" r="180" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <!-- Inner dot -->
+    <circle cx="0" cy="-30" r="34" fill="#ffffff"/>
+    <!-- Label -->
+    <text x="0" y="240" text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-size="68" font-weight="700" fill="#ffffff" letter-spacing="6">START</text>
+  </g>
+</svg>
