@@ -3,7 +3,7 @@ import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES } from '../layouts/spreadSizes';
 import { exportToFolder, exportAsPDF } from '../utils/export';
 import { subscribeAutosaveStatus } from '../store/autosave';
-import { getStoredUser, trackEvent, signOut, onAuthStateChange, refreshUserTier } from '../utils/supabase';
+import { getStoredUser, trackEvent, signOut, onAuthStateChange, refreshUserTier, supabase } from '../utils/supabase';
 import { isProjectUnlocked } from '../utils/paystack';
 import { getActiveProjectId } from '../store/projects';
 import { getEffectiveTier, trialStatus, starterStatus, priceForProject } from '../utils/premium';
@@ -130,6 +130,23 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     setAuthUser(profile || null);
     if (profile) setSignup(null); // close any open auth modal once signed in
   }), []);
+
+  // Admin-initiated password resets: when the user clicks the recovery
+  // link in their email, Supabase signs them in with a temporary session
+  // and fires PASSWORD_RECOVERY. We open the SetPasswordModal so they
+  // can immediately type a new password.
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setShowPassword(true);
+    });
+    // Also catch the case where the user arrived with ?reset=1 in the
+    // URL (e.g. opened the link in a new tab after the listener ran).
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('reset') === '1') setShowPassword(true);
+    } catch { /* ignore */ }
+    return () => sub?.subscription?.unsubscribe?.();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();

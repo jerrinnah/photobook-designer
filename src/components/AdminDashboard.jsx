@@ -196,26 +196,29 @@ export default function AdminDashboard() {
                   ['app_use_count', 'Sessions'],
                   ['last_used_at', 'Last used'],
                   ['created_at', 'Joined'],
+                  ['actions', 'Actions'],
                 ].map(([key, label]) => (
                   <th key={key}
                     onClick={() => {
+                      if (key === 'actions') return; // not sortable
                       if (sortBy === key) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
                       else { setSortBy(key); setSortDir('desc'); }
                     }}
                     style={{
                       textAlign: 'left', padding: '10px 12px',
                       color: '#888', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase',
-                      cursor: 'pointer', userSelect: 'none', borderBottom: '1px solid #1a1a1a',
+                      cursor: key === 'actions' ? 'default' : 'pointer',
+                      userSelect: 'none', borderBottom: '1px solid #1a1a1a',
                       fontWeight: 600,
                     }}>
-                    {label} {sortBy === key && (sortDir === 'asc' ? '↑' : '↓')}
+                    {label} {sortBy === key && key !== 'actions' && (sortDir === 'asc' ? '↑' : '↓')}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
                   {users.length === 0 ? 'No signups yet.' : 'No matches.'}
                 </td></tr>
               )}
@@ -277,6 +280,9 @@ export default function AdminDashboard() {
                   <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#b89fff' }}>{u.app_use_count}</td>
                   <td style={{ ...cellStyle, color: '#888' }}>{formatDate(u.last_used_at)}</td>
                   <td style={{ ...cellStyle, color: '#666' }}>{formatDate(u.created_at)}</td>
+                  <td style={cellStyle}>
+                    <UserRowActions email={u.email} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -326,6 +332,61 @@ export default function AdminDashboard() {
 // Inline form: grant a tier to ANY email (creates the public.users
 // row if it doesn't exist yet — useful for pre-loading paid customers
 // who haven't signed up yet, or unverified magic-link recipients).
+// Per-row admin actions — currently just password reset. Triggers
+// Supabase's built-in recovery email (resetPasswordForEmail), which
+// sends the user a one-time link back to /?reset=1. The existing
+// SetPasswordModal handles the recovery callback and lets them set
+// a new password.
+function UserRowActions({ email }) {
+  const [state, setState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
+  const [errMsg, setErrMsg] = useState('');
+
+  const sendReset = async () => {
+    if (state === 'sending') return;
+    if (!confirm(`Send a password-reset email to ${email}?\n\nThey'll get a one-time link from Supabase to set a new password.`)) return;
+    setState('sending');
+    setErrMsg('');
+    try {
+      const redirectTo = `${window.location.origin}/?reset=1`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw new Error(error.message);
+      setState('sent');
+      setTimeout(() => setState('idle'), 6000);
+    } catch (err) {
+      setErrMsg(err.message || 'Failed to send');
+      setState('error');
+      setTimeout(() => setState('idle'), 6000);
+    }
+  };
+
+  const label =
+    state === 'sending' ? 'Sending…' :
+    state === 'sent'    ? '✓ Sent' :
+    state === 'error'   ? '⚠ Failed' :
+    '🔑 Reset PW';
+  const colors =
+    state === 'sent'  ? { bg: '#0e1a10', fg: '#6fcf97', border: '#2a4a2a' } :
+    state === 'error' ? { bg: '#1a0808', fg: '#e05c5c', border: '#5a1a1a' } :
+                        { bg: '#181818', fg: '#aaa',    border: '#2a2a2a' };
+
+  return (
+    <button
+      onClick={sendReset}
+      disabled={state === 'sending'}
+      title={state === 'error' ? errMsg : `Email ${email} a password reset link`}
+      style={{
+        padding: '4px 10px', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+        background: colors.bg, color: colors.fg,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 3, cursor: state === 'sending' ? 'wait' : 'pointer',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function AddUserByEmail({ password, onAdded }) {
   const [email, setEmail] = useState('');
   const [tier, setTier] = useState('pro');
