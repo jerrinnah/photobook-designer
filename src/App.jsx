@@ -14,7 +14,7 @@ import Tour, { hasSeenTour } from './components/Tour';
 import NameProjectHint from './components/NameProjectHint';
 import LandingPage from './components/LandingPage';
 import ShareProgressToast from './components/ShareProgressToast';
-import { hasEngaged } from './utils/supabase';
+import { hasEngaged, startSessionLivenessCheck } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 import { useTheme } from './utils/theme';
 
@@ -32,6 +32,14 @@ export default function App() {
     if (hasSeenTour()) return;
     const t = setTimeout(() => setTourOpen(true), 600);
     return () => clearTimeout(t);
+  }, []);
+
+  // Server-side account deletion safety net. If an admin deletes the
+  // signed-in user, this catches it on visibilitychange / focus / 5-min
+  // poll and force-signs-them-out instead of letting them keep using a
+  // dead JWT until expiry (default 1 hour).
+  useEffect(() => {
+    return startSessionLivenessCheck();
   }, []);
 
   // Listen for replay requests from the profile menu

@@ -143,6 +143,74 @@ export async function signOut() {
   setTimeout(() => { window.location.reload(); }, 50);
 }
 
+// ── Liveness check: detect server-side account deletion ────────────
+// Supabase JWTs are valid until expiry (default 1h) regardless of
+// whether the auth.users row still exists. If an admin deletes a
+// signed-in user, their tab keeps working until the access token
+// expires. This helper round-trips to Supabase to verify the session
+// is still real — call it on tab focus / visibilitychange / a slow
+// polling interval to force-sign-out deleted users within seconds
+// of them coming back to the app.
+async function isSessionStillValid() {
+  if (!isSupabaseConfigured) return true;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    // No user OR explicit "user not found" → the row is gone.
+    if (error) {
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('user not found') || msg.includes('user_not_found') ||
+          msg.includes('jwt') || msg.includes('session') || msg.includes('invalid')) {
+        return false;
+      }
+      // Other errors (network glitch, 503) — assume valid, don't sign out.
+      return true;
+    }
+    return Boolean(user?.id);
+  } catch {
+    // Network failure — assume valid; we don't want offline use to log people out.
+    return true;
+  }
+}
+
+let _livenessStopFns = [];
+export function startSessionLivenessCheck() {
+  if (typeof window === 'undefined') return () => {};
+  // Avoid stacking listeners across re-renders / HMR.
+  stopSessionLivenessCheck();
+
+  const verifyAndKickIfGone = async () => {
+    if (!getStoredUser()) return; // not signed in — nothing to verify
+    const ok = await isSessionStillValid();
+    if (!ok) {
+      console.warn('[auth] session no longer valid — server-side account was deleted or revoked. Signing out.');
+      try { await signOut(); } catch { /* signOut already reloads on success */ }
+    }
+  };
+
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') verifyAndKickIfGone();
+  };
+  const onFocus = () => verifyAndKickIfGone();
+  // Slow poll as a backstop — every 5 minutes — so even a user who
+  // never tabs away gets caught.
+  const interval = setInterval(verifyAndKickIfGone, 5 * 60 * 1000);
+
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onFocus);
+  _livenessStopFns.push(
+    () => document.removeEventListener('visibilitychange', onVisible),
+    () => window.removeEventListener('focus', onFocus),
+    () => clearInterval(interval),
+  );
+  // Fire once immediately so we don't wait for the first event.
+  verifyAndKickIfGone();
+  return stopSessionLivenessCheck;
+}
+export function stopSessionLivenessCheck() {
+  for (const fn of _livenessStopFns) try { fn(); } catch { /* ignore */ }
+  _livenessStopFns = [];
+}
+
 // ── Password auth (optional, for returning users) ───────────────────
 // Users always start with magic link (Supabase Auth verifies the email
 // that way). After their first sign-in they can optionally set a
