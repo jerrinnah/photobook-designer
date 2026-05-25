@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 // bundle. Log it once on module load — admins can ask users to open
 // DevTools → Console → search for [AutoBook auth] to see what's
 // running in their browser.
-const AUTH_BUNDLE_VERSION = '2026-05-25-reload-after-fallback';
+const AUTH_BUNDLE_VERSION = '2026-05-25-sdk-bypass';
 if (typeof window !== 'undefined') {
   console.info(`[AutoBook auth] bundle ${AUTH_BUNDLE_VERSION} loaded`);
 }
@@ -476,36 +476,43 @@ export async function signInWithPassword(email, password) {
         )),
       ]);
     } catch (e) {
-      console.warn('[signInWithPassword] setSession failed; writing token directly to localStorage and reloading', e);
+      console.warn('[signInWithPassword] setSession wedged; using bypass path (write tokens + write app user record + force-rerender)', e);
       try {
-        // Match the SDK's localStorage key format. Project ref is the
-        // first subdomain of the Supabase URL (e.g. xyzabc.supabase.co
-        // → key prefix sb-xyzabc).
+        // Write the SDK's session payload to localStorage in the v2
+        // format. If the SDK ever recovers it'll pick this up.
         const projectRef = (supabaseUrl.match(/https?:\/\/([^.]+)\./) || [])[1] || 'project';
-        const key = `sb-${projectRef}-auth-token`;
-        const payload = {
+        const sdkKey = `sb-${projectRef}-auth-token`;
+        const sdkPayload = {
           access_token: data.access_token,
           refresh_token: data.refresh_token,
           token_type: 'bearer',
           expires_in: data.expires_in || 3600,
           expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
+          provider_token: null,
+          provider_refresh_token: null,
           user: data.user,
         };
-        localStorage.setItem(key, JSON.stringify(payload));
-        // Mark fresh + engaged BEFORE reload so the post-reload init
-        // hydrates cleanly without the liveness check racing.
-        try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
-        markSessionFresh(60_000);
-        // Reload so the SDK re-initializes and picks up the session
-        // from localStorage. INITIAL_SESSION fires → onAuthStateChange
-        // → user is signed in. No way to recover state in-place when
-        // setSession wedges — reload is the reliable path.
-        console.info('[signInWithPassword] reloading to apply session...');
-        window.location.assign(window.location.pathname);
-        // Caller's "Signing in..." spinner stays until reload — that's fine.
-        return;
+        localStorage.setItem(sdkKey, JSON.stringify(sdkPayload));
+
+        // CRITICAL: also write our app's own user record directly so the
+        // UI doesn't have to wait on the SDK. useAuthUser subscribes to
+        // this — calling storeUser flips the entire React tree to the
+        // signed-in state instantly, no reload required. RPCs that need
+        // the JWT will lazy-pick it from localStorage when needed.
+        if (data.user) {
+          storeUser({
+            id: data.user.id,
+            email: data.user.email,
+            phone: data.user.phone || data.user.user_metadata?.phone || null,
+            tier: 'free',          // refreshed by refreshUserTier shortly
+            _fromBypass: true,
+          });
+          markSessionFresh(60_000);
+          // Kick the DB tier sync in the background.
+          setTimeout(() => { refreshUserTier().catch(() => {}); }, 100);
+        }
       } catch (innerErr) {
-        console.error('[signInWithPassword] localStorage fallback also failed', innerErr);
+        console.error('[signInWithPassword] bypass path failed too', innerErr);
         throw new Error('Sign-in succeeded server-side but could not be applied locally. Try clearing site data (DevTools → Application → Clear storage) and signing in again.');
       }
     }
