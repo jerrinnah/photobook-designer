@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../utils/supabase';
+import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey, rpcDirect } from '../utils/supabase';
 import { PREMIUM_FEATURES, FREE_FEATURES } from '../utils/premium';
 
 const PW_KEY = 'admin-password-v1';
@@ -15,39 +15,6 @@ export default function AdminDashboard() {
   const [sortDir, setSortDir] = useState('desc');
   const [search, setSearch] = useState('');
 
-  // Direct fetch — bypasses supabase-js's HTTP layer which has been
-  // wedging at 30s on this project despite the same RPCs returning
-  // in <1ms via SQL Editor. Logs the full request lifecycle to the
-  // console so the cause (CORS preflight, 401, paused project, etc.)
-  // is visible in DevTools instead of opaque.
-  const rpcDirect = async (fnName, params, label, signal) => {
-    if (!supabaseUrl || !supabaseAnonKey) throw new Error('Supabase URL/key not configured.');
-    const endpoint = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/rpc/${fnName}`;
-    const startedAt = performance.now();
-    console.info(`[Admin] → POST ${endpoint}`);
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      signal,
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(params),
-    });
-    const elapsed = Math.round(performance.now() - startedAt);
-    const text = await res.text();
-    console.info(`[Admin] ← ${res.status} ${label} in ${elapsed}ms (${text.length} bytes)`);
-    if (!res.ok) {
-      throw new Error(`${label} RPC returned ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
-    }
-    let data;
-    try { data = JSON.parse(text); }
-    catch (e) { throw new Error(`${label} RPC returned non-JSON: ${text.slice(0, 200)}`); }
-    return data;
-  };
-
   const load = async (pw) => {
     if (!isSupabaseConfigured) {
       setError('Supabase not configured.');
@@ -55,33 +22,13 @@ export default function AdminDashboard() {
     }
     setLoading(true);
     setError(null);
-
-    // 30s hard cap per call via AbortController — actually cancels
-    // the in-flight fetch instead of just leaving a dangling promise.
-    const callRpc = async (fnName, label) => {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 30_000);
-      try {
-        return await rpcDirect(fnName, { p_password: pw }, label, ctrl.signal);
-      } catch (e) {
-        if (e?.name === 'AbortError') {
-          throw new Error(`${label} timed out (30s) at the fetch layer. Open DevTools Network tab, retry, and look for the ${fnName} request — its status will tell you why (CORS preflight stuck, project paused, etc.).`);
-        }
-        throw e;
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-
     try {
-      const statsData = await callRpc('get_stats_admin', 'Stats');
+      const statsData = await rpcDirect('get_stats_admin', { p_password: pw }, { label: 'Stats', timeoutMs: 30_000 });
       const statsRow = Array.isArray(statsData) ? statsData[0] : statsData;
       if (statsRow == null) {
         throw new Error("Wrong password. (Or the admin RPCs aren't installed — run SUPABASE_ADMIN_RPC.sql.)");
       }
-
-      const usersData = await callRpc('get_users_admin', 'Users');
-
+      const usersData = await rpcDirect('get_users_admin', { p_password: pw }, { label: 'Users', timeoutMs: 30_000 });
       setStats(statsRow);
       setUsers(Array.isArray(usersData) ? usersData : []);
       sessionStorage.setItem(PW_KEY, pw);
@@ -287,10 +234,9 @@ export default function AdminDashboard() {
                           return;
                         }
                         try {
-                          const { error } = await supabase.rpc('set_tier_by_email_admin', {
+                          await rpcDirect('set_tier_by_email_admin', {
                             p_password: password, p_email: u.email, p_tier: next,
-                          });
-                          if (error) throw new Error(error.message);
+                          }, { label: 'Set tier', timeoutMs: 15_000 });
                           await load(password);
                         } catch (err) { alert(err.message); e.target.value = u.tier; }
                       }}
@@ -396,13 +342,29 @@ function UserRowActions({ email, adminPassword, verified, onChanged }) {
     setState('sending');
     setErrMsg('');
     try {
+      // Direct call to /auth/v1/recover — bypasses the SDK fetch wedge
+      // that supabase.auth.resetPasswordForEmail can get stuck on.
       const redirectTo = `${window.location.origin}/?reset=1`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-      if (error) throw new Error(error.message);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15_000);
+      const res = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/recover`, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+          apikey: supabaseAnonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, redirect_to: redirectTo }),
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Reset failed: ${res.status} — ${body.slice(0, 150)}`);
+      }
       setState('sent');
       setTimeout(() => setState('idle'), 6000);
     } catch (err) {
-      setErrMsg(err.message || 'Failed to send');
+      setErrMsg(err.name === 'AbortError' ? 'Reset request timed out (15s)' : err.message || 'Failed to send');
       setState('error');
       setTimeout(() => setState('idle'), 6000);
     }
@@ -426,12 +388,11 @@ function UserRowActions({ email, adminPassword, verified, onChanged }) {
     setState('sending');
     setErrMsg('');
     try {
-      const { data, error } = await supabase.rpc('set_user_password_admin', {
+      const data = await rpcDirect('set_user_password_admin', {
         p_password: adminPassword,
         p_email: email,
         p_new_password: pw,
-      });
-      if (error) throw new Error(error.message);
+      }, { label: 'Set password', timeoutMs: 15_000 });
       if (data !== true) throw new Error('Server returned an unexpected response.');
       setSetOk(pw);
       setMode('idle');
@@ -550,11 +511,10 @@ function UserRowActions({ email, adminPassword, verified, onChanged }) {
     if (!confirm(`Mark ${email} as confirmed?\n\nUse this when the user says they can't sign in even with the right password — that usually means their email_confirmed_at is null. Confirming lets them sign in immediately.`)) return;
     setState('sending');
     try {
-      const { data, error } = await supabase.rpc('confirm_user_email_admin', {
+      const data = await rpcDirect('confirm_user_email_admin', {
         p_password: adminPassword,
         p_email: email,
-      });
-      if (error) throw new Error(error.message);
+      }, { label: 'Confirm email', timeoutMs: 15_000 });
       if (data !== true) throw new Error('Server returned an unexpected response.');
       onChanged?.();
     } catch (err) {
@@ -615,11 +575,10 @@ function UserRowActions({ email, adminPassword, verified, onChanged }) {
           if (typed !== 'DELETE') return;
           setState('sending');
           try {
-            const { data, error } = await supabase.rpc('delete_user_admin', {
+            const data = await rpcDirect('delete_user_admin', {
               p_password: adminPassword,
               p_email: email,
-            });
-            if (error) throw new Error(error.message);
+            }, { label: 'Delete user', timeoutMs: 15_000 });
             if (data !== true) throw new Error('Server returned an unexpected response.');
             onChanged?.();
           } catch (err) {
@@ -653,12 +612,11 @@ function AddUserByEmail({ password, onAdded }) {
     if (!email.trim() || pending) return;
     setPending(true); setMsg(null);
     try {
-      const { data, error } = await supabase.rpc('set_tier_by_email_admin', {
+      const data = await rpcDirect('set_tier_by_email_admin', {
         p_password: password,
         p_email: email.trim(),
         p_tier: tier,
-      });
-      if (error) throw new Error(error.message);
+      }, { label: 'Grant tier', timeoutMs: 15_000 });
       setMsg({ tone: 'ok', text: `${data === 'created' ? 'Created' : 'Updated'}: ${email.trim()} → ${tier}` });
       setEmail('');
       onAdded?.();

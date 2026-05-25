@@ -178,6 +178,59 @@ export async function signOut() {
   window.location.assign(window.location.pathname);
 }
 
+// ── Direct RPC bypass ──────────────────────────────────────────────
+// supabase-js's internal fetch layer wedges on this project — calls
+// to supabase.rpc() / supabase.auth.signOut() can hang indefinitely
+// even when the underlying DB returns in <1ms. This helper goes
+// straight to PostgREST with native fetch + AbortController so any
+// call has a hard cap and a visible Network entry in DevTools.
+//
+// Returns the parsed JSON response on success (or throws with the
+// HTTP status + body excerpt on failure). Throws a clean
+// "${label} timed out" error on AbortError so callers can show
+// something meaningful instead of an opaque promise hang.
+export async function rpcDirect(fnName, params = {}, opts = {}) {
+  if (!isSupabaseConfigured) throw new Error('Supabase URL/key not configured.');
+  const label = opts.label || fnName;
+  const timeoutMs = opts.timeoutMs || 20_000;
+  const endpoint = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/rpc/${fnName}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const startedAt = performance.now();
+  console.info(`[rpcDirect] → ${fnName}`);
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+    const elapsed = Math.round(performance.now() - startedAt);
+    const text = await res.text();
+    console.info(`[rpcDirect] ← ${fnName} ${res.status} in ${elapsed}ms`);
+    if (!res.ok) {
+      // Try to extract Supabase's error message; fall back to raw body.
+      let detail = text;
+      try { const j = JSON.parse(text); detail = j.message || j.error || text; } catch { /* keep raw */ }
+      throw new Error(`${label}: ${res.status} ${res.statusText} — ${String(detail).slice(0, 200)}`);
+    }
+    try { return JSON.parse(text); }
+    catch { throw new Error(`${label} returned non-JSON: ${text.slice(0, 200)}`); }
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      throw new Error(`${label} timed out after ${timeoutMs / 1000}s. Check the Network tab in DevTools — the ${fnName} request will show why (CORS, paused project, network drop).`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Liveness check: detect server-side account deletion ────────────
 // Supabase JWTs are valid until expiry (default 1h) regardless of
 // whether the auth.users row still exists. If an admin deletes a
