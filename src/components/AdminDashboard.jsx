@@ -18,6 +18,8 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set()); // emails of bulk-selected rows
   const [detailEmail, setDetailEmail] = useState(null); // open drawer for this user
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'users' | 'payments' | 'referrals' | 'settings'
+  const [referrals, setReferrals] = useState(null);
 
   const load = async (pw) => {
     if (!isSupabaseConfigured) {
@@ -57,6 +59,16 @@ export default function AdminDashboard() {
     if (password) load(password);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Lazy-load referrals when that tab is first opened (avoids extra
+  // RPC for admins who never visit it).
+  useEffect(() => {
+    if (activeTab === 'referrals' && password && !referrals) {
+      rpcDirect('get_referrals_admin', { p_password: password }, { label: 'Referrals', timeoutMs: 15_000 })
+        .then((r) => setReferrals(r))
+        .catch((e) => console.warn('[Admin] referrals RPC failed:', e.message));
+    }
+  }, [activeTab, password, referrals]);
 
   const logout = () => {
     sessionStorage.removeItem(PW_KEY);
@@ -138,24 +150,126 @@ export default function AdminDashboard() {
   }
 
   // ── Dashboard ────────────────────────────────────────────────────
-  return (
-    <div style={{ ...pageStyle, alignItems: 'stretch', justifyContent: 'flex-start' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 24px', borderBottom: '1px solid #1a1a1a', background: '#0c0c0c',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="./logo.png" alt="" style={{ height: 26, width: 26, borderRadius: '50%' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#ddd' }}>Admin Dashboard</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => load(password)} style={btnGhost} title="Refresh">↻ Refresh</button>
-          <button onClick={exportCSV} style={btnGhost}>↓ Export CSV</button>
-          <a href="/" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>← App</a>
-          <button onClick={logout} style={{ ...btnGhost, color: '#e05c5c', borderColor: '#3a1a1a' }}>Sign out</button>
-        </div>
-      </div>
+  const tabs = [
+    { key: 'overview',  label: 'Overview',  icon: '⌂' },
+    { key: 'users',     label: 'Users',     icon: '◉', badge: users.length },
+    { key: 'payments',  label: 'Payments',  icon: '◰' },
+    { key: 'referrals', label: 'Referrals', icon: '↺' },
+    { key: 'settings',  label: 'Settings',  icon: '⚙' },
+  ];
 
+  return (
+    <div style={{
+      display: 'flex', height: '100vh', background: '#0a0a0a',
+      color: '#e0e0e0', fontFamily: 'system-ui, -apple-system, sans-serif',
+    }}>
+      {/* ── Sidebar ───────────────────────────────────────────── */}
+      <aside style={{
+        width: 220, flexShrink: 0,
+        background: '#0c0c0c', borderRight: '1px solid #1a1a1a',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ padding: '20px 18px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="./logo.png" alt="" style={{ height: 28, width: 28, borderRadius: 6 }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: 0.3 }}>
+            AutoBook
+          </span>
+          <span style={{ fontSize: 9, color: '#666', marginLeft: 'auto', letterSpacing: 1 }}>ADMIN</span>
+        </div>
+        <nav style={{ padding: '8px 10px', flex: 1 }}>
+          {tabs.map((t) => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              style={{
+                width: '100%', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', marginBottom: 2,
+                background: activeTab === t.key ? '#1a3580' : 'transparent',
+                color: activeTab === t.key ? '#fff' : '#aaa',
+                border: 'none', borderRadius: 6,
+                fontSize: 12, fontWeight: activeTab === t.key ? 600 : 500,
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ fontSize: 14, width: 16, textAlign: 'center' }}>{t.icon}</span>
+              <span>{t.label}</span>
+              {t.badge != null && t.badge > 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  fontSize: 9, padding: '1px 6px',
+                  background: activeTab === t.key ? 'rgba(255,255,255,0.18)' : '#1a1a1a',
+                  color: activeTab === t.key ? '#fff' : '#888',
+                  borderRadius: 8, fontWeight: 600,
+                }}>{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* Upsell-style card — keeps the inspiration's friendly bottom card */}
+        <div style={{
+          margin: '10px 12px 12px',
+          padding: '14px 12px',
+          background: 'linear-gradient(135deg, #1a3580 0%, #0e1a3d 100%)',
+          borderRadius: 10,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
+            Share AutoBook
+          </div>
+          <div style={{ fontSize: 10, color: '#9fb8d8', lineHeight: 1.45, marginBottom: 10 }}>
+            Refer photographers — earn 20% off your next plan per conversion.
+          </div>
+          <button onClick={() => setActiveTab('referrals')}
+            style={{
+              width: '100%', padding: '6px 10px',
+              fontSize: 10, fontWeight: 600,
+              background: '#fff', color: '#1a3580',
+              border: 'none', borderRadius: 5, cursor: 'pointer',
+            }}>
+            View referrals →
+          </button>
+        </div>
+
+        <div style={{ padding: '10px 12px 14px', borderTop: '1px solid #161616' }}>
+          <a href="/" style={navFootBtn}>← Back to app</a>
+          <button onClick={logout} style={{ ...navFootBtn, color: '#e05c5c' }}>Sign out</button>
+        </div>
+      </aside>
+
+      {/* ── Main panel ─────────────────────────────────────────── */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <header style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 26px', borderBottom: '1px solid #161616',
+        }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: '#fff' }}>
+              {{
+                overview: 'Overview',
+                users: 'Users',
+                payments: 'Payments',
+                referrals: 'Referral program',
+                settings: 'Settings',
+              }[activeTab]}
+            </div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+              {{
+                overview: 'Revenue, growth, and what users are doing right now.',
+                users: 'Search, manage tiers, reset passwords, and audit accounts.',
+                payments: 'Every Paystack transaction across all currencies.',
+                referrals: 'Top referrers + program performance.',
+                settings: 'Feature gating, SQL setup, and admin tools.',
+              }[activeTab]}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => load(password)} style={btnGhost} title="Refresh data">↻</button>
+            <button onClick={exportCSV} style={btnGhost}>↓ Export CSV</button>
+          </div>
+        </header>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 26px 30px' }}>
+
+      {activeTab === 'overview' && (<>
       {/* Top metric row — three KPIs with deltas. Falls back to the
           old count cards when SUPABASE_ADMIN_OVERVIEW.sql isn't
           installed yet. */}
@@ -196,9 +310,11 @@ export default function AdminDashboard() {
           <StatCard label="Signups · 30d" value={stats.signups_last_30d} accent="#e05c5c" />
         </div>
       )}
+      </>)}
 
+      {activeTab === 'users' && (<>
       {/* Table */}
-      <div style={{ padding: '8px 24px 24px', flex: 1, overflow: 'auto' }}>
+      <div style={{ padding: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <input
             type="text" placeholder="Search email or phone…"
@@ -387,43 +503,52 @@ export default function AdminDashboard() {
             </tbody>
           </table>
 
-          {/* Feature catalogue */}
-          <div style={{ marginTop: 32 }}>
-            <div style={{ fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
-              Feature gating reference
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-              <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontSize: 10, color: '#f6c90e', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
-                  ✦ Premium unlocks
-                </div>
-                {PREMIUM_FEATURES.map((f) => (
-                  <div key={f.key} style={{ marginBottom: 8, fontSize: 12 }}>
-                    <div style={{ color: '#ddd' }}>· {f.name}</div>
-                    <div style={{ color: '#666', fontSize: 11, marginLeft: 10 }}>{f.detail}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontSize: 10, color: '#6fcf97', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
-                  Always free
-                </div>
-                {FREE_FEATURES.map((f) => (
-                  <div key={f.key} style={{ marginBottom: 8, fontSize: 12 }}>
-                    <div style={{ color: '#ddd' }}>· {f.name}</div>
-                    <div style={{ color: '#666', fontSize: 11, marginLeft: 10 }}>{f.detail}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{ marginTop: 10, fontSize: 11, color: '#555', lineHeight: 1.5 }}>
-              Per-user tier is toggled via the <b style={{ color: '#888' }}>Tier</b> column above.
-              The feature catalogue is read from <code style={{ color: '#888' }}>src/utils/premium.js</code> —
-              edit that file to add/remove items, then redeploy.
-            </div>
-          </div>
         </div>
       </div>
+      </>)}
+
+      {activeTab === 'payments' && <PaymentsPanel activity={overview?.activity || []} />}
+      {activeTab === 'referrals' && <ReferralsPanel data={referrals} />}
+
+      {activeTab === 'settings' && (
+        <div>
+          <div style={{ fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+            Feature gating reference
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+            <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 10, color: '#f6c90e', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                ✦ Premium unlocks
+              </div>
+              {PREMIUM_FEATURES.map((f) => (
+                <div key={f.key} style={{ marginBottom: 8, fontSize: 12 }}>
+                  <div style={{ color: '#ddd' }}>· {f.name}</div>
+                  <div style={{ color: '#666', fontSize: 11, marginLeft: 10 }}>{f.detail}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontSize: 10, color: '#6fcf97', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+                Always free
+              </div>
+              {FREE_FEATURES.map((f) => (
+                <div key={f.key} style={{ marginBottom: 8, fontSize: 12 }}>
+                  <div style={{ color: '#ddd' }}>· {f.name}</div>
+                  <div style={{ color: '#666', fontSize: 11, marginLeft: 10 }}>{f.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: '#555', lineHeight: 1.5 }}>
+            Per-user tier is toggled via the <b style={{ color: '#888' }}>Tier</b> column in the Users tab.
+            The feature catalogue is read from <code style={{ color: '#888' }}>src/utils/premium.js</code> —
+            edit that file to add/remove items, then redeploy.
+          </div>
+        </div>
+      )}
+
+        </div>
+      </main>
 
       {/* Row-click user detail drawer */}
       {detailEmail && (
@@ -918,6 +1043,111 @@ function StatCard({ label, value, accent }) {
     </div>
   );
 }
+
+function PaymentsPanel({ activity }) {
+  const payments = (activity || []).filter((a) => a.kind === 'payment');
+  if (payments.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 12 }}>
+        No payments in the last 30 days yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: '#0c0c0c' }}>
+            {['When', 'User', 'Amount', 'Status'].map((h) => (
+              <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: '#888', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', borderBottom: '1px solid #1a1a1a' }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {payments.map((p, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid #161616' }}>
+              <td style={{ ...cellStyle, color: '#888' }}>{formatDate(p.at)}</td>
+              <td style={cellStyle}>{p.email}</td>
+              <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#e8e8e8', fontWeight: 600 }}>
+                {p.meta?.currency} {Number(p.meta?.amount || 0).toLocaleString()}
+              </td>
+              <td style={cellStyle}>
+                <span style={{
+                  fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase',
+                  padding: '2px 8px', borderRadius: 3,
+                  background: p.meta?.status === 'verified' ? '#0e1a10' : p.meta?.status === 'failed' ? '#1a0808' : '#1a1408',
+                  color:      p.meta?.status === 'verified' ? '#6fcf97' : p.meta?.status === 'failed' ? '#e05c5c' : '#f6c90e',
+                }}>
+                  {p.meta?.status || '—'}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReferralsPanel({ data }) {
+  if (!data) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: '#555', fontSize: 12 }}>
+        Loading… (if this stays, run <code>SUPABASE_REFERRALS.sql</code> in Supabase SQL Editor)
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
+        <MetricCard label="Invites sent"  value={data.total_invited}     accent="#4f8ef7" />
+        <MetricCard label="Converted"     value={data.total_converted}   hint={`${data.conversion_pct}% conversion`} accent="#6fcf97" />
+        <MetricCard label="Discount given" value={`${data.total_discount_given}%`} hint="Sum of % redeemed so far" accent="#f6c90e" />
+        <MetricCard label="Redeemed"      value={data.total_redeemed}    accent="#b89fff" />
+      </div>
+
+      <div style={{ fontSize: 11, color: '#888', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
+        Top referrers
+      </div>
+      <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: '#0c0c0c' }}>
+              {['Referrer', 'Invited', 'Converted', 'Redeemed'].map((h) => (
+                <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: '#888', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', borderBottom: '1px solid #1a1a1a' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(data.top_referrers || []).length === 0 && (
+              <tr><td colSpan={4} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                No referrals yet. Share the referral link from the user profile menu to earn discounts.
+              </td></tr>
+            )}
+            {(data.top_referrers || []).map((r) => (
+              <tr key={r.referrer_email} style={{ borderBottom: '1px solid #161616' }}>
+                <td style={cellStyle}>{r.referrer_email}</td>
+                <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums' }}>{r.invited}</td>
+                <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#6fcf97' }}>{r.converted}</td>
+                <td style={{ ...cellStyle, fontVariantNumeric: 'tabular-nums', color: '#b89fff' }}>{r.redeemed}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const navFootBtn = {
+  display: 'block', width: '100%', textAlign: 'left',
+  padding: '7px 12px', marginBottom: 2,
+  background: 'transparent', border: 'none',
+  color: '#888', fontSize: 11, cursor: 'pointer',
+  textDecoration: 'none', borderRadius: 5,
+};
 
 function BulkActionBar({ count, onClear, onSetTier, onDelete }) {
   return (

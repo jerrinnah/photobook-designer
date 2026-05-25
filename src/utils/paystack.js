@@ -29,31 +29,59 @@ export const formatPrice = (plan, currencyCode) => {
 // the visitor's active currency. All 5 currencies in currency.js are
 // Paystack-supported (NGN, USD, ZAR, GHS, KES). The merchant must have
 // each currency enabled in their Paystack dashboard for this to work.
-export function openPaystackCheckout({ email, plan, currencyCode }) {
+export async function openPaystackCheckout({ email, plan, currencyCode }) {
+  if (!isPaystackConfigured()) {
+    throw new Error('Paystack is not configured. Set VITE_PAYSTACK_PUBLIC_KEY.');
+  }
+  const code = currencyCode || getActiveCurrency();
+  const baseAmount = priceForPlan(plan, code);
+  if (!baseAmount) throw new Error('Unknown plan.');
+
+  // Apply referral discount, if any. We probe the user's pending
+  // discount %, deduct it from the price, then redeem at the same
+  // time the popup opens. If the user closes the popup, the redeem
+  // is rolled back via convert_referral_for_email isn't called — the
+  // discount stays available for their next attempt.
+  const reference = `pb_${plan}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  let discountPct = 0;
+  try {
+    const summary = await supabase.rpc('get_my_referral_summary');
+    discountPct = Number(summary?.data?.discount_pct || 0);
+  } catch { /* user might not be in DB yet — ignore */ }
+  const discountedAmount = Math.max(50, Math.round(baseAmount * (1 - discountPct / 100)));
+
+  // Redeem only when the user actually confirms payment in the popup.
+  // Doing it up-front would burn the discount on a cancelled checkout.
+
   return new Promise((resolve, reject) => {
-    if (!isPaystackConfigured()) {
-      reject(new Error('Paystack is not configured. Set VITE_PAYSTACK_PUBLIC_KEY.'));
-      return;
-    }
-    const code = currencyCode || getActiveCurrency();
-    const amount = priceForPlan(plan, code);
-    if (!amount) { reject(new Error('Unknown plan.')); return; }
-    const reference = `pb_${plan}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const handler = window.PaystackPop.setup({
       key: PUBLIC_KEY,
       email,
-      amount: Math.round(amount * 100),
+      amount: Math.round(discountedAmount * 100),
       currency: code,
       ref: reference,
       metadata: {
         plan,
         currency: code,
+        base_amount: baseAmount,
+        discount_pct: discountPct,
         custom_fields: [
           { display_name: 'Plan', variable_name: 'plan', value: `AutoBook ${plan === 'pro' ? 'Pro' : 'Starter'}` },
           { display_name: 'Currency', variable_name: 'currency', value: code },
+          ...(discountPct > 0 ? [{ display_name: 'Referral discount', variable_name: 'ref_discount', value: `${discountPct}% off` }] : []),
         ],
       },
-      callback: (response) => resolve(response.reference || reference),
+      callback: (response) => {
+        // Mark the buyer's earned discounts as redeemed against THIS
+        // payment ref. Fire-and-forget so it can't block the success.
+        if (discountPct > 0) {
+          try {
+            supabase.rpc('redeem_my_referral_discount', { p_payment_ref: response.reference || reference })
+              .catch((e) => console.info('[Referral] redeem failed (non-fatal):', e?.message));
+          } catch { /* ignore */ }
+        }
+        resolve(response.reference || reference);
+      },
       onClose: () => reject(new Error('Payment was cancelled.')),
     });
     handler.openIframe();
@@ -81,6 +109,18 @@ export async function claimPlan(plan, reference) {
     const patch = { tier: plan };
     if (plan === 'starter') patch.photobookCount = 0; // backend reset
     localStorage.setItem('photobook-user-v1', JSON.stringify({ ...user, ...patch }));
+  } catch { /* ignore */ }
+  // Referral mechanics (fire-and-forget — never block a successful payment):
+  //  1) If THIS user was referred by someone, mark that referral as
+  //     converted so the referrer earns their 20% discount
+  //  2) (Discount redemption for the BUYER happens earlier in the
+  //     checkout flow — see openPaystackCheckout, applies the price cut
+  //     before the popup opens)
+  try {
+    if (user?.email) {
+      supabase.rpc('convert_referral_for_email', { p_email: user.email })
+        .catch((e) => console.info('[Referral] convert_referral_for_email failed (non-fatal):', e?.message));
+    }
   } catch { /* ignore */ }
   return true;
 }

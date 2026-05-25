@@ -92,7 +92,46 @@ begin
                                  then round(100.0 * v_paid_users / v_total_users, 1)
                                  else 0 end,
     'sparkline',            coalesce(v_sparkline, '[]'::jsonb),
-    'tier_mix',             v_tier_mix
+    'tier_mix',             v_tier_mix,
+    -- 30-day daily revenue series (NGN) for the big chart
+    'revenue_series',       (
+      select coalesce(jsonb_agg(jsonb_build_object('d', d, 'v', v) order by d), '[]'::jsonb)
+      from (
+        select gs.d::date as d,
+               coalesce((
+                 select sum(amount)
+                   from public.payments p
+                  where p.currency = 'NGN'
+                    and p.status in ('claimed', 'verified')
+                    and date_trunc('day', p.created_at)::date = gs.d::date
+               ), 0)::numeric as v
+        from generate_series((now() - interval '29 days')::date, now()::date, interval '1 day') as gs(d)
+      ) s
+    ),
+    -- 30-day daily signup series for the second line on the chart
+    'signup_series',        coalesce(v_sparkline, '[]'::jsonb),
+    -- Recent activity feed for the right column (last 20 events:
+    -- payments + signups + tier changes inferred from payment status).
+    'activity',             (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'kind',  kind,
+        'email', email,
+        'meta',  meta,
+        'at',    at
+      ) order by at desc), '[]'::jsonb)
+      from (
+        select 'payment' as kind, u.email,
+               jsonb_build_object('amount', p.amount, 'currency', p.currency, 'status', p.status) as meta,
+               p.created_at as at
+          from public.payments p join public.users u on u.id = p.user_id
+         where p.created_at >= now() - interval '30 days'
+        union all
+        select 'signup' as kind, u.email, '{}'::jsonb as meta, u.created_at as at
+          from public.users u
+         where u.created_at >= now() - interval '30 days'
+        order by at desc limit 20
+      ) a
+    )
   );
 end;
 $$;

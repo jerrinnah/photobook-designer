@@ -366,6 +366,34 @@ export function stopSessionLivenessCheck() {
 // password from the profile menu — subsequent sign-ins can then use
 // either method.
 
+// Stash any ?ref=CODE from the URL on first load so we can attribute
+// the signup to the referrer once an email + tier exist.
+export function captureReferralFromUrl() {
+  if (typeof window === 'undefined') return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('ref');
+    if (code && code.trim()) {
+      localStorage.setItem('photobook-pending-ref', code.trim().toUpperCase());
+    }
+  } catch { /* ignore */ }
+}
+captureReferralFromUrl();
+
+// Fire-and-forget: attribute the freshly-signed-up email to whoever
+// owns the referral code we stashed earlier. Server silently no-ops
+// when the code is invalid or already attributed.
+async function attributeReferralIfPending(email) {
+  try {
+    const code = localStorage.getItem('photobook-pending-ref');
+    if (!code || !email) return;
+    await rpcDirect('attribute_referral', { p_code: code, p_email: email }, {
+      label: 'Attribute referral', timeoutMs: 6_000,
+    });
+    localStorage.removeItem('photobook-pending-ref');
+  } catch (e) { console.info('[Referral] attribution failed (non-fatal):', e?.message); }
+}
+
 // One-shot signup with email + password. The BEFORE INSERT trigger in
 // SUPABASE_DEFAULT_PASSWORD.sql auto-confirms the email when a password
 // is present, so the user is signed in immediately and can proceed to
@@ -401,6 +429,7 @@ export async function signUpWithPassword(email, password, phone) {
   if (signUpData?.session?.access_token) {
     try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
     markSessionFresh();
+    attributeReferralIfPending(trimmed);
     return;
   }
 
@@ -414,6 +443,7 @@ export async function signUpWithPassword(email, password, phone) {
     if (siErr) throw siErr;
     try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
     markSessionFresh();
+    attributeReferralIfPending(trimmed);
   } catch (e) {
     console.error('[signUpWithPassword] account created but immediate sign-in failed', e);
     throw new Error(

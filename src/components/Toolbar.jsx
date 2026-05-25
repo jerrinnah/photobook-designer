@@ -16,6 +16,7 @@ import UpgradeModal from './UpgradeModal';
 import DesktopAppModal from './DesktopAppModal';
 import SupportModal from './SupportModal';
 import SpreadExportPicker from './SpreadExportPicker';
+import ReferralModal from './ReferralModal';
 import { useTheme } from '../utils/theme';
 
 const makeBtnStyle = (t) => (extra = {}) => ({
@@ -77,6 +78,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showDesktop, setShowDesktop] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [showReferral, setShowReferral] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [authUser, setAuthUser] = useState(getStoredUser());
   const [profileOpen, setProfileOpen] = useState(false);
@@ -650,6 +652,12 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
                     ✉ Contact support
                   </button>
                   <button
+                    onClick={() => { setShowReferral(true); setProfileOpen(false); }}
+                    style={{ ...menuItem, color: '#6fcf97' }}
+                  >
+                    ↺ Refer & earn 20% off
+                  </button>
+                  <button
                     onClick={() => { toggleTheme(); }}
                     style={menuItem}
                     title="Switch between light and dark interface"
@@ -763,6 +771,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         onUpgradeClick={() => { setShowDesktop(false); setUpgradeReason('plans'); }}
       />
       <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
+      <ReferralModal open={showReferral} onClose={() => setShowReferral(false)} />
       <UpgradeModal
         open={Boolean(upgradeReason)}
         onClose={() => { setUpgradeReason(null); pendingExportRef.current = null; }}
