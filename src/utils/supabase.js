@@ -275,7 +275,7 @@ export async function signUpWithPassword(email, password, phone) {
   if (!password || password.length < 8) {
     throw new Error('Password must be at least 8 characters.');
   }
-  const { error: signUpErr } = await supabase.auth.signUp({
+  const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
     email: trimmed,
     password,
     options: phone ? { data: { phone } } : undefined,
@@ -290,15 +290,33 @@ export async function signUpWithPassword(email, password, phone) {
   if (phone) {
     try { await signUp({ email: trimmed, phone }); } catch { /* non-fatal */ }
   }
-  // The trigger auto-confirmed the email AND we have a session now —
-  // explicitly sign in so the SDK definitely has the user loaded.
+
+  // If supabase.auth.signUp returned a session, the user is signed in
+  // immediately — no further work needed.
+  if (signUpData?.session?.access_token) {
+    try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+    markSessionFresh();
+    return;
+  }
+
+  // No session returned → Supabase requires email confirmation. Try
+  // an explicit sign-in (in case the auto-confirm trigger fired). If
+  // that fails, the user is stuck pending confirmation — surface a
+  // clear message and direct them to their inbox instead of letting
+  // them think the password is wrong.
   try {
-    await supabase.auth.signInWithPassword({ email: trimmed, password });
-  } catch { /* signUp() typically already creates a session */ }
-  try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
-  // 30s grace period so the liveness check doesn't race a freshly
-  // hydrating session and false-positive the user out.
-  markSessionFresh();
+    const { error: siErr } = await supabase.auth.signInWithPassword({ email: trimmed, password });
+    if (siErr) throw siErr;
+    try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+    markSessionFresh();
+  } catch (e) {
+    console.error('[signUpWithPassword] account created but immediate sign-in failed', e);
+    throw new Error(
+      "Your account was created but Supabase requires email confirmation before you can sign in. " +
+      "Check your inbox for the confirmation link, then come back and sign in. " +
+      "(Admins: disable 'Confirm email' in Supabase Auth → Providers → Email to skip this step.)"
+    );
+  }
 }
 
 export async function signInWithPassword(email, password) {
