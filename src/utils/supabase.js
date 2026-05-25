@@ -9,6 +9,12 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(url && anonKey);
+// Re-exported so callers can hit the REST/RPC endpoint directly via
+// fetch when the SDK's internal HTTP layer wedges (we've seen 30s
+// hangs even when the DB returns the same RPC in <1ms — direct
+// fetch with AbortController bypasses whatever the SDK is stuck on).
+export const supabaseUrl = url || '';
+export const supabaseAnonKey = anonKey || '';
 
 export const supabase = isSupabaseConfigured
   ? createClient(url, anonKey, {
