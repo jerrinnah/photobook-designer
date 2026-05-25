@@ -20,32 +20,38 @@ security definer
 set search_path = public, auth
 as $$
 declare
-  v_user_id uuid;
+  v_auth_id uuid;
 begin
   -- 🔑 CHANGE THIS to match the password in SUPABASE_ADMIN_RPC.sql
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
 
-  -- Find the auth user by email (case-insensitive)
-  select id into v_user_id
+  -- Find the auth user by email (case-insensitive). NOTE:
+  -- public.users.id is NOT the same as auth.users.id — they're
+  -- linked via public.users.auth_id, so we match the public row
+  -- on email instead of trying to reuse auth.users.id.
+  select id into v_auth_id
     from auth.users
     where lower(email) = lower(trim(p_email))
     limit 1;
 
-  if v_user_id is null then
-    raise exception 'No account found for %', p_email;
+  -- 1. Wipe the app-level row by email (covers both linked and
+  --    orphaned rows where auth_id is null because the auth user
+  --    was deleted previously).
+  delete from public.users
+   where lower(email) = lower(trim(p_email));
+
+  -- 2. Delete the auth identity if it exists. Supabase's auth
+  --    schema cascades this to auth.identities, auth.sessions,
+  --    auth.refresh_tokens, etc.
+  if v_auth_id is not null then
+    delete from auth.users where id = v_auth_id;
   end if;
 
-  -- 1. Wipe app-level row first (public.users). If you have other
-  --    user-owned tables without ON DELETE CASCADE, delete from them
-  --    here too (e.g. shared_projects, share_spread_feedback, etc).
-  delete from public.users where id = v_user_id;
-
-  -- 2. Delete the auth identity. Supabase's auth schema cascades this
-  --    to auth.identities, auth.sessions, auth.refresh_tokens, etc.
-  delete from auth.users where id = v_user_id;
-
+  -- Returns true even when there was no auth row — useful for
+  -- cleaning up orphaned public.users rows from earlier buggy
+  -- deletes. The row in the dashboard disappears either way.
   return true;
 end;
 $$;
@@ -55,3 +61,9 @@ grant execute on function public.delete_user_admin(text, text)
 
 -- ── Verify it worked ───────────────────────────────────────────────
 -- select public.delete_user_admin('CHANGE_THIS_PASSWORD', 'someone@example.com');
+
+-- ── One-off cleanup for orphaned rows from the earlier buggy version ─
+-- Run this once to wipe any public.users rows whose auth_id is null
+-- (auth user was already deleted, but the public row got left behind).
+--
+--   delete from public.users where auth_id is null;

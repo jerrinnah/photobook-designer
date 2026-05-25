@@ -18,7 +18,7 @@ declare
   v_user_id uuid;
 begin
   -- 🔑 CHANGE THIS to match the password in SUPABASE_ADMIN_RPC.sql
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
 

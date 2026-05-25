@@ -22,7 +22,7 @@ select
   u.created_at,
   u.updated_at
 from auth.users u
-where lower(u.email) = lower('CHANGE_ME@example.com');
+where lower(u.email) = lower('fotochefstudios@gmail.com');
 
 -- ── 2. FORCE-CONFIRM a single user (most common fix) ───────────────
 -- Use when "has_password = true" + "email_confirmed_at = null".
