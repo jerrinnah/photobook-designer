@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 // bundle. Log it once on module load — admins can ask users to open
 // DevTools → Console → search for [AutoBook auth] to see what's
 // running in their browser.
-const AUTH_BUNDLE_VERSION = '2026-05-25-tier-refresh-direct';
+const AUTH_BUNDLE_VERSION = '2026-05-25-onauth-cache-bridge';
 if (typeof window !== 'undefined') {
   console.info(`[AutoBook auth] bundle ${AUTH_BUNDLE_VERSION} loaded`);
 }
@@ -622,6 +622,16 @@ export function onAuthStateChange(callback) {
     queueMicrotask(() => callback(getStoredUser()));
     return () => {};
   }
+
+  // ALSO subscribe to cacheListeners so callers see updates from the
+  // SDK-bypass sign-in path (which calls storeUser directly without
+  // going through supabase.auth.signInWithPassword). Without this, the
+  // Toolbar's "Sign in" button stayed visible after sign-in until the
+  // user manually refreshed — the SDK event never fired because we
+  // never awaited setSession.
+  const cacheCallback = (u) => callback(u || null);
+  cacheListeners.add(cacheCallback);
+
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_OUT') {
       clearStoredUser();
@@ -657,7 +667,10 @@ export function onAuthStateChange(callback) {
       }
     }
   });
-  return () => subscription?.unsubscribe();
+  return () => {
+    subscription?.unsubscribe();
+    cacheListeners.delete(cacheCallback);
+  };
 }
 
 // Refresh the entire profile (tier + brand) — call on app load so admin
