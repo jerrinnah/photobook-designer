@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 // bundle. Log it once on module load — admins can ask users to open
 // DevTools → Console → search for [AutoBook auth] to see what's
 // running in their browser.
-const AUTH_BUNDLE_VERSION = '2026-05-25-instant-signin';
+const AUTH_BUNDLE_VERSION = '2026-05-25-tier-refresh-direct';
 if (typeof window !== 'undefined') {
   console.info(`[AutoBook auth] bundle ${AUTH_BUNDLE_VERSION} loaded`);
 }
@@ -198,10 +198,27 @@ export async function signOut() {
 // HTTP status + body excerpt on failure). Throws a clean
 // "${label} timed out" error on AbortError so callers can show
 // something meaningful instead of an opaque promise hang.
+// Reads the current user's access token directly from localStorage so
+// we never have to await supabase.auth.getSession() (which wedges on
+// the same SDK fetch layer). Returns null if no signed-in session.
+export function getStoredAccessToken() {
+  try {
+    const projectRef = (supabaseUrl.match(/https?:\/\/([^.]+)\./) || [])[1] || 'project';
+    const raw = localStorage.getItem(`sb-${projectRef}-auth-token`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.access_token || null;
+  } catch { return null; }
+}
+
 export async function rpcDirect(fnName, params = {}, opts = {}) {
   if (!isSupabaseConfigured) throw new Error('Supabase URL/key not configured.');
   const label = opts.label || fnName;
   const timeoutMs = opts.timeoutMs || 20_000;
+  // `useUserToken: true` sends the signed-in user's access token in
+  // Authorization, so the RPC sees auth.uid() and RLS works.
+  // Otherwise we send the anon key (default — admin RPCs use this).
+  const authToken = opts.useUserToken ? (getStoredAccessToken() || supabaseAnonKey) : supabaseAnonKey;
   const endpoint = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/rpc/${fnName}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -213,7 +230,7 @@ export async function rpcDirect(fnName, params = {}, opts = {}) {
       signal: ctrl.signal,
       headers: {
         apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
+        Authorization: `Bearer ${authToken}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
@@ -653,11 +670,14 @@ export function onAuthStateChange(callback) {
 // as the paid tier is confirmed.
 export async function refreshUserTier() {
   if (!isSupabaseConfigured) return;
+  // Prefer the JWT-based path so RLS / auth.uid() work. If no token
+  // present, fall back to the legacy path that takes user_id explicitly.
+  const token = getStoredAccessToken();
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const { data, error } = await supabase.rpc('get_my_profile');
-      if (error) { console.warn('[Auth] get_my_profile failed:', error.message); return; }
+    if (token) {
+      const data = await rpcDirect('get_my_profile', {}, {
+        label: 'Refresh tier', timeoutMs: 10_000, useUserToken: true,
+      });
       const fresh = Array.isArray(data) ? data[0] : data;
       if (fresh) {
         const cached = profileToCache(fresh);
@@ -666,13 +686,17 @@ export async function refreshUserTier() {
       }
       return;
     }
-  } catch { /* fall back to legacy path */ }
+  } catch (e) {
+    console.warn('[Auth] get_my_profile failed:', e?.message);
+    // fall through to legacy path
+  }
 
   const u = getStoredUser();
   if (!u?.id) return;
   try {
-    const { data, error } = await supabase.rpc('get_user_profile', { p_user_id: u.id });
-    if (error) return;
+    const data = await rpcDirect('get_user_profile', { p_user_id: u.id }, {
+      label: 'Refresh tier (legacy)', timeoutMs: 10_000,
+    });
     const fresh = Array.isArray(data) ? data[0] : data;
     if (fresh) storeUser(profileToCache(fresh));
   } catch { /* network blip — ignore */ }
