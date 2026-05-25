@@ -22,32 +22,34 @@ export default function AdminDashboard() {
     }
     setLoading(true);
     setError(null);
-    // 15s hard cap. Without this, a network glitch or an unresponsive RPC
-    // leaves the button stuck on "Checking…" forever with no feedback.
+    // 30s hard cap per call. RPCs run sequentially so the failure
+    // message tells you EXACTLY which one timed out (stats vs users)
+    // instead of an opaque "one of them died".
     const withTimeout = (p, label) => Promise.race([
       p,
       new Promise((_, reject) => setTimeout(
-        () => reject(new Error(`${label} timed out — server didn't respond in 15s. Check your network and try again.`)),
-        15_000,
+        () => reject(new Error(`${label} timed out (30s). Open Supabase SQL Editor and try: select public.${label === 'Stats' ? 'get_stats_admin' : 'get_users_admin'}('your-admin-password'); — if THAT hangs too, the function itself is the problem.`)),
+        30_000,
       )),
     ]);
     try {
-      const [statsRes, usersRes] = await Promise.all([
-        withTimeout(supabase.rpc('get_stats_admin', { p_password: pw }), 'Stats request'),
-        withTimeout(supabase.rpc('get_users_admin', { p_password: pw }), 'Users request'),
-      ]);
-      if (statsRes.error) throw new Error(statsRes.error.message);
-      if (usersRes.error) throw new Error(usersRes.error.message);
+      const statsRes = await withTimeout(supabase.rpc('get_stats_admin', { p_password: pw }), 'Stats');
+      if (statsRes.error) throw new Error(`Stats RPC: ${statsRes.error.message}`);
       const statsRow = Array.isArray(statsRes.data) ? statsRes.data[0] : statsRes.data;
       // The admin RPCs return NULL (no error) when the password is wrong.
       // Surface that explicitly instead of leaving the user staring at a
       // blank "Sign in" button thinking nothing happened.
       if (statsRow == null) throw new Error('Wrong password. (Or admin RPCs aren\'t installed — run SUPABASE_ADMIN_RPC.sql.)');
+
+      const usersRes = await withTimeout(supabase.rpc('get_users_admin', { p_password: pw }), 'Users');
+      if (usersRes.error) throw new Error(`Users RPC: ${usersRes.error.message}`);
+
       setStats(statsRow);
       setUsers(usersRes.data || []);
       sessionStorage.setItem(PW_KEY, pw);
       setPassword(pw);
     } catch (err) {
+      console.error('[AdminDashboard.load] failed', err);
       setError(err.message || 'Failed to load');
       sessionStorage.removeItem(PW_KEY);
       setPassword('');
