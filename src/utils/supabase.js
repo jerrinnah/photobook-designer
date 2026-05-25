@@ -120,16 +120,39 @@ export function hasEngaged() {
 // component anywhere can hang on to stale in-memory auth state. The
 // reload is intentional: it's the simplest guarantee that sign-out is
 // always a clean break, regardless of which component subscribed where.
+//
+// CRITICAL: this function must NEVER hang. supabase.auth.signOut() can
+// wedge at the SDK fetch layer (we've seen 30s+ hangs on the same
+// project); local-storage cleanup + reload must still happen.
 export async function signOut() {
+  console.info('[signOut] starting');
+
   // Flush any pending project autosave to IDB BEFORE we reload — so a
   // signed-in user who just made an edit doesn't lose it on the way out.
   // Lazy import to avoid a circular dep (autosave doesn't depend on auth).
+  // Capped at 1s so a hung autosave doesn't block sign-out.
   try {
-    const { flushAutosave } = await import('../store/autosave');
-    await flushAutosave();
+    await Promise.race([
+      import('../store/autosave').then(({ flushAutosave }) => flushAutosave()),
+      new Promise((resolve) => setTimeout(resolve, 1000)),
+    ]);
   } catch { /* ignore — never block sign-out on autosave errors */ }
 
-  try { await supabase?.auth.signOut(); } catch { /* ignore — proceed anyway */ }
+  // Fire the Supabase signOut but DON'T await its full network round-trip
+  // beyond 2 seconds. The local-side cleanup below is what actually logs
+  // the user out in the browser; the network call is a courtesy to revoke
+  // the refresh token server-side.
+  try {
+    await Promise.race([
+      supabase?.auth.signOut() ?? Promise.resolve(),
+      new Promise((resolve) => setTimeout(() => {
+        console.warn('[signOut] supabase.auth.signOut() did not respond in 2s — proceeding with local cleanup anyway');
+        resolve();
+      }, 2000)),
+    ]);
+  } catch (e) {
+    console.warn('[signOut] supabase.auth.signOut threw, ignoring:', e?.message);
+  }
 
   // Belt-and-braces: manually purge any Supabase auth keys in case
   // signOut() didn't fully clean up (network errors, stale tokens, etc.)
@@ -148,8 +171,11 @@ export async function signOut() {
   // visit (e.g. shared computer, deliberate fresh start).
   try { localStorage.removeItem('photobook-engaged-v1'); } catch { /* ignore */ }
 
-  // Hard reload to clear every React tree's cached auth state.
-  setTimeout(() => { window.location.reload(); }, 50);
+  console.info('[signOut] local cleanup done, reloading');
+  // Hard reload to clear every React tree's cached auth state. Use a
+  // synchronous redirect (not setTimeout) so even if the browser is
+  // throttling timers we get out cleanly.
+  window.location.assign(window.location.pathname);
 }
 
 // ── Liveness check: detect server-side account deletion ────────────
