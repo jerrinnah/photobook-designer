@@ -26,17 +26,42 @@ export default function PasswordInput({ style, ...rest }) {
         tabIndex={-1}
         style={{
           position: 'absolute',
-          right: 6, top: '50%',
+          right: 4, top: '50%',
           transform: 'translateY(-50%)',
           background: 'none', border: 'none',
-          padding: '4px 6px', cursor: 'pointer',
-          fontSize: 14, lineHeight: 1,
+          padding: '6px 8px', cursor: 'pointer',
+          lineHeight: 0,
           color: '#888',
-          opacity: 0.85,
+          opacity: 0.8,
         }}
       >
-        {visible ? '🙈' : '👁'}
+        {visible ? <EyeOffIcon /> : <EyeIcon />}
       </button>
     </div>
+  );
+}
+
+// Classic eye outline — almond shape with a pupil.
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="1.7"
+         strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+// Same eye with a diagonal slash through it.
+function EyeOffIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="1.7"
+         strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="4" y1="20" x2="20" y2="4" />
+    </svg>
   );
 }
