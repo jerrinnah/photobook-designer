@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 // bundle. Log it once on module load — admins can ask users to open
 // DevTools → Console → search for [AutoBook auth] to see what's
 // running in their browser.
-const AUTH_BUNDLE_VERSION = '2026-05-25-sdk-bypass';
+const AUTH_BUNDLE_VERSION = '2026-05-25-instant-signin';
 if (typeof window !== 'undefined') {
   console.info(`[AutoBook auth] bundle ${AUTH_BUNDLE_VERSION} loaded`);
 }
@@ -458,63 +458,50 @@ export async function signInWithPassword(email, password) {
     throw new Error(msg || `Sign-in failed: HTTP ${res.status}`);
   }
 
-  // Hydrate the SDK session so onAuthStateChange fires + the rest of
-  // the app (autosave, profile menu, paywalls) sees the user.
-  // Capped at 5s — setSession can itself wedge on the same SDK issue.
-  // If it does, we fall back to writing the auth token directly to
-  // localStorage so the next page load picks up the session.
-  if (data?.access_token && data?.refresh_token) {
+  // Don't await setSession at all — it wedges on some browsers and
+  // we don't need it to ship the user into the signed-in state.
+  // Instead we:
+  //   1) Write the SDK's session payload to localStorage immediately
+  //      so any later SDK init picks it up
+  //   2) Write our own user record (storeUser) so useAuthUser flips
+  //      the React tree to signed-in IMMEDIATELY
+  //   3) Fire setSession() in the background as a best-effort; if it
+  //      eventually completes the SDK has its session too
+  if (data?.access_token && data?.refresh_token && data?.user) {
     try {
-      await Promise.race([
-        supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        }),
-        new Promise((_, reject) => setTimeout(
-          () => reject(new Error('setSession timed out (5s)')),
-          5_000,
-        )),
-      ]);
-    } catch (e) {
-      console.warn('[signInWithPassword] setSession wedged; using bypass path (write tokens + write app user record + force-rerender)', e);
-      try {
-        // Write the SDK's session payload to localStorage in the v2
-        // format. If the SDK ever recovers it'll pick this up.
-        const projectRef = (supabaseUrl.match(/https?:\/\/([^.]+)\./) || [])[1] || 'project';
-        const sdkKey = `sb-${projectRef}-auth-token`;
-        const sdkPayload = {
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          token_type: 'bearer',
-          expires_in: data.expires_in || 3600,
-          expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
-          provider_token: null,
-          provider_refresh_token: null,
-          user: data.user,
-        };
-        localStorage.setItem(sdkKey, JSON.stringify(sdkPayload));
+      // 1) SDK localStorage payload (v2 format)
+      const projectRef = (supabaseUrl.match(/https?:\/\/([^.]+)\./) || [])[1] || 'project';
+      const sdkKey = `sb-${projectRef}-auth-token`;
+      localStorage.setItem(sdkKey, JSON.stringify({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        token_type: 'bearer',
+        expires_in: data.expires_in || 3600,
+        expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
+        provider_token: null,
+        provider_refresh_token: null,
+        user: data.user,
+      }));
 
-        // CRITICAL: also write our app's own user record directly so the
-        // UI doesn't have to wait on the SDK. useAuthUser subscribes to
-        // this — calling storeUser flips the entire React tree to the
-        // signed-in state instantly, no reload required. RPCs that need
-        // the JWT will lazy-pick it from localStorage when needed.
-        if (data.user) {
-          storeUser({
-            id: data.user.id,
-            email: data.user.email,
-            phone: data.user.phone || data.user.user_metadata?.phone || null,
-            tier: 'free',          // refreshed by refreshUserTier shortly
-            _fromBypass: true,
-          });
-          markSessionFresh(60_000);
-          // Kick the DB tier sync in the background.
-          setTimeout(() => { refreshUserTier().catch(() => {}); }, 100);
-        }
-      } catch (innerErr) {
-        console.error('[signInWithPassword] bypass path failed too', innerErr);
-        throw new Error('Sign-in succeeded server-side but could not be applied locally. Try clearing site data (DevTools → Application → Clear storage) and signing in again.');
-      }
+      // 2) Our user record — fires useAuthUser → React UI updates now
+      storeUser({
+        id: data.user.id,
+        email: data.user.email,
+        phone: data.user.phone || data.user.user_metadata?.phone || null,
+        tier: 'free',
+        _fromBypass: true,
+      });
+      markSessionFresh(60_000);
+
+      // 3) Background tier refresh + SDK hydration. We don't await.
+      setTimeout(() => { refreshUserTier().catch(() => {}); }, 100);
+      supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      }).catch((e) => console.info('[signInWithPassword] background setSession failed (non-fatal):', e?.message));
+    } catch (innerErr) {
+      console.error('[signInWithPassword] failed to persist session locally', innerErr);
+      throw new Error('Sign-in succeeded server-side but could not be applied locally. Try clearing site data (DevTools → Application → Clear storage) and signing in again.');
     }
   }
 
