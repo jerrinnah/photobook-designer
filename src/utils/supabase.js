@@ -197,9 +197,17 @@ export async function signInWithPassword(email, password) {
   }
   const { error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
   if (error) {
-    // Surface Supabase's "Invalid login credentials" in a friendlier way.
-    if (/invalid login/i.test(error.message)) {
-      throw new Error('Wrong email or password. New here? Use the magic link tab to sign up.');
+    // Supabase returns the same generic "Invalid login credentials" for
+    // both wrong-password AND email-not-confirmed cases (to avoid
+    // leaking account existence). Hint at both possibilities so the
+    // user knows to check their inbox / contact support — and so an
+    // admin reading a support ticket knows to try the ✔ Confirm
+    // button in the dashboard.
+    if (/invalid login|invalid credentials/i.test(error.message)) {
+      throw new Error("Sign-in failed. Either the password is wrong OR your email hasn't been confirmed yet — check your inbox for the confirmation link, or use 'Forgot password? Email me a link' below.");
+    }
+    if (/email.*not.*confirmed/i.test(error.message)) {
+      throw new Error("Your email isn't confirmed yet. Check your inbox for the confirmation link, or use 'Forgot password? Email me a link' below to get a fresh one.");
     }
     throw new Error(error.message);
   }

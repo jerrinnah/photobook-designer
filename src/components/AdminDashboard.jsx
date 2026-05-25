@@ -281,7 +281,12 @@ export default function AdminDashboard() {
                   <td style={{ ...cellStyle, color: '#888' }}>{formatDate(u.last_used_at)}</td>
                   <td style={{ ...cellStyle, color: '#666' }}>{formatDate(u.created_at)}</td>
                   <td style={cellStyle}>
-                    <UserRowActions email={u.email} adminPassword={password} onChanged={() => load(password)} />
+                    <UserRowActions
+                      email={u.email}
+                      adminPassword={password}
+                      verified={Boolean(u.verified)}
+                      onChanged={() => load(password)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -338,7 +343,7 @@ export default function AdminDashboard() {
 //                  trip) via the SECURITY DEFINER RPC in
 //                  SUPABASE_ADMIN_PASSWORD.sql. Useful for support
 //                  cases where the user can't access their inbox.
-function UserRowActions({ email, adminPassword, onChanged }) {
+function UserRowActions({ email, adminPassword, verified, onChanged }) {
   const [state, setState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
   const [errMsg, setErrMsg] = useState('');
   const [mode, setMode] = useState('idle'); // 'idle' | 'setting'
@@ -500,8 +505,41 @@ function UserRowActions({ email, adminPassword, onChanged }) {
     state === 'error' ? { bg: '#1a0808', fg: '#e05c5c', border: '#5a1a1a' } :
                         { bg: '#181818', fg: '#aaa',    border: '#2a2a2a' };
 
+  const confirmEmail = async () => {
+    if (state === 'sending') return;
+    if (!confirm(`Mark ${email} as confirmed?\n\nUse this when the user says they can't sign in even with the right password — that usually means their email_confirmed_at is null. Confirming lets them sign in immediately.`)) return;
+    setState('sending');
+    try {
+      const { data, error } = await supabase.rpc('confirm_user_email_admin', {
+        p_password: adminPassword,
+        p_email: email,
+      });
+      if (error) throw new Error(error.message);
+      if (data !== true) throw new Error('Server returned an unexpected response.');
+      onChanged?.();
+    } catch (err) {
+      alert(`Confirm failed: ${err.message}\n\nDid you install SUPABASE_ADMIN_CONFIRM.sql?`);
+      setState('idle');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', gap: 4 }}>
+      {!verified && (
+        <button
+          onClick={confirmEmail}
+          disabled={state === 'sending'}
+          title={`Mark ${email}'s email as confirmed so they can sign in with their password`}
+          style={{
+            padding: '4px 10px', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+            background: '#0e1a10', color: '#6fcf97',
+            border: '1px solid #2a4a2a',
+            borderRadius: 3, cursor: state === 'sending' ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          ✔ Confirm
+        </button>
+      )}
       <button
         onClick={sendReset}
         disabled={state === 'sending'}
