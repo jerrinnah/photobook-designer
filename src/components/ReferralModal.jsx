@@ -29,7 +29,19 @@ export default function ReferralModal({ open, onClose }) {
         });
         if (alive) setData(summary);
       } catch (e) {
-        if (alive) setErr(e.message);
+        if (!alive) return;
+        const msg = (e?.message || '').toLowerCase();
+        if (msg.includes('could not find the function') || msg.includes('404')) {
+          setErr(
+            "The referral program isn't installed in your Supabase project yet. " +
+            "Open Supabase SQL Editor and run SUPABASE_REFERRALS.sql " +
+            "(replace CHANGE_THIS_PASSWORD with your admin password before running)."
+          );
+        } else if (msg.includes('not signed in')) {
+          setErr("Sign in first — referral links are tied to your account.");
+        } else {
+          setErr(e.message);
+        }
       }
     })();
     return () => { alive = false; };
