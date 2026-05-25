@@ -407,22 +407,61 @@ export async function signInWithPassword(email, password) {
   if (!password || password.length < 8) {
     throw new Error('Password must be at least 8 characters.');
   }
-  const { error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
-  if (error) {
-    // Supabase returns the same generic "Invalid login credentials" for
-    // both wrong-password AND email-not-confirmed cases (to avoid
-    // leaking account existence). Hint at both possibilities so the
-    // user knows to check their inbox / contact support — and so an
-    // admin reading a support ticket knows to try the ✔ Confirm
-    // button in the dashboard.
-    if (/invalid login|invalid credentials/i.test(error.message)) {
+  // Direct POST to /auth/v1/token bypasses the supabase-js HTTP layer
+  // which has been wedging on some users' browsers — the SDK promise
+  // never resolves so the button stays stuck on "Signing in...".
+  // AbortController gives us a real hard cap on the request.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  let res, raw;
+  try {
+    res = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: trimmed, password }),
+    });
+    raw = await res.text();
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      throw new Error('Sign-in timed out after 15s. If this keeps happening, disable browser extensions (we saw runtime.lastError in your console — an extension is intercepting requests) or try an incognito window.');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let data = null;
+  try { data = JSON.parse(raw); } catch { /* keep raw */ }
+
+  if (!res.ok) {
+    const msg = (data?.error_description || data?.message || data?.error || raw || '').toString();
+    console.error('[signInWithPassword] non-2xx response', res.status, msg);
+    if (/invalid login|invalid credentials|invalid_grant|invalid email or password/i.test(msg)) {
       throw new Error("Sign-in failed. Either the password is wrong OR your email hasn't been confirmed yet — check your inbox for the confirmation link, or use 'Forgot password? Email me a link' below.");
     }
-    if (/email.*not.*confirmed/i.test(error.message)) {
+    if (/email.*not.*confirmed/i.test(msg)) {
       throw new Error("Your email isn't confirmed yet. Check your inbox for the confirmation link, or use 'Forgot password? Email me a link' below to get a fresh one.");
     }
-    throw new Error(error.message);
+    throw new Error(msg || `Sign-in failed: HTTP ${res.status}`);
   }
+
+  // Hydrate the SDK session so onAuthStateChange fires + the rest of
+  // the app (autosave, profile menu, paywalls) sees the user.
+  if (data?.access_token && data?.refresh_token) {
+    try {
+      await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+    } catch (e) {
+      console.warn('[signInWithPassword] setSession failed; tokens persisted but SDK state may be stale', e);
+    }
+  }
+
   try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
   // 30s grace period so the liveness check doesn't race a freshly
   // hydrating session and false-positive the user out.
