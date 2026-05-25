@@ -9,12 +9,15 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState(() => sessionStorage.getItem(PW_KEY) || '');
   const [pwInput, setPwInput] = useState('');
   const [stats, setStats] = useState(null);
+  const [overview, setOverview] = useState(null); // new richer overview (revenue, sparkline, tier mix)
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sortBy, setSortBy] = useState('created_at');
   const [sortDir, setSortDir] = useState('desc');
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(new Set()); // emails of bulk-selected rows
+  const [detailEmail, setDetailEmail] = useState(null); // open drawer for this user
 
   const load = async (pw) => {
     if (!isSupabaseConfigured) {
@@ -34,6 +37,12 @@ export default function AdminDashboard() {
       setUsers(Array.isArray(usersData) ? usersData : []);
       sessionStorage.setItem(PW_KEY, pw);
       setPassword(pw);
+
+      // Fetch the richer overview separately — don't block sign-in if
+      // the optional RPC isn't installed yet.
+      rpcDirect('get_overview_admin', { p_password: pw }, { label: 'Overview', timeoutMs: 15_000 })
+        .then((o) => setOverview(o))
+        .catch((e) => console.info('[Admin] overview RPC not installed yet (run SUPABASE_ADMIN_OVERVIEW.sql):', e?.message));
     } catch (err) {
       console.error('[AdminDashboard.load] failed', err);
       setError(err.message || 'Failed to load');
@@ -147,15 +156,46 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div style={{ padding: '20px 24px 8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <StatCard label="Total signups" value={stats.total_users} accent="#4f8ef7" />
-        <StatCard label="Premium users" value={stats.total_premium} accent="#f6c90e" />
-        <StatCard label="Photobooks created" value={stats.total_photobooks} accent="#6fcf97" />
-        <StatCard label="App sessions" value={stats.total_app_uses} accent="#b89fff" />
-        <StatCard label="Signups · 7d" value={stats.signups_last_7d} accent="#d4843a" />
-        <StatCard label="Signups · 30d" value={stats.signups_last_30d} accent="#e05c5c" />
-      </div>
+      {/* Top metric row — three KPIs with deltas. Falls back to the
+          old count cards when SUPABASE_ADMIN_OVERVIEW.sql isn't
+          installed yet. */}
+      {overview ? (
+        <>
+          <div style={{ padding: '20px 24px 8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <MetricCard
+              label="Revenue · 30d"
+              value={`₦${Number(overview.revenue_30d_ngn || 0).toLocaleString()}`}
+              delta={pctDelta(overview.revenue_30d_ngn, overview.revenue_prev_30d_ngn)}
+              accent="#f6c90e"
+            />
+            <MetricCard
+              label="Signups · 7d"
+              value={overview.signups_7d}
+              delta={pctDelta(overview.signups_7d, overview.signups_prev_7d)}
+              accent="#4f8ef7"
+            />
+            <MetricCard
+              label="Conversion"
+              value={`${overview.conversion_pct}%`}
+              hint={`${overview.paid_users} / ${overview.total_users} users on a paid plan`}
+              accent="#6fcf97"
+            />
+          </div>
+          <div style={{ padding: '8px 24px', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+            <Sparkline data={overview.sparkline || []} label="Signups · last 30 days" />
+            <TierMixDonut mix={overview.tier_mix || {}} />
+          </div>
+        </>
+      ) : (
+        <div style={{ padding: '20px 24px 8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <StatCard label="Total signups" value={stats.total_users} accent="#4f8ef7" />
+          <StatCard label="Premium users" value={stats.total_premium} accent="#f6c90e" />
+          <StatCard label="Photobooks created" value={stats.total_photobooks} accent="#6fcf97" />
+          <StatCard label="App sessions" value={stats.total_app_uses} accent="#b89fff" />
+          <StatCard label="Signups · 7d" value={stats.signups_last_7d} accent="#d4843a" />
+          <StatCard label="Signups · 30d" value={stats.signups_last_30d} accent="#e05c5c" />
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ padding: '8px 24px 24px', flex: 1, overflow: 'auto' }}>
@@ -171,10 +211,55 @@ export default function AdminDashboard() {
         {/* Grant tier to any email — even unverified ones */}
         <AddUserByEmail password={password} onAdded={() => load(password)} />
 
+        {/* Bulk-action bar — appears only when 1+ rows are selected */}
+        {selected.size > 0 && (
+          <BulkActionBar
+            count={selected.size}
+            onClear={() => setSelected(new Set())}
+            onSetTier={async (tier) => {
+              if (!confirm(`Set ${selected.size} user${selected.size === 1 ? '' : 's'} to ${tier.toUpperCase()}?`)) return;
+              for (const email of selected) {
+                try {
+                  await rpcDirect('set_tier_by_email_admin', {
+                    p_password: password, p_email: email, p_tier: tier,
+                  }, { label: 'Bulk set tier', timeoutMs: 15_000 });
+                } catch (err) { alert(`Failed for ${email}: ${err.message}`); }
+              }
+              setSelected(new Set());
+              await load(password);
+            }}
+            onDelete={async () => {
+              if (!confirm(`Permanently delete ${selected.size} user${selected.size === 1 ? '' : 's'}? This cannot be undone.`)) return;
+              for (const email of selected) {
+                try {
+                  await rpcDirect('delete_user_admin', {
+                    p_password: password, p_email: email,
+                  }, { label: 'Bulk delete', timeoutMs: 15_000 });
+                } catch (err) { alert(`Failed for ${email}: ${err.message}`); }
+              }
+              setSelected(new Set());
+              await load(password);
+            }}
+          />
+        )}
+
         <div style={{ background: '#111', borderRadius: 8, overflow: 'hidden', border: '1px solid #1a1a1a' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0c0c0c' }}>
+                <th style={{
+                  textAlign: 'center', padding: '10px 8px', width: 32,
+                  borderBottom: '1px solid #1a1a1a',
+                }}>
+                  <input type="checkbox"
+                    checked={sorted.length > 0 && selected.size === sorted.length}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelected(new Set(sorted.map((u) => u.email)));
+                      else setSelected(new Set());
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 {[
                   ['email', 'Email'],
                   ['verified', 'Status'],
@@ -206,12 +291,34 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {sorted.length === 0 && (
-                <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
+                <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#555' }}>
                   {users.length === 0 ? 'No signups yet.' : 'No matches.'}
                 </td></tr>
               )}
               {sorted.map((u) => (
-                <tr key={u.email} style={{ borderBottom: '1px solid #161616' }}>
+                <tr key={u.email}
+                  onClick={(e) => {
+                    // Skip drawer open if user clicked checkbox / actions
+                    if (e.target.closest('input,select,button,a')) return;
+                    setDetailEmail(u.email);
+                  }}
+                  style={{
+                    borderBottom: '1px solid #161616',
+                    background: selected.has(u.email) ? '#0e1620' : 'transparent',
+                    cursor: 'pointer',
+                  }}>
+                  <td style={{ textAlign: 'center', padding: '8px 4px' }}>
+                    <input type="checkbox"
+                      checked={selected.has(u.email)}
+                      onChange={(e) => {
+                        const next = new Set(selected);
+                        if (e.target.checked) next.add(u.email);
+                        else next.delete(u.email);
+                        setSelected(next);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={cellStyle}>{u.email}</td>
                   <td style={cellStyle}>
                     <span style={{
@@ -317,6 +424,131 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Row-click user detail drawer */}
+      {detailEmail && (
+        <UserDetailDrawer
+          email={detailEmail}
+          adminPassword={password}
+          onClose={() => setDetailEmail(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function UserDetailDrawer({ email, adminPassword, onClose }) {
+  const [data, setData] = useState(null);
+  const [loadErr, setLoadErr] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    rpcDirect('get_user_detail_admin', {
+      p_password: adminPassword, p_email: email,
+    }, { label: 'User detail', timeoutMs: 15_000 })
+      .then((d) => { if (alive) setData(d); })
+      .catch((e) => { if (alive) setLoadErr(e.message); });
+    return () => { alive = false; };
+  }, [email, adminPassword]);
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 300,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', justifyContent: 'flex-end',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: '#111', borderLeft: '1px solid #1f1f1f',
+        width: 480, maxWidth: '92vw', height: '100%',
+        overflowY: 'auto', boxShadow: '-20px 0 40px rgba(0,0,0,0.5)',
+        color: '#e0e0e0', padding: '20px 22px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{email}</div>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', color: '#666',
+            fontSize: 18, cursor: 'pointer', padding: '4px 8px',
+          }}>✕</button>
+        </div>
+
+        {!data && !loadErr && <div style={{ color: '#666', fontSize: 12 }}>Loading…</div>}
+        {loadErr && (
+          <div style={{
+            padding: '10px 12px', background: '#1a0808', border: '1px solid #5a1a1a',
+            color: '#e05c5c', fontSize: 11, borderRadius: 5,
+          }}>
+            {loadErr}<br />Did you install SUPABASE_ADMIN_OVERVIEW.sql?
+          </div>
+        )}
+
+        {data && (
+          <>
+            <Section title="Account">
+              <Field label="Tier" value={<span style={{ color: '#f6c90e' }}>{data.user.tier || 'free'}</span>} />
+              <Field label="User ID" value={<code style={{ fontSize: 10, color: '#888' }}>{data.user.id}</code>} />
+              <Field label="Phone" value={data.user.phone || '—'} />
+              <Field label="Joined" value={formatDate(data.user.created_at)} />
+              <Field label="Last used" value={formatDate(data.user.last_used_at)} />
+              <Field label="Photobooks" value={data.user.photobook_count ?? 0} />
+              <Field label="Sessions" value={data.user.app_use_count ?? 0} />
+            </Section>
+
+            <Section title="Auth">
+              <Field label="Email confirmed" value={data.auth.email_confirmed_at ? formatDate(data.auth.email_confirmed_at) : <span style={{ color: '#e05c5c' }}>○ Pending</span>} />
+              <Field label="Last sign-in" value={formatDate(data.auth.last_sign_in_at)} />
+              <Field label="Banned" value={data.auth.banned_until ? <span style={{ color: '#e05c5c' }}>Until {formatDate(data.auth.banned_until)}</span> : '—'} />
+              <Field label="Deleted" value={data.auth.deleted_at ? <span style={{ color: '#e05c5c' }}>Yes — {formatDate(data.auth.deleted_at)}</span> : '—'} />
+            </Section>
+
+            <Section title={`Payments (${data.payments.length})`}>
+              {data.payments.length === 0 ? (
+                <div style={{ color: '#555', fontSize: 11 }}>No payments yet.</div>
+              ) : (
+                data.payments.map((p) => (
+                  <div key={p.reference} style={{
+                    padding: '8px 10px', marginBottom: 6,
+                    background: '#0c0c0c', border: '1px solid #1a1a1a', borderRadius: 5,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 13, color: '#e8e8e8', fontVariantNumeric: 'tabular-nums' }}>
+                        {p.currency} {Number(p.amount).toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 10, color: p.status === 'verified' ? '#6fcf97' : p.status === 'failed' ? '#e05c5c' : '#f6c90e' }}>
+                        {p.status}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                      {formatDate(p.created_at)} · <code>{p.reference}</code>
+                    </div>
+                  </div>
+                ))
+              )}
+            </Section>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{
+        fontSize: 10, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase',
+        marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid #1a1a1a',
+      }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 11 }}>
+      <span style={{ color: '#888' }}>{label}</span>
+      <span style={{ color: '#ddd' }}>{value}</span>
     </div>
   );
 }
@@ -682,6 +914,151 @@ function StatCard({ label, value, accent }) {
       </div>
       <div style={{ fontSize: 24, fontWeight: 600, color: '#e8e8e8', fontVariantNumeric: 'tabular-nums' }}>
         {value ?? '—'}
+      </div>
+    </div>
+  );
+}
+
+function BulkActionBar({ count, onClear, onSetTier, onDelete }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '10px 14px', marginBottom: 10,
+      background: '#0e1620', border: '1px solid #1e3a5f',
+      borderRadius: 6,
+    }}>
+      <span style={{ fontSize: 12, color: '#9fb8d8', fontWeight: 600 }}>
+        {count} selected
+      </span>
+      <span style={{ flex: 1 }} />
+      <button onClick={() => onSetTier('free')} style={bulkBtn('#aaa')}>→ Free</button>
+      <button onClick={() => onSetTier('starter')} style={bulkBtn('#6fb8d8')}>→ Starter</button>
+      <button onClick={() => onSetTier('pro')} style={bulkBtn('#f6c90e')}>→ Pro</button>
+      <button onClick={onDelete} style={bulkBtn('#e05c5c')}>🗑 Delete</button>
+      <button onClick={onClear} style={{ ...bulkBtn('#666'), background: 'transparent', border: 'none' }}>✕ Clear</button>
+    </div>
+  );
+}
+
+const bulkBtn = (color) => ({
+  padding: '5px 12px', fontSize: 11, fontWeight: 600,
+  background: '#181818', color,
+  border: `1px solid ${color}40`,
+  borderRadius: 4, cursor: 'pointer',
+});
+
+function MetricCard({ label, value, delta, hint, accent }) {
+  const trend = delta == null ? null
+    : delta > 0 ? { color: '#6fcf97', sign: '↑' }
+    : delta < 0 ? { color: '#e05c5c', sign: '↓' }
+    : { color: '#666', sign: '·' };
+  return (
+    <div style={{
+      background: '#111', border: '1px solid #1a1a1a', borderRadius: 8,
+      padding: '14px 18px', borderLeft: `3px solid ${accent}`,
+    }}>
+      <div style={{ fontSize: 10, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <div style={{ fontSize: 26, fontWeight: 600, color: '#e8e8e8', fontVariantNumeric: 'tabular-nums' }}>
+          {value ?? '—'}
+        </div>
+        {trend && (
+          <div style={{ fontSize: 11, color: trend.color, fontWeight: 600 }}>
+            {trend.sign} {Math.abs(delta)}% vs prev
+          </div>
+        )}
+      </div>
+      {hint && (
+        <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>{hint}</div>
+      )}
+    </div>
+  );
+}
+
+function pctDelta(curr, prev) {
+  const c = Number(curr) || 0;
+  const p = Number(prev) || 0;
+  if (p === 0) return c > 0 ? 100 : null;
+  return Math.round(((c - p) / p) * 100);
+}
+
+// Inline SVG sparkline — no chart library dependency.
+function Sparkline({ data, label }) {
+  const values = Array.isArray(data) ? data.map((d) => Number(d.daily) || 0) : [];
+  const max = Math.max(1, ...values);
+  const w = 480, h = 64, pad = 4;
+  const points = values.map((v, i) => {
+    const x = pad + (i * (w - pad * 2)) / Math.max(1, values.length - 1);
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(' ');
+  const total = values.reduce((s, v) => s + v, 0);
+  const lastDate = data?.[data.length - 1]?.d;
+  return (
+    <div style={{
+      background: '#111', border: '1px solid #1a1a1a', borderRadius: 8,
+      padding: '14px 18px',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#888' }}>{total} total · through {lastDate || '—'}</span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: 64, display: 'block' }}>
+        <polyline points={points} fill="none" stroke="#4f8ef7" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+        <polygon points={`${pad},${h - pad} ${points} ${w - pad},${h - pad}`} fill="#4f8ef7" opacity="0.12" />
+      </svg>
+    </div>
+  );
+}
+
+// Donut tier mix — pure SVG.
+function TierMixDonut({ mix }) {
+  const free = Number(mix.free) || 0;
+  const starter = Number(mix.starter) || 0;
+  const pro = Number(mix.pro) || 0;
+  const total = free + starter + pro;
+  const segs = total === 0
+    ? [{ color: '#1a1a1a', frac: 1, label: 'No users yet' }]
+    : [
+        { color: '#4a4a4a', frac: free / total,    label: `Free ${free}` },
+        { color: '#6fb8d8', frac: starter / total, label: `Starter ${starter}` },
+        { color: '#f6c90e', frac: pro / total,     label: `Pro ${pro}` },
+      ];
+  const R = 28, C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div style={{
+      background: '#111', border: '1px solid #1a1a1a', borderRadius: 8,
+      padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
+    }}>
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r={R} fill="none" stroke="#1a1a1a" strokeWidth="10" />
+        {segs.map((s, i) => {
+          const len = s.frac * C;
+          const seg = (
+            <circle key={i} cx="40" cy="40" r={R} fill="none"
+              stroke={s.color} strokeWidth="10"
+              strokeDasharray={`${len} ${C - len}`}
+              strokeDashoffset={-offset}
+              transform="rotate(-90 40 40)"
+            />
+          );
+          offset += len;
+          return seg;
+        })}
+      </svg>
+      <div>
+        <div style={{ fontSize: 10, color: '#666', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+          Tier mix
+        </div>
+        {segs.map((s, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#bbb', marginBottom: 2 }}>
+            <span style={{ width: 8, height: 8, background: s.color, borderRadius: 2, display: 'inline-block' }} />
+            <span>{s.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
