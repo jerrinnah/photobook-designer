@@ -102,6 +102,9 @@ export async function sendMagicLink(email, pendingPhone = null) {
   // should skip the marketing landing on future visits regardless of
   // whether they clicked the link.
   try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+  // 30s grace period so the liveness check doesn't race a freshly
+  // hydrating session and false-positive the user out.
+  markSessionFresh();
 }
 
 // Has this visitor ever started the auth flow OR successfully signed in?
@@ -157,28 +160,60 @@ export async function signOut() {
 // is still real — call it on tab focus / visibilitychange / a slow
 // polling interval to force-sign-out deleted users within seconds
 // of them coming back to the app.
+//
+// CRITICAL: be conservative. False positives sign legitimate users
+// out — much worse than letting a deleted user keep their tab open
+// for an extra minute. Only sign out when we're CERTAIN the user
+// row is gone (HTTP 404 / "user from sub claim in JWT does not
+// exist" / explicit "user_not_found"). Generic "session" / "jwt"
+// errors are NOT enough — those happen during normal token refresh.
+function isUserDeletedError(error) {
+  if (!error) return false;
+  const msg = (error.message || '').toLowerCase();
+  // Supabase Auth returns one of these on a deleted user:
+  //   "User from sub claim in JWT does not exist"
+  //   "user_not_found"
+  // HTTP 404 from the user-info endpoint is also a strong signal.
+  return msg.includes('user from sub claim') ||
+         msg.includes('user_not_found') ||
+         msg.includes('user not found') ||
+         error.status === 404;
+}
+
 async function isSessionStillValid() {
   if (!isSupabaseConfigured) return true;
   try {
     const { data: { user }, error } = await supabase.auth.getUser();
-    // No user OR explicit "user not found" → the row is gone.
     if (error) {
-      const msg = (error.message || '').toLowerCase();
-      if (msg.includes('user not found') || msg.includes('user_not_found') ||
-          msg.includes('jwt') || msg.includes('session') || msg.includes('invalid')) {
+      if (isUserDeletedError(error)) {
+        console.warn('[auth] user-deleted signal from server:', error.message);
         return false;
       }
-      // Other errors (network glitch, 503) — assume valid, don't sign out.
+      // Any other error (network, 503, session refresh race, etc.) →
+      // assume valid. We do NOT sign the user out for transient issues.
       return true;
     }
-    return Boolean(user?.id);
-  } catch {
-    // Network failure — assume valid; we don't want offline use to log people out.
+    // getUser() returned no error AND no user → user is gone.
+    if (!user?.id) {
+      console.warn('[auth] getUser returned no user — treating as deleted.');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    // Network failure (fetch threw) — assume valid; don't kick users offline.
+    console.info('[auth] liveness check network error, assuming valid:', e?.message);
     return true;
   }
 }
 
 let _livenessStopFns = [];
+// Used to give the user a grace period after sign-in — if a getUser
+// call races with session propagation, we don't want to log them out.
+let _sessionGraceUntil = 0;
+export function markSessionFresh(ms = 30_000) {
+  _sessionGraceUntil = Date.now() + ms;
+}
+
 export function startSessionLivenessCheck() {
   if (typeof window === 'undefined') return () => {};
   // Avoid stacking listeners across re-renders / HMR.
@@ -186,6 +221,7 @@ export function startSessionLivenessCheck() {
 
   const verifyAndKickIfGone = async () => {
     if (!getStoredUser()) return; // not signed in — nothing to verify
+    if (Date.now() < _sessionGraceUntil) return; // just signed in — skip
     const ok = await isSessionStillValid();
     if (!ok) {
       console.warn('[auth] session no longer valid — server-side account was deleted or revoked. Signing out.');
@@ -208,8 +244,10 @@ export function startSessionLivenessCheck() {
     () => window.removeEventListener('focus', onFocus),
     () => clearInterval(interval),
   );
-  // Fire once immediately so we don't wait for the first event.
-  verifyAndKickIfGone();
+  // Don't fire immediately on mount — give the page time to hydrate
+  // any pending magic-link / password-signup session first. Skip if
+  // we're inside the post-signin grace window.
+  setTimeout(verifyAndKickIfGone, 5_000);
   return stopSessionLivenessCheck;
 }
 export function stopSessionLivenessCheck() {
@@ -258,6 +296,9 @@ export async function signUpWithPassword(email, password, phone) {
     await supabase.auth.signInWithPassword({ email: trimmed, password });
   } catch { /* signUp() typically already creates a session */ }
   try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+  // 30s grace period so the liveness check doesn't race a freshly
+  // hydrating session and false-positive the user out.
+  markSessionFresh();
 }
 
 export async function signInWithPassword(email, password) {
@@ -286,6 +327,9 @@ export async function signInWithPassword(email, password) {
     throw new Error(error.message);
   }
   try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+  // 30s grace period so the liveness check doesn't race a freshly
+  // hydrating session and false-positive the user out.
+  markSessionFresh();
 }
 
 // Sets (or changes) the current user's password. Requires an active
@@ -396,6 +440,9 @@ export function onAuthStateChange(callback) {
       return;
     }
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      // 30s liveness-check grace so the session-validity probe doesn't
+      // race the freshly hydrated token and false-positive a sign-out.
+      markSessionFresh();
       const profile = await syncProfileAfterAuth();
       // If sync failed (network, RPC blip), keep the cached profile —
       // DO NOT pass null and accidentally sign the user out.
