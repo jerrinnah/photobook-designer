@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sendMagicLink, signInWithPassword, signUpWithPassword, isSupabaseConfigured } from '../utils/supabase';
+import PasswordInput from './PasswordInput';
 
 // Sign-in / sign-up modal:
 //   - "Sign in" tab: existing users — email + password
@@ -157,8 +158,8 @@ export default function AuthModal({ open, onClose, action, onAuthed }) {
             </label>
             <label style={{ display: 'block', marginBottom: mode === 'signup' ? 12 : 14 }}>
               <span style={labelStyle}>Password</span>
-              <input
-                type="password" required minLength={8}
+              <PasswordInput
+                required minLength={8}
                 value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 8 characters"
                 style={inputStyle}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey, rpcDirect } from '../utils/supabase';
+import PasswordInput from './PasswordInput';
 import { PREMIUM_FEATURES, FREE_FEATURES } from '../utils/premium';
 
 const PW_KEY = 'admin-password-v1';
@@ -99,8 +100,8 @@ export default function AdminDashboard() {
             Enter the admin password to view signups and stats.
           </div>
           <form onSubmit={(e) => { e.preventDefault(); if (pwInput.trim()) load(pwInput.trim()); }}>
-            <input
-              type="password" autoFocus
+            <PasswordInput
+              autoFocus
               value={pwInput}
               onChange={(e) => setPwInput(e.target.value)}
               placeholder="Admin password"

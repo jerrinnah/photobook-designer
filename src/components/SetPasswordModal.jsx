@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { setMyPassword } from '../utils/supabase';
+import PasswordInput from './PasswordInput';
 
 // Lets a signed-in user set or change their password so they don't
 // have to wait for a magic link on every visit.
@@ -74,8 +75,8 @@ export default function SetPasswordModal({ open, onClose }) {
           <form onSubmit={handleSave}>
             <label style={{ display: 'block', marginBottom: 12 }}>
               <span style={labelStyle}>New password</span>
-              <input
-                type="password" autoFocus required minLength={8}
+              <PasswordInput
+                autoFocus required minLength={8}
                 value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 8 characters"
                 style={inputStyle}
@@ -83,8 +84,8 @@ export default function SetPasswordModal({ open, onClose }) {
             </label>
             <label style={{ display: 'block', marginBottom: 14 }}>
               <span style={labelStyle}>Confirm password</span>
-              <input
-                type="password" required minLength={8}
+              <PasswordInput
+                required minLength={8}
                 value={confirm} onChange={(e) => setConfirm(e.target.value)}
                 placeholder="Re-enter password"
                 style={inputStyle}
