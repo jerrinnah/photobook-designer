@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 // bundle. Log it once on module load — admins can ask users to open
 // DevTools → Console → search for [AutoBook auth] to see what's
 // running in their browser.
-const AUTH_BUNDLE_VERSION = '2026-05-25-direct-fetch';
+const AUTH_BUNDLE_VERSION = '2026-05-25-reload-after-fallback';
 if (typeof window !== 'undefined') {
   console.info(`[AutoBook auth] bundle ${AUTH_BUNDLE_VERSION} loaded`);
 }
@@ -476,7 +476,7 @@ export async function signInWithPassword(email, password) {
         )),
       ]);
     } catch (e) {
-      console.warn('[signInWithPassword] setSession failed; writing token directly to localStorage as fallback', e);
+      console.warn('[signInWithPassword] setSession failed; writing token directly to localStorage and reloading', e);
       try {
         // Match the SDK's localStorage key format. Project ref is the
         // first subdomain of the Supabase URL (e.g. xyzabc.supabase.co
@@ -492,8 +492,21 @@ export async function signInWithPassword(email, password) {
           user: data.user,
         };
         localStorage.setItem(key, JSON.stringify(payload));
+        // Mark fresh + engaged BEFORE reload so the post-reload init
+        // hydrates cleanly without the liveness check racing.
+        try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+        markSessionFresh(60_000);
+        // Reload so the SDK re-initializes and picks up the session
+        // from localStorage. INITIAL_SESSION fires → onAuthStateChange
+        // → user is signed in. No way to recover state in-place when
+        // setSession wedges — reload is the reliable path.
+        console.info('[signInWithPassword] reloading to apply session...');
+        window.location.assign(window.location.pathname);
+        // Caller's "Signing in..." spinner stays until reload — that's fine.
+        return;
       } catch (innerErr) {
         console.error('[signInWithPassword] localStorage fallback also failed', innerErr);
+        throw new Error('Sign-in succeeded server-side but could not be applied locally. Try clearing site data (DevTools → Application → Clear storage) and signing in again.');
       }
     }
   }
