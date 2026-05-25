@@ -12,6 +12,7 @@ import { useAuthUser } from '../utils/supabase';
 import { useBookStore } from '../store/useBookStore';
 import { getActiveProjectId } from '../store/projects';
 import DesktopDownloads from './DesktopDownloads';
+import AuthModal from './AuthModal';
 
 // ── Direct-payment fallback ────────────────────────────────────────────
 // If the Paystack inline popup misbehaves (network glitch, popup blocked,
@@ -27,6 +28,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
   const [paying, setPaying] = useState(false); // 'starter' | 'pro' | 'book' | false
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [authPrompt, setAuthPrompt] = useState(null); // 'starter' | 'pro' | 'book' | null — pending plan after signup
   const user = useAuthUser();
   const spreads = useBookStore((s) => s.spreads);
   const { code: currencyCode, set: setCurrency, currency, available } = useCurrency();
@@ -36,8 +38,19 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
   const bookPrice = priceForProject(spreads, currencyCode);
   const projectId = getActiveProjectId();
 
-  const handlePay = async (plan) => {
-    if (!canPay || paying) return;
+  // Click intent gets remembered so we can resume after sign-up. The
+  // resume runs immediately from AuthModal's onAuthed callback (which
+  // fires AFTER the user record is hydrated) instead of relying on a
+  // useEffect dependency on `user`.
+  const handlePlanClick = (plan) => {
+    if (paying || success) return;
+    if (!isPaystackConfigured()) { setError('Payments not configured yet.'); return; }
+    if (!user?.email) { setAuthPrompt(plan); return; }
+    if (plan === 'book') doPayPerBook(); else doPay(plan);
+  };
+
+  const doPay = async (plan) => {
+    if (!user?.email || paying) return;
     setError(null);
     setPaying(plan);
     try {
@@ -52,8 +65,8 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
     }
   };
 
-  const handlePayPerBook = async () => {
-    if (!canPay || paying) return;
+  const doPayPerBook = async () => {
+    if (!user?.email || paying) return;
     if (!projectId) { setError('Open or create a project first.'); return; }
     if (bookPrice.totalNGN <= 0) { setError('This book has no spreads to unlock yet.'); return; }
     setError(null);
@@ -125,7 +138,10 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
           <div style={warnBox}>⚠ Paystack not configured. Owner: set VITE_PAYSTACK_PUBLIC_KEY in .env.production.</div>
         )}
         {!user?.email && (
-          <div style={warnBox}>Sign in first (Save or Export a photobook) — your account needs an email so the receipt can be sent.</div>
+          <div style={{ ...warnBox, background: '#0c1620', borderColor: '#1e3a5f', color: '#9fb8d8' }}>
+            Tap any plan below — we'll create your account on the same screen
+            (email + password, no email round-trip) before opening Paystack.
+          </div>
         )}
 
         {/* Currency selector */}
@@ -175,8 +191,8 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
               bookPrice.total > 0 ? `Pay ${formatMoney(bookPrice.total, currencyCode)} for this book` :
               'Add photos to a spread first'
             }
-            onClick={handlePayPerBook}
-            disabled={!canPay || paying || success || bookPrice.total <= 0}
+            onClick={() => handlePlanClick('book')}
+            disabled={paying || success || bookPrice.total <= 0 || !isPaystackConfigured()}
             success={success === 'book'}
           />
           {/* STARTER */}
@@ -192,8 +208,8 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
               paying === 'starter' ? 'Opening Paystack…' :
               `Choose Starter · ${formatPrice('starter', currencyCode)}`
             }
-            onClick={() => handlePay('starter')}
-            disabled={!canPay || paying || success}
+            onClick={() => handlePlanClick('starter')}
+            disabled={paying || success || !isPaystackConfigured()}
             success={success === 'starter'}
           />
           {/* PRO */}
@@ -210,8 +226,8 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
               paying === 'pro' ? 'Opening Paystack…' :
               `Choose Pro · ${formatPrice('pro', currencyCode)}`
             }
-            onClick={() => handlePay('pro')}
-            disabled={!canPay || paying || success}
+            onClick={() => handlePlanClick('pro')}
+            disabled={paying || success || !isPaystackConfigured()}
             success={success === 'pro'}
           />
         </div>
@@ -263,6 +279,25 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
           <button onClick={onClose} disabled={Boolean(paying)} style={btnGhost}>Not now</button>
         </div>
       </div>
+
+      {/* Stacked auth modal — opens when an unauthed user clicks a
+          plan. After successful signup/sign-in, the pending plan
+          fires automatically so the user makes a single click and
+          lands in the Paystack popup. */}
+      <AuthModal
+        open={Boolean(authPrompt)}
+        action="signup"
+        onClose={() => setAuthPrompt(null)}
+        onAuthed={() => {
+          const pending = authPrompt;
+          setAuthPrompt(null);
+          // Defer one tick so useAuthUser hydrates before doPay reads `user`.
+          setTimeout(() => {
+            if (pending === 'book') doPayPerBook();
+            else if (pending) doPay(pending);
+          }, 50);
+        }}
+      />
     </div>
   );
 }

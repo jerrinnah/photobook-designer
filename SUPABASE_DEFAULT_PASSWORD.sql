@@ -45,13 +45,21 @@ set search_path = public, extensions, auth
 as $$
 declare
   v_pw text;
+  v_had_password boolean := NEW.encrypted_password is not null and NEW.encrypted_password <> '';
 begin
-  -- Skip if a password is already present — this is either an admin-
-  -- created user or a re-signup somehow with an existing hash.
-  if NEW.encrypted_password is not null and NEW.encrypted_password <> '' then
+  -- If the user signed up WITH a password (e.g. the AuthModal Sign-up
+  -- tab) we auto-confirm their email so they can sign in immediately
+  -- and proceed to pay without a second round-trip through their inbox.
+  -- (Password-based signup implies the user is here and active.)
+  if v_had_password then
+    NEW.email_confirmed_at := coalesce(NEW.email_confirmed_at, now());
     return NEW;
   end if;
 
+  -- Magic-link / OTP signup path: generate a default password so the
+  -- email template can show "Or sign in with email + password".
+  -- email_confirmed_at stays null — the magic link itself confirms it.
+  --
   -- 12 chars, mixed alphanum, no ambiguous 0/O/1/l/I characters so
   -- the user can read it off a phone screen without confusion.
   v_pw := (

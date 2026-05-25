@@ -281,7 +281,7 @@ export default function AdminDashboard() {
                   <td style={{ ...cellStyle, color: '#888' }}>{formatDate(u.last_used_at)}</td>
                   <td style={{ ...cellStyle, color: '#666' }}>{formatDate(u.created_at)}</td>
                   <td style={cellStyle}>
-                    <UserRowActions email={u.email} adminPassword={password} />
+                    <UserRowActions email={u.email} adminPassword={password} onChanged={() => load(password)} />
                   </td>
                 </tr>
               ))}
@@ -338,7 +338,7 @@ export default function AdminDashboard() {
 //                  trip) via the SECURITY DEFINER RPC in
 //                  SUPABASE_ADMIN_PASSWORD.sql. Useful for support
 //                  cases where the user can't access their inbox.
-function UserRowActions({ email, adminPassword }) {
+function UserRowActions({ email, adminPassword, onChanged }) {
   const [state, setState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
   const [errMsg, setErrMsg] = useState('');
   const [mode, setMode] = useState('idle'); // 'idle' | 'setting'
@@ -527,6 +527,38 @@ function UserRowActions({ email, adminPassword }) {
         }}
       >
         🔒 Set PW
+      </button>
+      <button
+        onClick={async () => {
+          const typed = window.prompt(
+            `Permanently delete ${email}?\n\nThis hard-deletes the auth user, public.users row, sessions, and identities. There is no undo.\n\nType DELETE to confirm:`,
+            ''
+          );
+          if (typed !== 'DELETE') return;
+          setState('sending');
+          try {
+            const { data, error } = await supabase.rpc('delete_user_admin', {
+              p_password: adminPassword,
+              p_email: email,
+            });
+            if (error) throw new Error(error.message);
+            if (data !== true) throw new Error('Server returned an unexpected response.');
+            onChanged?.();
+          } catch (err) {
+            alert(`Delete failed: ${err.message}`);
+            setState('idle');
+          }
+        }}
+        disabled={state === 'sending'}
+        title={`Permanently delete ${email}`}
+        style={{
+          padding: '4px 10px', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+          background: '#1a0808', color: '#e05c5c',
+          border: '1px solid #5a1a1a',
+          borderRadius: 3, cursor: state === 'sending' ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        🗑 Delete
       </button>
     </div>
   );

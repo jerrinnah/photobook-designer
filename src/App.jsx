@@ -41,6 +41,25 @@ export default function App() {
     return () => window.removeEventListener('autobook:start-tour', onReplay);
   }, []);
 
+  // If the user landed here via a landing-page CTA (e.g. ?plan=pro),
+  // surface the UpgradeModal preselected to that plan. Toolbar owns
+  // the modal and listens for autobook:open-upgrade.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const plan = params.get('plan');
+    if (!plan) return;
+    // Defer one frame so Toolbar has mounted its listener.
+    const t = setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('autobook:open-upgrade', { detail: { plan } }));
+      // Strip the param so a refresh doesn't keep re-opening the modal.
+      params.delete('plan');
+      const next = params.toString();
+      window.history.replaceState({}, '', next ? `?${next}` : window.location.pathname);
+    }, 50);
+    return () => clearTimeout(t);
+  }, []);
+
   // Routes (URL-based)
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);

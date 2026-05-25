@@ -13,7 +13,15 @@ import SupportModal from './SupportModal';
 
 export default function LandingPage() {
   const [supportOpen, setSupportOpen] = useState(false);
-  const goToEditor = () => { window.location.href = '?app=1'; };
+  const goToEditor = (intent) => {
+    // `intent` opens a specific flow when the editor mounts.
+    // ?plan=pro / ?plan=starter / ?plan=book → auto-opens UpgradeModal
+    // with that plan preselected, including the signup-then-pay path.
+    const qs = intent && typeof intent === 'string'
+      ? `?app=1&plan=${encodeURIComponent(intent)}`
+      : '?app=1';
+    window.location.href = qs;
+  };
   const goToPricing = () => {
     document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -396,7 +404,7 @@ function Pricing({ onTry }) {
           tagline="2-3 books per quarter"
           bullets={STARTER_FEATURES.map((f) => f.name)}
           cta="Choose Starter"
-          onClick={onTry}
+          onClick={() => onTry('starter')}
         />
         <PlanCard
           highlight
@@ -415,7 +423,7 @@ function Pricing({ onTry }) {
             'New templates as we ship them',
           ]}
           cta="Choose Pro"
-          onClick={onTry}
+          onClick={() => onTry('pro')}
         />
       </div>
 

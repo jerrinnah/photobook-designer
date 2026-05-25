@@ -115,6 +115,21 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     };
   }, []);
   const [upgradeReason, setUpgradeReason] = useState(null); // 'export' | 'plans' | null
+
+  // App.jsx fires this when ?plan=pro / ?plan=starter is in the URL
+  // (landing-page Choose Pro / Choose Starter CTA). UpgradeModal then
+  // walks the user through signup-then-pay.
+  useEffect(() => {
+    const onOpen = (e) => {
+      // The plan param is forwarded as detail for future use; the modal
+      // itself doesn't need it to render — the user picks the plan
+      // from the cards inside.
+      void e?.detail?.plan;
+      setUpgradeReason('plans');
+    };
+    window.addEventListener('autobook:open-upgrade', onOpen);
+    return () => window.removeEventListener('autobook:open-upgrade', onOpen);
+  }, []);
   // The export action queued behind a paywall — runs after per-book unlock.
   const pendingExportRef = useRef(null);
 

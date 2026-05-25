@@ -149,6 +149,43 @@ export async function signOut() {
 // password from the profile menu — subsequent sign-ins can then use
 // either method.
 
+// One-shot signup with email + password. The BEFORE INSERT trigger in
+// SUPABASE_DEFAULT_PASSWORD.sql auto-confirms the email when a password
+// is present, so the user is signed in immediately and can proceed to
+// pay without an inbox round-trip. Optional phone is mirrored into the
+// public.users row via the signup_user RPC (best-effort).
+export async function signUpWithPassword(email, password, phone) {
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  const trimmed = (email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    throw new Error('Please enter a valid email.');
+  }
+  if (!password || password.length < 8) {
+    throw new Error('Password must be at least 8 characters.');
+  }
+  const { error: signUpErr } = await supabase.auth.signUp({
+    email: trimmed,
+    password,
+    options: phone ? { data: { phone } } : undefined,
+  });
+  if (signUpErr) {
+    if (/already registered|already exists|user.*exists/i.test(signUpErr.message)) {
+      throw new Error('An account already exists for this email. Use Sign in instead.');
+    }
+    throw new Error(signUpErr.message);
+  }
+  // Best-effort: mirror phone into public.users (and ensure row exists).
+  if (phone) {
+    try { await signUp({ email: trimmed, phone }); } catch { /* non-fatal */ }
+  }
+  // The trigger auto-confirmed the email AND we have a session now —
+  // explicitly sign in so the SDK definitely has the user loaded.
+  try {
+    await supabase.auth.signInWithPassword({ email: trimmed, password });
+  } catch { /* signUp() typically already creates a session */ }
+  try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
+}
+
 export async function signInWithPassword(email, password) {
   if (!isSupabaseConfigured) throw new Error('Backend not configured.');
   const trimmed = email.trim().toLowerCase();

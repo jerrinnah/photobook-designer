@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { sendMagicLink, signInWithPassword, isSupabaseConfigured } from '../utils/supabase';
+import { sendMagicLink, signInWithPassword, signUpWithPassword, isSupabaseConfigured } from '../utils/supabase';
 
-// Sign-in / sign-up modal with two modes:
-//   - "Password" tab — existing users who set a password can sign in
-//     instantly with email + password.
-//   - "Magic link" tab — new users (and anyone who hasn't set a
-//     password yet) get a one-time link via email.
+// Sign-in / sign-up modal:
+//   - "Sign in" tab: existing users — email + password
+//   - "Sign up" tab: new users — email + password (+ optional phone).
+//     Auto-confirmed at the DB level (see SUPABASE_DEFAULT_PASSWORD.sql)
+//     so the user is signed in immediately and can pay right away.
+//   - "Email me a sign-in link" link in both tabs (fallback for users
+//     who forgot their password or prefer magic-link).
 //
-// New users always start on the magic-link tab because we use the link
-// to verify the email. After their first sign-in they can set a
-// password from the profile menu and skip magic links from then on.
-export default function AuthModal({ open, onClose, action }) {
-  const [mode, setMode] = useState('password'); // 'password' | 'magic'
+// `onAuthed` (optional): called after a successful sign-in OR sign-up.
+// Callers like UpgradeModal use this to resume a pending payment action.
+export default function AuthModal({ open, onClose, action, onAuthed }) {
+  // 'signup' is the default for first-time visitors hitting a paywall
+  // (the most common pattern); existing users tap "Sign in".
+  const [mode, setMode] = useState(action === 'signin' ? 'signin' : 'signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
@@ -22,16 +25,20 @@ export default function AuthModal({ open, onClose, action }) {
   if (!open) return null;
 
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const canPasswordSubmit = validEmail && password.length >= 8 && !pending;
-  const canMagicSubmit    = validEmail && !pending;
+  const canSubmit  = validEmail && password.length >= 8 && !pending;
 
-  const submitPassword = async (e) => {
+  const finishAuth = () => {
+    if (onAuthed) onAuthed(); // resume pending action (e.g. pay)
+    onClose();
+  };
+
+  const submitSignIn = async (e) => {
     e.preventDefault();
-    if (!canPasswordSubmit) return;
+    if (!canSubmit) return;
     setPending(true); setError(null);
     try {
       await signInWithPassword(email, password);
-      onClose();
+      finishAuth();
     } catch (err) {
       setError(err.message || 'Sign-in failed.');
     } finally {
@@ -39,9 +46,22 @@ export default function AuthModal({ open, onClose, action }) {
     }
   };
 
-  const submitMagic = async (e) => {
+  const submitSignUp = async (e) => {
     e.preventDefault();
-    if (!canMagicSubmit) return;
+    if (!canSubmit) return;
+    setPending(true); setError(null);
+    try {
+      await signUpWithPassword(email, password, phone || null);
+      finishAuth();
+    } catch (err) {
+      setError(err.message || 'Sign-up failed.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const sendLinkFallback = async () => {
+    if (!validEmail) { setError('Type your email above first.'); return; }
     setPending(true); setError(null);
     try {
       await sendMagicLink(email, phone || null);
@@ -56,7 +76,6 @@ export default function AuthModal({ open, onClose, action }) {
   const switchMode = (next) => {
     setMode(next);
     setError(null);
-    setPassword('');
   };
 
   return (
@@ -93,10 +112,10 @@ export default function AuthModal({ open, onClose, action }) {
             display: 'flex', gap: 0, marginBottom: 16, marginTop: 12,
             borderBottom: '1px solid #1f1f1f',
           }}>
-            <Tab active={mode === 'password'} onClick={() => switchMode('password')}>
+            <Tab active={mode === 'signin'} onClick={() => switchMode('signin')}>
               Sign in
             </Tab>
-            <Tab active={mode === 'magic'} onClick={() => switchMode('magic')}>
+            <Tab active={mode === 'signup'} onClick={() => switchMode('signup')}>
               Sign up
             </Tab>
           </div>
@@ -105,17 +124,11 @@ export default function AuthModal({ open, onClose, action }) {
         {sent ? (
           <div style={{ padding: '4px 0' }}>
             <div style={{ fontSize: 13, color: '#6fcf97', marginBottom: 10 }}>
-              ✓ Sign-up link sent to <b style={{ color: '#ddd' }}>{email}</b>
+              ✓ Sign-in link sent to <b style={{ color: '#ddd' }}>{email}</b>
             </div>
             <div style={{ fontSize: 12, color: '#888', lineHeight: 1.6 }}>
-              Open the email on this device and click the link. You'll land
-              back here with your account ready to use. The link expires
-              in 1 hour.
-            </div>
-            <div style={{ fontSize: 11, color: '#666', marginTop: 14, lineHeight: 1.5 }}>
-              Tip: after you sign in, open your profile menu (top right) and
-              choose <b style={{ color: '#aaa' }}>Set password</b> so you can
-              skip the email link next time.
+              Open the email on this device and click the link. The link
+              expires in 1 hour.
             </div>
             <div style={{ fontSize: 11, color: '#555', marginTop: 12 }}>
               Wrong email?{' '}
@@ -124,8 +137,15 @@ export default function AuthModal({ open, onClose, action }) {
               </button>
             </div>
           </div>
-        ) : mode === 'password' ? (
-          <form onSubmit={submitPassword}>
+        ) : (
+          <form onSubmit={mode === 'signin' ? submitSignIn : submitSignUp}>
+            {mode === 'signup' && (
+              <div style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.55 }}>
+                Pick any email + password. You'll be signed in immediately —
+                no inbox round-trip.
+              </div>
+            )}
+
             <label style={{ display: 'block', marginBottom: 12 }}>
               <span style={labelStyle}>Email</span>
               <input
@@ -135,7 +155,7 @@ export default function AuthModal({ open, onClose, action }) {
                 style={inputStyle}
               />
             </label>
-            <label style={{ display: 'block', marginBottom: 14 }}>
+            <label style={{ display: 'block', marginBottom: mode === 'signup' ? 12 : 14 }}>
               <span style={labelStyle}>Password</span>
               <input
                 type="password" required minLength={8}
@@ -144,61 +164,35 @@ export default function AuthModal({ open, onClose, action }) {
                 style={inputStyle}
               />
             </label>
+            {mode === 'signup' && (
+              <label style={{ display: 'block', marginBottom: 14 }}>
+                <span style={labelStyle}>Phone <span style={{ textTransform: 'none', color: '#444' }}>(optional)</span></span>
+                <input
+                  type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+1 555 123 4567"
+                  style={inputStyle}
+                />
+              </label>
+            )}
 
             {error && <div style={errStyle}>{error}</div>}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14, alignItems: 'center' }}>
-              <button type="button" onClick={() => switchMode('magic')}
+              <button type="button" onClick={sendLinkFallback} disabled={pending}
                 style={{ ...linkBtn, marginRight: 'auto' }}>
-                Forgot password? Email me a link
+                {mode === 'signin' ? 'Forgot password? Email me a link' : 'Email me a sign-in link instead'}
               </button>
               <button type="button" onClick={onClose} disabled={pending} style={btnGhost}>
                 Cancel
               </button>
-              <button type="submit" disabled={!canPasswordSubmit || !isSupabaseConfigured} style={{
+              <button type="submit" disabled={!canSubmit || !isSupabaseConfigured} style={{
                 ...btnPrimary,
-                opacity: (!canPasswordSubmit || !isSupabaseConfigured) ? 0.5 : 1,
-                cursor: (!canPasswordSubmit || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
+                opacity: (!canSubmit || !isSupabaseConfigured) ? 0.5 : 1,
+                cursor: (!canSubmit || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
               }}>
-                {pending ? 'Signing in…' : 'Sign in'}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={submitMagic}>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 14, lineHeight: 1.55 }}>
-              New here? Enter your email and we'll send a link to activate your account.
-              Already have one but no password? Same link works — sign in, set a password,
-              you're set for life.
-            </div>
-            <label style={{ display: 'block', marginBottom: 12 }}>
-              <span style={labelStyle}>Email</span>
-              <input
-                type="email" autoFocus required
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                style={inputStyle}
-              />
-            </label>
-            <label style={{ display: 'block', marginBottom: 14 }}>
-              <span style={labelStyle}>Phone <span style={{ textTransform: 'none', color: '#444' }}>(optional)</span></span>
-              <input
-                type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 555 123 4567"
-                style={inputStyle}
-              />
-            </label>
-
-            {error && <div style={errStyle}>{error}</div>}
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-              <button type="button" onClick={onClose} disabled={pending} style={btnGhost}>Cancel</button>
-              <button type="submit" disabled={!canMagicSubmit || !isSupabaseConfigured} style={{
-                ...btnPrimary,
-                opacity: (!canMagicSubmit || !isSupabaseConfigured) ? 0.5 : 1,
-                cursor: (!canMagicSubmit || !isSupabaseConfigured) ? 'not-allowed' : 'pointer',
-              }}>
-                {pending ? 'Sending…' : '✉ Send sign-up link'}
+                {pending
+                  ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
+                  : (mode === 'signin' ? 'Sign in' : 'Create account')}
               </button>
             </div>
           </form>
