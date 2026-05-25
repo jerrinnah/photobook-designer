@@ -5,6 +5,15 @@ import { useEffect, useState } from 'react';
 // All writes go through Postgres RPC functions guarded by SECURITY DEFINER
 // and rate-limited by IP — direct table access is denied by RLS.
 
+// Version marker so support can tell whether a user has the latest
+// bundle. Log it once on module load — admins can ask users to open
+// DevTools → Console → search for [AutoBook auth] to see what's
+// running in their browser.
+const AUTH_BUNDLE_VERSION = '2026-05-25-direct-fetch';
+if (typeof window !== 'undefined') {
+  console.info(`[AutoBook auth] bundle ${AUTH_BUNDLE_VERSION} loaded`);
+}
+
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -451,14 +460,41 @@ export async function signInWithPassword(email, password) {
 
   // Hydrate the SDK session so onAuthStateChange fires + the rest of
   // the app (autosave, profile menu, paywalls) sees the user.
+  // Capped at 5s — setSession can itself wedge on the same SDK issue.
+  // If it does, we fall back to writing the auth token directly to
+  // localStorage so the next page load picks up the session.
   if (data?.access_token && data?.refresh_token) {
     try {
-      await supabase.auth.setSession({
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-      });
+      await Promise.race([
+        supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        }),
+        new Promise((_, reject) => setTimeout(
+          () => reject(new Error('setSession timed out (5s)')),
+          5_000,
+        )),
+      ]);
     } catch (e) {
-      console.warn('[signInWithPassword] setSession failed; tokens persisted but SDK state may be stale', e);
+      console.warn('[signInWithPassword] setSession failed; writing token directly to localStorage as fallback', e);
+      try {
+        // Match the SDK's localStorage key format. Project ref is the
+        // first subdomain of the Supabase URL (e.g. xyzabc.supabase.co
+        // → key prefix sb-xyzabc).
+        const projectRef = (supabaseUrl.match(/https?:\/\/([^.]+)\./) || [])[1] || 'project';
+        const key = `sb-${projectRef}-auth-token`;
+        const payload = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          token_type: 'bearer',
+          expires_in: data.expires_in || 3600,
+          expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
+          user: data.user,
+        };
+        localStorage.setItem(key, JSON.stringify(payload));
+      } catch (innerErr) {
+        console.error('[signInWithPassword] localStorage fallback also failed', innerErr);
+      }
     }
   }
 
