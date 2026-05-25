@@ -45,3 +45,53 @@ select count(*) as returned_rows from public.get_users_admin('Nej2026');
 -- is having problems (check status.supabase.com or your project's
 -- Database health in the dashboard).
 select now() as server_time, version() as pg_version;
+
+-- ── 7. STUCK QUERIES — most common cause of "Stats timed out" ─────
+-- If a previous SQL Editor tab is still spinning, or a trigger
+-- went into a long wait, queries against public.users will queue
+-- behind it. Lists every backend currently waiting on or running
+-- something against public.users.
+select
+  pid,
+  state,
+  wait_event_type,
+  wait_event,
+  now() - query_start as running_for,
+  left(query, 200) as query
+from pg_stat_activity
+where datname = current_database()
+  and pid <> pg_backend_pid()
+  and state <> 'idle'
+order by query_start asc;
+
+-- ── 8. KILL stuck queries (run AFTER inspecting #7) ───────────────
+-- For each pid that's been "active" for more than a minute and is
+-- something you don't recognize, kill it with:
+--
+--   select pg_terminate_backend(<pid>);
+--
+-- Or nuke EVERY non-idle query that's been running >60s:
+--
+--   select pg_terminate_backend(pid)
+--   from pg_stat_activity
+--   where datname = current_database()
+--     and pid <> pg_backend_pid()
+--     and state <> 'idle'
+--     and now() - query_start > interval '1 minute';
+
+-- ── 9. LOCKS on public.users ──────────────────────────────────────
+-- Shows what holds a lock on the users table right now. Anything
+-- here means subsequent reads / writes wait.
+select
+  l.locktype,
+  l.mode,
+  l.granted,
+  a.pid,
+  a.state,
+  a.wait_event_type,
+  now() - a.query_start as running_for,
+  left(a.query, 200) as query
+from pg_locks l
+join pg_stat_activity a on a.pid = l.pid
+where l.relation = 'public.users'::regclass
+order by a.query_start asc;
