@@ -26,7 +26,7 @@ declare
   v_sparkline jsonb;
   v_tier_mix jsonb;
 begin
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
 
@@ -156,7 +156,7 @@ declare
   v_payments jsonb;
   v_auth_meta jsonb;
 begin
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
 

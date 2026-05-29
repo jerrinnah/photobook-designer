@@ -419,6 +419,11 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   const [zoom, setZoom] = useLocalStorage('canvas-zoom', 1);
   const zoomContainerRef = useRef(null);
   const pinchRef = useRef(null);
+  // Cell toolbar placement. 'top' = pinned top-center of the spread
+  // (default), 'cell' = follows the selected cell (legacy), or a custom
+  // { x, y } in spread-pixel coords when the user drags it somewhere.
+  const [toolbarPos, setToolbarPos] = useLocalStorage('cell-toolbar-pos', 'top');
+  const toolbarDragRef = useRef(null);
   // Latest interaction state — lets the wheel/pinch listeners read fresh values
   // without being re-registered every render.
   const interactionStateRef = useRef({});
@@ -755,14 +760,24 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     });
   };
 
-  // Floating toolbar position for selected cell
+  // Floating toolbar position for selected cell.
+  //   • 'top'  → pinned top-center of the spread (default)
+  //   • 'cell' → follows the selected cell (legacy behaviour)
+  //   • {x,y}  → custom spot the user dragged it to (spread-px coords)
   const selGeo = selectedCellIndex !== null ? cellGeometry[selectedCellIndex] : null;
   const floatToolbar = selGeo ? (() => {
-    const cx = (selGeo.x + selGeo.w / 2) * SPREAD_W;
-    const cy = selGeo.y * SPREAD_H;
-    const bh = selGeo.h * SPREAD_H;
-    const showAbove = (cy + bh) > SPREAD_H * 0.78;
-    return { cx, top: showAbove ? cy - 38 : cy + bh + 6 };
+    if (toolbarPos && typeof toolbarPos === 'object') {
+      return { cx: toolbarPos.x, top: toolbarPos.y, anchored: 'transform: none' };
+    }
+    if (toolbarPos === 'cell') {
+      const cx = (selGeo.x + selGeo.w / 2) * SPREAD_W;
+      const cy = selGeo.y * SPREAD_H;
+      const bh = selGeo.h * SPREAD_H;
+      const showAbove = (cy + bh) > SPREAD_H * 0.78;
+      return { cx, top: showAbove ? cy - 38 : cy + bh + 6 };
+    }
+    // default 'top' — centered at the top edge of the spread
+    return { cx: SPREAD_W / 2, top: 10 };
   })() : null;
 
   // Floating toolbar position for selected caption
@@ -1255,6 +1270,55 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 pointerEvents: 'all',
               }}
             >
+              {/* Drag grip — repositions the toolbar anywhere on the spread.
+                  Deltas are divided by zoom because the toolbar lives inside
+                  the scaled canvas container. */}
+              <span
+                title="Drag to move this toolbar"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const startX = e.clientX;
+                  const startY = e.clientY;
+                  const origin = (floatToolbar && typeof floatToolbar.cx === 'number')
+                    ? { x: floatToolbar.cx, y: floatToolbar.top }
+                    : { x: SPREAD_W / 2, y: 10 };
+                  toolbarDragRef.current = { startX, startY, origin };
+                  const onMove = (ev) => {
+                    const d = toolbarDragRef.current;
+                    if (!d) return;
+                    const dx = (ev.clientX - d.startX) / zoom;
+                    const dy = (ev.clientY - d.startY) / zoom;
+                    const nx = Math.max(40, Math.min(SPREAD_W - 40, d.origin.x + dx));
+                    const ny = Math.max(0, Math.min(SPREAD_H - 30, d.origin.y + dy));
+                    setToolbarPos({ x: Math.round(nx), y: Math.round(ny) });
+                  };
+                  const onUp = () => {
+                    toolbarDragRef.current = null;
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                  };
+                  window.addEventListener('mousemove', onMove);
+                  window.addEventListener('mouseup', onUp);
+                }}
+                style={{
+                  cursor: 'move', color: '#555', fontSize: 13, lineHeight: 1,
+                  padding: '0 4px 0 2px', userSelect: 'none',
+                }}
+              >⠿</span>
+
+              {/* Reset to default top-center — only shows when moved */}
+              {toolbarPos !== 'top' && (
+                <span
+                  title="Pin back to top-center"
+                  onClick={(e) => { e.stopPropagation(); setToolbarPos('top'); }}
+                  style={{
+                    cursor: 'pointer', color: '#6a9fd8', fontSize: 11, lineHeight: 1,
+                    padding: '0 4px', userSelect: 'none', borderRight: '1px solid #222', marginRight: 2,
+                  }}
+                >📌</span>
+              )}
+
               {/* Cell label + print size */}
               <span style={{ fontSize: 10, color: '#444', padding: '0 4px', borderRight: '1px solid #222', marginRight: 2, whiteSpace: 'nowrap' }}>
                 Cell {selectedCellIndex + 1}
