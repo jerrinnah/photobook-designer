@@ -1261,7 +1261,8 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
             never appear in exports/shares (those only rasterize the
             Konva Stage). */}
         {cellGeometry.map((geo, i) => {
-          const cell = spread.cells[i];
+          if (!geo) return null;
+          const cell = spread?.cells?.[i];
           if (!cell?.photoId) return null;
           const photo = photos.find((p) => p.id === cell.photoId);
           if (!photo || (photo.facePriority || 0) <= 0) return null;

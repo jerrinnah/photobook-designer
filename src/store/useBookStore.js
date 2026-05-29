@@ -15,7 +15,7 @@ const facePrioritySort = (arr) =>
   [...arr].sort((a, b) => {
     const fp = (b.facePriority || 0) - (a.facePriority || 0);
     if (Math.abs(fp) > 0.0001) return fp;
-    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
   });
 
 const shuffle = (arr) => {
