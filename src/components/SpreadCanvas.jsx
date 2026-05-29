@@ -742,8 +742,13 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
       } else {
         setGhostCell(null);
       }
+      // Full deselect on empty-space click: clears the cell (and its
+      // multi-selection, via setSelectedCell(null)), any caption, and
+      // closes the FX / gradient panels so nothing lingers.
       setSelectedCell(null);
       setSelectedCaptionId(null);
+      setShowFxPanel(false);
+      setShowGradPanel(false);
     }
   };
 

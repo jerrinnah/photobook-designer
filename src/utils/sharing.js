@@ -14,6 +14,7 @@
 
 import { supabase, isSupabaseConfigured, getStoredUser } from './supabase';
 import { getEffectiveTier } from './premium';
+import { useBookStore } from '../store/useBookStore';
 
 const BUCKET = 'share-previews';
 const MAX_SPREAD_LONG_EDGE = 1200; // Crisp enough for retina previews; smaller = faster capture + upload
@@ -89,6 +90,9 @@ function waitForRepaint() {
 // ── Capture: render one spread to a WebP Blob ───────────────────────
 async function captureOneSpread(stageRef, spread, setActiveSpread, index) {
   setActiveSpread(spread.id);
+  // Clear selection so resize handles / outlines never appear in the
+  // shared preview image.
+  try { useBookStore.getState().setSelectedCell(null); } catch { /* ignore */ }
   await waitForRepaint();
   const stage = stageRef.current;
   if (!stage) throw new Error('Editor stage disappeared mid-capture.');

@@ -196,6 +196,13 @@ async function captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, sp
   const { w: screenW } = getScreenDims(spreadSizeId, customSize);
   const pixelRatio = getExportPixelRatio(spreadSizeId, screenW, customSize);
 
+  // Clear any active selection BEFORE capturing so the blue resize
+  // handles / selection outline / group bbox never bleed into the
+  // exported image. setActiveSpread already nulls the selection per
+  // spread, but we clear up-front too in case the first captured
+  // spread is the currently-active one.
+  try { useBookStore.getState().setSelectedCell(null); } catch { /* ignore */ }
+
   // Filter to designed spreads only. Renumber so output is "01, 02, …"
   // contiguously rather than "01, 03, 05, …" with gaps.
   const designed = spreads.filter(isSpreadDesigned);
@@ -203,7 +210,12 @@ async function captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, sp
 
   for (let i = 0; i < designed.length; i++) {
     setActiveSpread(designed[i].id);
+    // Belt-and-braces: ensure selection stays cleared for every frame.
+    useBookStore.getState().setSelectedCell(null);
     await new Promise((r) => setTimeout(r, 220));
+    // Force a fresh Konva draw so the layer reflects the cleared
+    // selection (no lingering handles) before we rasterize.
+    try { stageRef.current?.getLayers?.().forEach((l) => l.batchDraw()); } catch { /* ignore */ }
     let dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
     dataURL = await maybeWatermark(dataURL);
     frames.push({ idx: i + 1, dataURL, role: designed[i].role });
