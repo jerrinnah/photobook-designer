@@ -1099,20 +1099,38 @@ export const useBookStore = create((set, get) => ({
 
     // Fill ONLY empty, non-locked cells — never overwrite existing placements.
     // Skip the cover spread entirely.
-    // Photos are placed in import order (pool.shift) — predictable and
-    // matches the way users list/sort their imports.
+    //
+    // Photos are taken from the (priority-sorted) pool with pool.shift(),
+    // so the key person's photos come first. When prioritized photos
+    // exist we also fill the BIGGEST cells first on each spread, so the
+    // key person gets hero-sized placement instead of whatever cell
+    // happened to come first in template order. With no prioritized
+    // photos we keep the original template (reading) order.
+    const poolHasPriority = pool.some((p) => (p.facePriority || 0) > 0);
     const newSpreads = spreads.map((spread, idx) => {
       if (idx === 0) return spread;
       const newCells = [...spread.cells];
       const newGeo = [...spread.cellGeometry];
-      spread.cells.forEach((cell, i) => {
-        if (cell.locked || cell.photoId) return;
-        const geo = newGeo[i];
-        if (!geo || pool.length === 0) return;
+
+      // Indices of fillable cells on this spread, in the order we'll fill.
+      let order = spread.cells
+        .map((cell, i) => i)
+        .filter((i) => !newCells[i].locked && !newCells[i].photoId && newGeo[i]);
+      if (poolHasPriority) {
+        order = order.sort((a, b) => {
+          const ga = newGeo[a], gb = newGeo[b];
+          return (gb.w * gb.h) - (ga.w * ga.h); // biggest cell first
+        });
+      }
+
+      for (const i of order) {
+        if (pool.length === 0) break;
+        const cell = newCells[i];
+        let geo = newGeo[i];
         const photo = pool.shift();
-        if (!cell.manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
-      });
+        if (!cell.manualCrop) { geo = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh); newGeo[i] = geo; }
+        newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(geo, photo, sw, sh) };
+      }
       return { ...spread, cells: newCells, cellGeometry: newGeo };
     });
 
@@ -1137,20 +1155,27 @@ export const useBookStore = create((set, get) => ({
       s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean))
     );
 
-    // Take photos in natural sort order (e.g. IMG_001, IMG_002, …) instead
-    // of shuffling. Predictable, repeatable.
-    let pool = naturalSort(s.photos.filter((p) => !usedEverywhere.has(p.id)));
+    // Key-person photos first; then natural sort order within each bucket.
+    let pool = facePrioritySort(s.photos.filter((p) => !usedEverywhere.has(p.id)));
 
     const newGeo = tmpl.cells.map((c) => ({ ...c }));
     const newCells = tmpl.cells.map((c) => makeCell(c));
 
-    newCells.forEach((cell, i) => {
-      if (pool.length === 0) return;
-      const geo = newGeo[i];
-      const photo = pool.shift(); // next available photo in name order
-      newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-      newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
-    });
+    // Fill biggest cells first when prioritized photos exist so the key
+    // person lands in the hero cell of the new layout.
+    const poolHasPriority = pool.some((p) => (p.facePriority || 0) > 0);
+    let order = newCells.map((_, i) => i);
+    if (poolHasPriority) {
+      order = order.sort((a, b) => (newGeo[b].w * newGeo[b].h) - (newGeo[a].w * newGeo[a].h));
+    }
+    for (const i of order) {
+      if (pool.length === 0) break;
+      const cell = newCells[i];
+      const photo = pool.shift();
+      const geo = fitGeoToPhoto(newGeo[i], photo.width / photo.height, sw, sh);
+      newGeo[i] = geo;
+      newCells[i] = { ...cell, photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(geo, photo, sw, sh) };
+    }
 
     return {
       spreads: s.spreads.map((sp) =>
