@@ -849,6 +849,43 @@ export const useBookStore = create((set, get) => ({
     }),
   }))),
 
+  // Z-order: reorder a cell within the spread. Cells render in array
+  // order (later index = drawn on top), so moving a cell's position in
+  // the cells + cellGeometry arrays changes its stacking — useful when
+  // cells overlap after free resize/positioning.
+  //   direction: 'front' (to top) | 'back' (to bottom)
+  //            | 'forward' (1 up)  | 'backward' (1 down)
+  // selectedCellIndex follows the moved cell to its new position.
+  reorderCellZ: (spreadId, cellIndex, direction) => set(h((s) => {
+    const spread = s.spreads.find((sp) => sp.id === spreadId);
+    if (!spread) return s;
+    const n = spread.cells.length;
+    if (cellIndex < 0 || cellIndex >= n) return s;
+
+    let target;
+    if (direction === 'front') target = n - 1;
+    else if (direction === 'back') target = 0;
+    else if (direction === 'forward') target = Math.min(n - 1, cellIndex + 1);
+    else if (direction === 'backward') target = Math.max(0, cellIndex - 1);
+    else return s;
+    if (target === cellIndex) return s;
+
+    const move = (arr) => {
+      const a = [...arr];
+      const [item] = a.splice(cellIndex, 1);
+      a.splice(target, 0, item);
+      return a;
+    };
+
+    return {
+      spreads: s.spreads.map((sp) => sp.id === spreadId
+        ? { ...sp, cells: move(sp.cells), cellGeometry: move(sp.cellGeometry) }
+        : sp),
+      selectedCellIndex: target,
+      selectedCellIndices: new Set([target]),
+    };
+  })),
+
   // Clones a cell inside the same spread. The copy is offset slightly so
   // it's visible (not stacked exactly on top), and all photo/effect/crop
   // state is preserved. Cell is clamped to stay inside the spread.

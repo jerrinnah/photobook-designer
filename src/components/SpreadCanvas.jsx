@@ -400,7 +400,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     selectedCellIndex, setSelectedCell,
     selectedCellIndices, multiMoveCells, multiResizeCells,
     splitCell, duplicateCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
-    commitResizeCell, setCellGradient, transferCell, setCellEffects,
+    commitResizeCell, setCellGradient, transferCell, setCellEffects, reorderCellZ,
     addCaption, updateCaption, removeCaption, duplicateCaption,
     adjustCell,
     clearPhotoSelection,
@@ -1418,6 +1418,30 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               </button>
 
               <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
+
+              {/* Layer order — only meaningful when there are 2+ cells */}
+              {cellGeometry.length > 1 && (
+                <>
+                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Bring to front (on top of all)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'front')}>
+                    ⤒ Front
+                  </button>
+                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Bring forward (one layer up)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'forward')}>
+                    ↑
+                  </button>
+                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Send backward (one layer down)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'backward')}>
+                    ↓
+                  </button>
+                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Send to back (behind all)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'back')}>
+                    ⤓ Back
+                  </button>
+
+                  <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
+                </>
+              )}
 
               {selectedCell.photoId && (
                 <>
