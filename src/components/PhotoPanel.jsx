@@ -6,6 +6,7 @@ import { assignPhotoWithPrompt } from '../utils/photoAssign';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import CollapsedRail from './CollapsedRail';
 import { useTheme } from '../utils/theme';
+import { getKeyDescriptor, scorePhotos } from '../utils/faceDetect';
 
 // ── Perceptual hashing (dHash 8×8 = 64-bit fingerprint) ──────────────
 // Resizes image to 9×8 greyscale, compares adjacent horizontal pixels.
@@ -88,11 +89,17 @@ export default function PhotoPanel({ mobile = false }) {
     photoSort, setPhotoSort,
     photoSearch, setPhotoSearch,
     togglePhotoFavorite,
+    setPhotoFacePriorities,
     resetProject,
   } = useBookStore();
 
   const [simMap, setSimMap] = useState(null);   // Map photoId → {groupNum, isKeep} | null
   const [computing, setComputing] = useState(false);
+  // Face-priority state. faceState: null | 'scanning' | 'done'
+  const [faceState, setFaceState] = useState(null);
+  const [faceProgress, setFaceProgress] = useState({ done: 0, total: 0, hits: 0 });
+  const [faceErr, setFaceErr] = useState(null);
+  const hasFacePriority = photos.some((p) => (p.facePriority || 0) > 0);
   const hashCache = useRef(new Map()); // photoId → hash bits
   const [collapsed, setCollapsed] = useLocalStorage('photopanel-collapsed', false);
 
@@ -203,6 +210,51 @@ export default function PhotoPanel({ mobile = false }) {
   const handleClearSimilar = () => {
     setSimMap(null);
     clearPhotoSelection();
+  };
+
+  // ── Face prioritization ────────────────────────────────────────────
+  // Uses the single selected photo as the "reference" of the key person.
+  // Detects their face, scores every photo by how closely/prominently
+  // that person appears, and stores facePriority so Design All / Arrange
+  // place those photos first + in hero cells.
+  const handlePrioritizeFace = async () => {
+    if (faceState === 'scanning') return;
+    setFaceErr(null);
+    if (selectedPhotoIds.size !== 1) {
+      setFaceErr('Select exactly one photo that clearly shows the person you want to prioritize, then click again.');
+      return;
+    }
+    const refId = [...selectedPhotoIds][0];
+    const refPhoto = photos.find((p) => p.id === refId);
+    if (!refPhoto) { setFaceErr('Reference photo not found.'); return; }
+
+    setFaceState('scanning');
+    setFaceProgress({ done: 0, total: photos.length, hits: 0 });
+    try {
+      const keyDescriptor = await getKeyDescriptor(refPhoto.src);
+      if (!keyDescriptor) {
+        setFaceState(null);
+        setFaceErr("Couldn't find a clear face in that photo. Pick one where the person faces the camera.");
+        return;
+      }
+      const scores = await scorePhotos(photos, keyDescriptor, (done, total, hits) => {
+        setFaceProgress({ done, total, hits });
+      });
+      // Reference photo is always the strongest match.
+      scores.set(refId, 1);
+      setPhotoFacePriorities(scores);
+      setFaceState('done');
+      clearPhotoSelection();
+    } catch (e) {
+      setFaceState(null);
+      setFaceErr(e.message || 'Face scan failed.');
+    }
+  };
+
+  const handleClearFacePriority = () => {
+    setPhotoFacePriorities(null);
+    setFaceState(null);
+    setFaceErr(null);
   };
 
   // Count duplicate groups found
@@ -340,6 +392,50 @@ export default function PhotoPanel({ mobile = false }) {
             <option value="landscape">Landscape first</option>
           </select>
           <span style={{ fontSize: 9, color: t.textFaint }}>{sorted.length}</span>
+        </div>
+      )}
+
+      {/* Prioritize a person (face) */}
+      {photos.length >= 2 && (
+        <div style={{ padding: '0 10px 6px' }}>
+          {faceState === 'scanning' ? (
+            <div style={{
+              padding: '6px 8px', background: t.mode === 'light' ? '#fdf6e3' : '#1a1408',
+              border: `1px solid ${t.mode === 'light' ? '#e8d27a' : '#3a2a10'}`,
+              borderRadius: 4, fontSize: 10, color: '#c9a227', lineHeight: 1.5,
+            }}>
+              ★ Scanning faces… {faceProgress.done}/{faceProgress.total}
+              {faceProgress.hits > 0 && <> · <span style={{ color: '#6fcf97' }}>{faceProgress.hits} matches</span></>}
+            </div>
+          ) : hasFacePriority ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '6px 8px', background: t.mode === 'light' ? '#fffae0' : '#1a1408',
+              border: `1px solid ${t.mode === 'light' ? '#e8d27a' : '#3a2a10'}`,
+              borderRadius: 4, fontSize: 10, color: '#c9a227',
+            }}>
+              <span>★ {photos.filter((p) => (p.facePriority || 0) > 0).length} photos prioritized</span>
+              <button onClick={handleClearFacePriority}
+                style={{ background: 'none', border: 'none', color: t.textMuted, fontSize: 10, cursor: 'pointer', padding: 0 }}>
+                Clear
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handlePrioritizeFace}
+              title="Select one photo of a key person, then click — their photos get hero placement in Design All"
+              style={{
+                width: '100%', padding: '5px 0',
+                background: t.bgInput, border: `1px solid ${t.border}`,
+                borderRadius: 4, color: t.textMuted, fontSize: 10, cursor: 'pointer',
+              }}
+            >
+              ★ Prioritize a person
+            </button>
+          )}
+          {faceErr && (
+            <div style={{ marginTop: 4, fontSize: 9, color: '#e05c5c', lineHeight: 1.4 }}>{faceErr}</div>
+          )}
         </div>
       )}
 
@@ -557,6 +653,18 @@ export default function PhotoPanel({ mobile = false }) {
                 alt={p.name}
                 style={{ width: '100%', display: 'block', borderRadius: 4, userSelect: 'none', pointerEvents: 'none' }}
               />
+
+              {/* Key-person priority badge — gold star, top-right */}
+              {(p.facePriority || 0) > 0 && (
+                <div style={{
+                  position: 'absolute', top: 3, right: 3,
+                  background: 'rgba(0,0,0,0.6)', borderRadius: 3,
+                  padding: '1px 4px', fontSize: 9, color: '#f6c90e',
+                  lineHeight: 1.2, pointerEvents: 'none',
+                }} title={`Key person (priority ${(p.facePriority).toFixed(2)})`}>
+                  ★
+                </div>
+              )}
 
               {/* Repeated overlay */}
               {isRepeated && (

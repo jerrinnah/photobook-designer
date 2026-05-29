@@ -8,6 +8,16 @@ const round4 = (n) => Math.round(n * 10000) / 10000;
 const naturalSort = (arr) =>
   [...arr].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
+// Same as naturalSort but key-person photos (higher facePriority) come
+// first, so auto-design fills early spreads + hero cells with them.
+// Within the same priority bucket, natural filename order is preserved.
+const facePrioritySort = (arr) =>
+  [...arr].sort((a, b) => {
+    const fp = (b.facePriority || 0) - (a.facePriority || 0);
+    if (Math.abs(fp) > 0.0001) return fp;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
 const shuffle = (arr) => {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -648,6 +658,17 @@ export const useBookStore = create((set, get) => ({
     };
   })),
 
+  // Face prioritization: apply a Map<photoId, score 0..1> onto photos.
+  // Photos not in the map get facePriority 0. Auto-design then orders
+  // by facePriority DESC so the key person's photos land first + in
+  // the hero cells. Passing null clears all priorities.
+  setPhotoFacePriorities: (scoreMap) => set((s) => ({
+    photos: s.photos.map((p) => ({
+      ...p,
+      facePriority: scoreMap ? (scoreMap.get(p.id) || 0) : 0,
+    })),
+  })),
+
   // Plain click: replace selection with this single cell (idx=null clears).
   setSelectedCell: (idx) => set({
     selectedCellIndex: idx,
@@ -1005,7 +1026,8 @@ export const useBookStore = create((set, get) => ({
     const { w: sw, h: sh } = getScreenDims(s.spreadSizeId, s.customSize);
     // Exclude photos already used in ANY spread so no photo appears twice
     const usedIds = new Set(s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean)));
-    let pool = s.photos.filter((p) => !usedIds.has(p.id));
+    // Key-person photos first so they win the empty cells on this spread.
+    let pool = facePrioritySort(s.photos.filter((p) => !usedIds.has(p.id)));
     const newCells = [...spread.cells];
     const newGeo = [...spread.cellGeometry];
     spread.cells.forEach((cell, i) => {
@@ -1033,7 +1055,8 @@ export const useBookStore = create((set, get) => ({
     const alreadyPlaced = new Set(
       s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean))
     );
-    let pool = naturalSort(sourcePhotos.filter((p) => !alreadyPlaced.has(p.id)));
+    // Key-person photos first (facePriority), then natural filename order.
+    let pool = facePrioritySort(sourcePhotos.filter((p) => !alreadyPlaced.has(p.id)));
 
     const portraitCount = pool.filter((p) => p.height > p.width).length;
     const portraitDominant = pool.length > 0 && portraitCount > pool.length / 2;
