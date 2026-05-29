@@ -395,7 +395,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     minWidth: 28, textAlign: 'center',
   };
   const {
-    spreads, activeSpreadId, assignPhoto, addPhotos, addCellAt,
+    spreads, photos, activeSpreadId, assignPhoto, addPhotos, addCellAt,
     spreadSizeId, customSize, blendEdges, gap,
     selectedCellIndex, setSelectedCell,
     selectedCellIndices, multiMoveCells, multiResizeCells,
