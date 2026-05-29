@@ -654,13 +654,16 @@ export default function PhotoPanel({ mobile = false }) {
                 style={{ width: '100%', display: 'block', borderRadius: 4, userSelect: 'none', pointerEvents: 'none' }}
               />
 
-              {/* Key-person priority badge — gold star, top-right */}
+              {/* Key-person priority badge — gold star chip, top-right */}
               {(p.facePriority || 0) > 0 && (
                 <div style={{
-                  position: 'absolute', top: 3, right: 3,
-                  background: 'rgba(0,0,0,0.6)', borderRadius: 3,
-                  padding: '1px 4px', fontSize: 9, color: '#f6c90e',
-                  lineHeight: 1.2, pointerEvents: 'none',
+                  position: 'absolute', top: 4, right: 4,
+                  width: 18, height: 18,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: '#f6c90e', color: '#1a1208',
+                  borderRadius: '50%', fontSize: 11, lineHeight: 1,
+                  fontWeight: 700, pointerEvents: 'none',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
                 }} title={`Key person (priority ${(p.facePriority).toFixed(2)})`}>
                   ★
                 </div>

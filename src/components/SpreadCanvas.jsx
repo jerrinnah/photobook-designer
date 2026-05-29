@@ -1255,6 +1255,38 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           </Layer>
         </Stage>
 
+        {/* Key-person star overlays — a gold ★ on the corner of every
+            cell whose photo is prioritized. Rendered as DOM siblings of
+            the Stage (NOT Konva nodes), so they show in the editor but
+            never appear in exports/shares (those only rasterize the
+            Konva Stage). */}
+        {cellGeometry.map((geo, i) => {
+          const cell = spread.cells[i];
+          if (!cell?.photoId) return null;
+          const photo = photos.find((p) => p.id === cell.photoId);
+          if (!photo || (photo.facePriority || 0) <= 0) return null;
+          return (
+            <div
+              key={`star-${i}`}
+              title="Key person — prioritized in auto-design"
+              style={{
+                position: 'absolute',
+                left: geo.x * SPREAD_W + 6,
+                top: geo.y * SPREAD_H + 6,
+                width: 20, height: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(0,0,0,0.55)',
+                color: '#f6c90e',
+                borderRadius: '50%',
+                fontSize: 12, lineHeight: 1,
+                pointerEvents: 'none',
+                zIndex: 15,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+              }}
+            >★</div>
+          );
+        })}
+
         {/* Floating cell action toolbar */}
         {floatToolbar && selectedCell && (() => {
           const printInfo = selGeo ? getCellPrintInfo(selGeo, spreadSizeId, customSize) : null;
