@@ -776,8 +776,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
       const showAbove = (cy + bh) > SPREAD_H * 0.78;
       return { cx, top: showAbove ? cy - 38 : cy + bh + 6 };
     }
-    // default 'top' — centered at the top edge of the spread
-    return { cx: SPREAD_W / 2, top: 10 };
+    // default 'top' — floats ABOVE the spread's top edge so it never
+    // covers the photobook content (negative top = outside the spread).
+    return { cx: SPREAD_W / 2, top: -44 };
   })() : null;
 
   // Floating toolbar position for selected caption
@@ -792,7 +793,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
   // Padding around the canvas (breathing room). Wrapper always ≥ viewport
   // so flex centering works without overflow-clipping artefacts, and grows
   // when the scaled canvas exceeds the viewport so scrollbars work cleanly.
-  const PAD = 24;
+  // PAD is generous (vs the old 24) so the cell toolbar can float ABOVE
+  // the spread's top edge instead of overlapping the photobook content.
+  const PAD = 60;
   const wrapperW = SPREAD_W * zoom + PAD * 2;
   const wrapperH = SPREAD_H * zoom + PAD * 2;
 
@@ -1290,7 +1293,9 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                     const dx = (ev.clientX - d.startX) / zoom;
                     const dy = (ev.clientY - d.startY) / zoom;
                     const nx = Math.max(40, Math.min(SPREAD_W - 40, d.origin.x + dx));
-                    const ny = Math.max(0, Math.min(SPREAD_H - 30, d.origin.y + dy));
+                    // Allow dragging above the spread (down to -50) so the
+                    // user can keep the bar off the photobook content.
+                    const ny = Math.max(-50, Math.min(SPREAD_H - 30, d.origin.y + dy));
                     setToolbarPos({ x: Math.round(nx), y: Math.round(ny) });
                   };
                   const onUp = () => {
@@ -1302,10 +1307,19 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                   window.addEventListener('mouseup', onUp);
                 }}
                 style={{
-                  cursor: 'move', color: '#555', fontSize: 13, lineHeight: 1,
-                  padding: '0 4px 0 2px', userSelect: 'none',
+                  cursor: 'grab', userSelect: 'none',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 22, height: 22, marginRight: 2,
+                  background: '#1f1f1f', border: '1px solid #333', borderRadius: 4,
+                  color: '#9a9a9a',
                 }}
-              >⠿</span>
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="3" r="1.4" /><circle cx="11" cy="3" r="1.4" />
+                  <circle cx="5" cy="8" r="1.4" /><circle cx="11" cy="8" r="1.4" />
+                  <circle cx="5" cy="13" r="1.4" /><circle cx="11" cy="13" r="1.4" />
+                </svg>
+              </span>
 
               {/* Reset to default top-center — only shows when moved */}
               {toolbarPos !== 'top' && (
