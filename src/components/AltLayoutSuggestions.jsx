@@ -18,25 +18,30 @@ export default function AltLayoutSuggestions() {
   const [upgradeFor, setUpgradeFor] = useState(null);
   const effectiveTier = getEffectiveTier(useAuthUser());
 
-  // Pick 2–3 alternative templates with similar cell counts (±1) so the
-  // current photos still fit naturally.
-  const alternatives = useMemo(() => {
+  // Pick 4 alternative templates with similar cell counts (±1) so the
+  // current photos still fit naturally. Memo depends on spread.id +
+  // cell count ONLY — NOT the templateId or the full spread object.
+  // That way picking a TRY thumbnail doesn't reshuffle the whole list:
+  // the user can cycle through the same options without losing track.
+  const candidates = useMemo(() => {
     if (!spread) return [];
     const currentCount = spread.cells.length;
     const pool = TEMPLATES.filter((t) =>
       !t.printSize &&
       t.category !== 'Cover' &&
       t.category !== 'Event' &&
-      t.id !== spread.templateId &&
       Math.abs(t.cells.length - currentCount) <= 1
     );
     if (pool.length === 0) return [];
-    // Deterministic per spread+template — shuffle with a seeded sort so the
-    // strip stays stable while the user looks at a spread.
     const seed = (spread.id * 7919 + currentCount * 31) % pool.length;
     const rotated = [...pool.slice(seed), ...pool.slice(0, seed)];
-    return rotated.slice(0, 3);
-  }, [spread]);
+    return rotated.slice(0, 4); // 4 stable candidates
+  }, [spread?.id, spread?.cells.length]);
+
+  // Hide the currently-applied template at render time so it isn't
+  // shown as an alternative to itself. Yields up to 3 from the 4
+  // stable candidates — one being current still leaves 3 alternatives.
+  const alternatives = candidates.filter((t) => t.id !== spread?.templateId).slice(0, 3);
 
   // Hide on cover (index 0) and when there are no alternatives
   if (!spread || activeIdx === 0 || alternatives.length === 0) return null;
