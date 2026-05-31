@@ -401,6 +401,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     selectedCellIndices, multiMoveCells, multiResizeCells,
     splitCell, duplicateCell, removeCell, rotateCellPhoto, toggleCellLock, clearCell,
     commitResizeCell, setCellGradient, transferCell, setCellEffects, reorderCellZ,
+    copyCell, pasteCell, copiedCell,
     addCaption, updateCaption, removeCaption, duplicateCaption,
     adjustCell,
     clearPhotoSelection,
@@ -576,6 +577,27 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedCaptionId, selectedCellIndex, activeSpreadId, removeCaption, removeCell]);
+
+  // ⌘/Ctrl + C copies the selected cell, ⌘/Ctrl + V pastes the
+  // clipboard into the active spread. Ignored while typing in inputs.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const t = e.target;
+      const tag = t?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return;
+      const key = e.key.toLowerCase();
+      if (key === 'c' && selectedCellIndex !== null && selectedCellIndex !== undefined) {
+        e.preventDefault();
+        copyCell(activeSpreadId, selectedCellIndex);
+      } else if (key === 'v' && copiedCell) {
+        e.preventDefault();
+        pasteCell(activeSpreadId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeSpreadId, selectedCellIndex, copiedCell, copyCell, pasteCell]);
 
   // Preset sizes (cw/ch for default 12×6 spread, i.e. spreadRatio=2)
   const PRESETS = {
@@ -1412,9 +1434,29 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 <span style={{ letterSpacing: -1 }}>⬚</span> Split —
               </button>
 
-              <button style={cellBtnStyle()} title="Duplicate this cell with its photo"
+              <button style={cellBtnStyle()} title="Duplicate this cell with its photo (same spread)"
                 onClick={() => duplicateCell(activeSpreadId, selectedCellIndex)}>
                 ⊞ Duplicate
+              </button>
+
+              <button style={cellBtnStyle({ color: '#9a9a9a' })}
+                title="Copy this cell — paste it on any spread"
+                onClick={() => copyCell(activeSpreadId, selectedCellIndex)}>
+                ⎘ Copy
+              </button>
+
+              <button
+                style={cellBtnStyle({
+                  color: copiedCell ? '#6fcf97' : '#444',
+                  borderColor: copiedCell ? '#2a4a2a' : '#2a2a2a',
+                  background: copiedCell ? '#0e1a10' : 'transparent',
+                  cursor: copiedCell ? 'pointer' : 'not-allowed',
+                })}
+                disabled={!copiedCell}
+                title={copiedCell ? 'Paste the copied cell into this spread' : 'Nothing copied yet — use Copy on any cell first'}
+                onClick={() => copiedCell && pasteCell(activeSpreadId)}
+              >
+                ❒ Paste
               </button>
 
               <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />

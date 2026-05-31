@@ -315,6 +315,7 @@ export const useBookStore = create((set, get) => ({
   repeatedPhotoIds: new Set(),
   selectedCellIndex: null,         // "Primary" cell — drives the floating cell toolbar / panels
   selectedCellIndices: new Set(),  // Full multi-selection (always includes primary when set)
+  copiedCell: null,                // { cell, geo } — clipboard for cross-spread copy/paste
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
@@ -464,15 +465,25 @@ export const useBookStore = create((set, get) => ({
     return { spreads, activeSpreadId };
   })),
 
-  duplicateSpread: (id) => set(h((s) => {
+  // Full duplicate: clone the spread INCLUDING its photo placements and
+  // crop/zoom/effects/captions. Two spreads will then reference the
+  // same photoIds — that's intentional (the Repeated Photos tool can
+  // flag any you don't want shared). If you want a blank-layout copy
+  // instead, use duplicateSpread with { clearPhotos: true }.
+  duplicateSpread: (id, opts = {}) => set(h((s) => {
     const idx = s.spreads.findIndex((sp) => sp.id === id);
     if (idx === -1) return s;
     const newId = Math.max(...s.spreads.map((sp) => sp.id)) + 1;
     const copy = JSON.parse(JSON.stringify(s.spreads[idx]));
     copy.id = newId;
     copy.role = null; // duplicates don't inherit cover/back role
-    // Clear photo assignments — a duplicate inherits the LAYOUT, not the photos
-    copy.cells = copy.cells.map((c) => ({ ...c, photoId: null, zoom: 1, offsetX: 0, offsetY: 0 }));
+    if (opts.clearPhotos) {
+      copy.cells = copy.cells.map((c) => ({ ...c, photoId: null, zoom: 1, offsetX: 0, offsetY: 0 }));
+    }
+    // Re-id captions so undo/redo + dedup don't conflate them with the source spread
+    if (Array.isArray(copy.captions)) {
+      copy.captions = copy.captions.map((c) => ({ ...c, id: captionIdCounter++ }));
+    }
     const newSpreads = [...s.spreads.slice(0, idx + 1), copy, ...s.spreads.slice(idx + 1)];
     return { spreads: newSpreads };
   })),
@@ -911,6 +922,51 @@ export const useBookStore = create((set, get) => ({
       } : sp),
       selectedCellIndex: spread.cells.length, // select the new copy
       selectedCellIndices: new Set([spread.cells.length]),
+    };
+  })),
+
+  // ── Cross-spread cell clipboard ──────────────────────────────────
+  // copyCell snapshots the cell + its geometry into the store. pasteCell
+  // appends a new cell to a target spread using that snapshot, offset
+  // slightly so it's visible if pasted on the source spread. Both photo
+  // assignment and any effects/captions/crops are preserved.
+  copyCell: (spreadId, cellIndex) => set((s) => {
+    const spread = s.spreads.find((sp) => sp.id === spreadId);
+    if (!spread) return s;
+    const cell = spread.cells[cellIndex];
+    const geo = spread.cellGeometry[cellIndex];
+    if (!cell || !geo) return s;
+    return {
+      copiedCell: {
+        cell: JSON.parse(JSON.stringify(cell)),
+        geo: JSON.parse(JSON.stringify(geo)),
+      },
+    };
+  }),
+
+  pasteCell: (targetSpreadId) => set(h((s) => {
+    if (!s.copiedCell) return s;
+    const spread = s.spreads.find((sp) => sp.id === targetSpreadId);
+    if (!spread) return s;
+    const { cell, geo } = s.copiedCell;
+    // Offset slightly so it doesn't stack exactly on top of an existing cell
+    const OFFSET = 0.04;
+    let nx = round4(Math.min(1 - geo.w, Math.max(0, geo.x + OFFSET)));
+    let ny = round4(Math.min(1 - geo.h, Math.max(0, geo.y + OFFSET)));
+    if (nx >= 1 - geo.w) nx = 0;
+    if (ny >= 1 - geo.h) ny = 0;
+    const newGeo = { ...geo, x: nx, y: ny };
+    const newCell = { ...cell, manualCrop: true };
+    const newIdx = spread.cells.length;
+    return {
+      spreads: s.spreads.map((sp) => sp.id === targetSpreadId ? {
+        ...sp,
+        cellGeometry: [...sp.cellGeometry, newGeo],
+        cells: [...sp.cells, newCell],
+      } : sp),
+      activeSpreadId: targetSpreadId,
+      selectedCellIndex: newIdx,
+      selectedCellIndices: new Set([newIdx]),
     };
   })),
 
