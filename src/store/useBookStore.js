@@ -1339,6 +1339,13 @@ export const useBookStore = create((set, get) => ({
     const newCells = [...spread.cells];
     const newGeo = [...spread.cellGeometry];
 
+    // NOTE: reshuffle intentionally does NOT call fitGeoToPhoto. That
+    // function shrinks a cell to match the photo's aspect ratio using
+    // the cell's CURRENT w/h as max bounds, so calling it repeatedly
+    // (e.g. on every reshuffle) shrinks the cell on each pass. The
+    // photo crop-fills the cell instead via topAlignOffsetY, which is
+    // predictable and reversible.
+
     // Path 1: empty cells + a pool of unplaced photos → sequential fill.
     if (emptyOnes.length > 0) {
       const usedIds = new Set(s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean)));
@@ -1350,8 +1357,7 @@ export const useBookStore = create((set, get) => ({
           const photo = pool[cursor++];
           const geo = newGeo[i];
           if (!geo) continue;
-          if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-          newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+          newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(geo, photo, sw, sh) };
         }
         return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
       }
@@ -1373,8 +1379,7 @@ export const useBookStore = create((set, get) => ({
       if (!photo) return;
       const geo = newGeo[i];
       if (!geo) return;
-      if (!newCells[i].manualCrop) newGeo[i] = fitGeoToPhoto(geo, photo.width / photo.height, sw, sh);
-      newCells[i] = { ...newCells[i], photoId, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(newGeo[i], photo, sw, sh) };
+      newCells[i] = { ...newCells[i], photoId, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(geo, photo, sw, sh) };
     });
     return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
   })),
