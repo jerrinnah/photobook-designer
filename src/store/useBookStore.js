@@ -1346,21 +1346,31 @@ export const useBookStore = create((set, get) => ({
     // photo crop-fills the cell instead via topAlignOffsetY, which is
     // predictable and reversible.
 
-    // Path 1: empty cells + a pool of unplaced photos → sequential fill.
-    if (emptyOnes.length > 0) {
+    // Path 1: empty cells → fill each with the next picture.
+    //   Preference order so we always fill empty cells, even when the
+    //   library has no unplaced photos left:
+    //     1. Photos not placed anywhere (the original pool)
+    //     2. Photos not placed on THIS spread (avoids visible duplicates)
+    //     3. Any photo in the library (last resort — wraps around)
+    if (emptyOnes.length > 0 && s.photos.length > 0) {
       const usedIds = new Set(s.spreads.flatMap((sp) => sp.cells.map((c) => c.photoId).filter(Boolean)));
-      const pool = s.photos.filter((p) => !usedIds.has(p.id));
-      if (pool.length > 0) {
-        let cursor = 0;
-        for (const { i } of emptyOnes) {
-          if (cursor >= pool.length) break;
-          const photo = pool[cursor++];
-          const geo = newGeo[i];
-          if (!geo) continue;
-          newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(geo, photo, sw, sh) };
-        }
-        return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
+      let pool = s.photos.filter((p) => !usedIds.has(p.id));
+      if (pool.length === 0) {
+        const onThisSpread = new Set(spread.cells.map((c) => c.photoId).filter(Boolean));
+        pool = s.photos.filter((p) => !onThisSpread.has(p.id));
       }
+      if (pool.length === 0) pool = [...s.photos];
+
+      // Wrap the cursor so we keep filling even if empty cells > pool size.
+      let cursor = 0;
+      for (const { i } of emptyOnes) {
+        const photo = pool[cursor % pool.length];
+        cursor++;
+        const geo = newGeo[i];
+        if (!geo) continue;
+        newCells[i] = { ...newCells[i], photoId: photo.id, zoom: 1, offsetX: 0, offsetY: topAlignOffsetY(geo, photo, sw, sh) };
+      }
+      return { spreads: s.spreads.map((sp) => sp.id === spreadId ? { ...sp, cells: newCells, cellGeometry: newGeo } : sp) };
     }
 
     // Path 2: shuffle existing photos within this spread. Re-randomize
