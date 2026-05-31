@@ -1310,6 +1310,62 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           );
         })}
 
+        {/* Side action chip — Copy / Duplicate / Layer order. Pops up
+            vertically next to the selected cell. DOM overlay (not a
+            Konva node), so it shows in the editor but never appears
+            in exports / shares. */}
+        {selGeo && selectedCell && (() => {
+          const multi = cellGeometry.length > 1;
+          const btnCount = 2 + (multi ? 4 : 0); // copy + dup + (4 layer)
+          const colW = 30;
+          const colH = btnCount * 26 + (multi ? 8 : 4) + 6;
+          const cellRightPx = (selGeo.x + selGeo.w) * SPREAD_W;
+          const cellLeftPx  = selGeo.x * SPREAD_W;
+          const cellMidYPx  = (selGeo.y + selGeo.h / 2) * SPREAD_H;
+          const placeOnRight = cellRightPx + colW + 8 <= SPREAD_W;
+          const left = placeOnRight ? cellRightPx + 6 : Math.max(2, cellLeftPx - colW - 6);
+          const top = Math.max(2, Math.min(SPREAD_H - colH - 2, cellMidYPx - colH / 2));
+          const sideBtn = (extra = {}) => ({
+            width: 24, height: 24,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#181818', border: '1px solid #2a2a2a',
+            borderRadius: 4, color: '#aaa', fontSize: 13,
+            cursor: 'pointer', lineHeight: 1,
+            ...extra,
+          });
+          return (
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute', left, top, width: colW,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                background: '#141414', border: '1px solid #2a2a2a',
+                borderRadius: 6, padding: '4px 3px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.55)',
+                zIndex: 18, pointerEvents: 'all',
+              }}
+            >
+              <button style={sideBtn()} title="Copy this cell (⌘C / Ctrl+C)"
+                onClick={() => copyCell(activeSpreadId, selectedCellIndex)}>⎘</button>
+              <button style={sideBtn()} title="Duplicate this cell on this spread"
+                onClick={() => duplicateCell(activeSpreadId, selectedCellIndex)}>⊞</button>
+              {multi && (
+                <>
+                  <div style={{ width: '70%', height: 1, background: '#2a2a2a', margin: '2px 0' }} />
+                  <button style={sideBtn()} title="Bring to front (on top of all)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'front')}>⤒</button>
+                  <button style={sideBtn()} title="Bring forward (one layer up)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'forward')}>↑</button>
+                  <button style={sideBtn()} title="Send backward (one layer down)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'backward')}>↓</button>
+                  <button style={sideBtn()} title="Send to back (behind all)"
+                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'back')}>⤓</button>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Floating cell action toolbar */}
         {floatToolbar && selectedCell && (() => {
           const printInfo = selGeo ? getCellPrintInfo(selGeo, spreadSizeId, customSize) : null;
@@ -1434,17 +1490,6 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 <span style={{ letterSpacing: -1 }}>⬚</span> Split —
               </button>
 
-              <button style={cellBtnStyle()} title="Duplicate this cell with its photo (same spread)"
-                onClick={() => duplicateCell(activeSpreadId, selectedCellIndex)}>
-                ⊞ Duplicate
-              </button>
-
-              <button style={cellBtnStyle({ color: '#9a9a9a' })}
-                title="Copy this cell — paste it on any spread"
-                onClick={() => copyCell(activeSpreadId, selectedCellIndex)}>
-                ⎘ Copy
-              </button>
-
               <button
                 style={cellBtnStyle({
                   color: copiedCell ? '#6fcf97' : '#444',
@@ -1460,30 +1505,6 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               </button>
 
               <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
-
-              {/* Layer order — only meaningful when there are 2+ cells */}
-              {cellGeometry.length > 1 && (
-                <>
-                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Bring to front (on top of all)"
-                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'front')}>
-                    ⤒ Front
-                  </button>
-                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Bring forward (one layer up)"
-                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'forward')}>
-                    ↑
-                  </button>
-                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Send backward (one layer down)"
-                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'backward')}>
-                    ↓
-                  </button>
-                  <button style={cellBtnStyle({ color: '#9a9a9a' })} title="Send to back (behind all)"
-                    onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'back')}>
-                    ⤓ Back
-                  </button>
-
-                  <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
-                </>
-              )}
 
               {selectedCell.photoId && (
                 <>
