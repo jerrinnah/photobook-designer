@@ -226,6 +226,28 @@ const pickProgressiveTemplate = (spreadIdx, portraitDominant, sw, sh) => {
     || pickHighDensityTemplate(portraitDominant, sw, sh);
 };
 
+// Opening-spread templates: the first 4 spreads after the cover use
+// these specific Wedding-category templates so a fresh photobook
+// always starts with a recognisable wedding-story arc:
+//   1 → First Dance
+//   2 → Vows Moment
+//   3 → Cake & Details
+//   4 → Down The Aisle
+// Falls back to the progressive picker if any of these IDs goes missing.
+const OPENING_TEMPLATE_IDS = [
+  null,                // idx 0 = cover (untouched)
+  'wed-first-dance',
+  'wed-vows',
+  'wed-cake-cutting',
+  'wed-aisle',
+];
+
+const pickOpeningTemplate = (spreadIdx) => {
+  const id = OPENING_TEMPLATE_IDS[spreadIdx];
+  if (!id) return null;
+  return TEMPLATES.find((t) => t.id === id) || null;
+};
+
 // "Redesign" picker — targets the 3–9 cell editorial sweet spot from the
 // wedding photobook reference samples (hero + supporting photos, mosaics,
 // diptychs, etc.). Never picks super-dense layouts.
@@ -1161,11 +1183,17 @@ export const useBookStore = create((set, get) => ({
     // Progressive density: spread 1 = 1–3 cells, spread 2 = 2–4 cells, …
     // (cover at index 0 is untouched). Spreads the user already designed
     // (have any photos placed) are left alone.
+    //
+    // SPECIAL CASE: the first four spreads after the cover use specific
+    // Wedding-themed templates (First Dance, Vows Moment, Cake & Details,
+    // Down The Aisle) so a fresh book always opens with a coherent
+    // wedding-story arc instead of random density layouts.
     let spreads = s.spreads.map((sp, idx) => {
       if (idx === 0) return sp; // cover protected
       const hasAnyPhoto = sp.cells.some((c) => c.photoId);
       if (!hasAnyPhoto) {
-        const tmpl = pickProgressiveTemplate(idx, portraitDominant, sw, sh);
+        const tmpl = pickOpeningTemplate(idx)
+                   || pickProgressiveTemplate(idx, portraitDominant, sw, sh);
         return {
           ...sp,
           templateId: tmpl.id,
