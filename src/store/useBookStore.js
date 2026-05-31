@@ -59,9 +59,14 @@ const makeSpread = (id, tmpl) => {
   };
 };
 
-// Snapshot for undo/redo — excludes photos (large) and navigation state
+// Snapshot for undo/redo. The photos array is captured BY REFERENCE
+// (not deep-cloned) — every photo mutation already creates a new array
+// immutably, so the reference is stable. This lets undo restore the
+// photo library after removePhoto / clear without paying the deep-clone
+// cost on the huge base64 image strings.
 const snap = (s) => ({
   spreads: JSON.parse(JSON.stringify(s.spreads)),
+  photos: s.photos,
   gap: s.gap,
   bookName: s.bookName,
   blendEdges: s.blendEdges,

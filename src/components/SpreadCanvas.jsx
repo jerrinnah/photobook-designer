@@ -976,20 +976,10 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               />
             )}
 
-            {/* Ghost cell preview */}
-            {ghostGeo && (
-              <Rect
-                x={ghostGeo.x * SPREAD_W + gap / 2}
-                y={ghostGeo.y * SPREAD_H + gap / 2}
-                width={ghostGeo.w * SPREAD_W - gap}
-                height={ghostGeo.h * SPREAD_H - gap}
-                fill="rgba(79,142,247,0.08)"
-                stroke="#4f8ef7"
-                strokeWidth={1.5}
-                dash={[6, 4]}
-                listening={false}
-              />
-            )}
+            {/* Ghost cell preview rect removed — the Add-Cell popup
+                (rendered as a DOM overlay below) handles the picker,
+                we don't need the highlight outline on the canvas
+                cluttering the spread before the cell is added. */}
 
             <SeamHandles
               spreadId={activeSpreadId}
@@ -1310,15 +1300,18 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           );
         })}
 
-        {/* Side action chip — Copy / Duplicate / Layer order. Pops up
-            vertically next to the selected cell. DOM overlay (not a
-            Konva node), so it shows in the editor but never appears
-            in exports / shares. */}
+        {/* Side action chip — Move / Copy / Duplicate / Layer order /
+            Clear / Remove. Pops up vertically next to the selected
+            cell. DOM overlay (not a Konva node), so it shows in the
+            editor but never appears in exports / shares. */}
         {selGeo && selectedCell && (() => {
+          const hasPhoto = !!selectedCell.photoId;
           const multi = cellGeometry.length > 1;
-          const btnCount = 2 + (multi ? 4 : 0); // copy + dup + (4 layer)
-          const colW = 30;
-          const colH = btnCount * 26 + (multi ? 8 : 4) + 6;
+          // Count buttons: Move + Copy + Duplicate (3) + layer order (4 if multi)
+          // + Clear (1 if photo) + Remove (1) + dividers
+          let btnCount = 3 + (multi ? 4 : 0) + (hasPhoto ? 1 : 0) + 1;
+          const colW = 32;
+          const colH = btnCount * 27 + 6 + (multi ? 4 : 0) + 4;
           const cellRightPx = (selGeo.x + selGeo.w) * SPREAD_W;
           const cellLeftPx  = selGeo.x * SPREAD_W;
           const cellMidYPx  = (selGeo.y + selGeo.h / 2) * SPREAD_H;
@@ -1326,42 +1319,113 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
           const left = placeOnRight ? cellRightPx + 6 : Math.max(2, cellLeftPx - colW - 6);
           const top = Math.max(2, Math.min(SPREAD_H - colH - 2, cellMidYPx - colH / 2));
           const sideBtn = (extra = {}) => ({
-            width: 24, height: 24,
+            width: 26, height: 26,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#181818', border: '1px solid #2a2a2a',
-            borderRadius: 4, color: '#aaa', fontSize: 13,
+            background: '#1a1a1a', border: '1px solid #2a2a2a',
+            borderRadius: 4, color: '#bbb', fontSize: 13,
             cursor: 'pointer', lineHeight: 1,
             ...extra,
           });
+
+          // Drag the cell from the Move button. Mouse-move updates the
+          // dashed ghost rect (already rendered next to the selection
+          // handles) so the user sees where the cell will land; mouseup
+          // commits via commitResizeCell (one history entry per drag).
+          const startMoveDrag = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const startX = e.clientX, startY = e.clientY;
+            const g0 = { ...selGeo };
+            document.body.style.cursor = 'grabbing';
+            const onMove = (ev) => {
+              const dx = (ev.clientX - startX) / (zoom * SPREAD_W);
+              const dy = (ev.clientY - startY) / (zoom * SPREAD_H);
+              const nx = Math.max(0, Math.min(1 - g0.w, g0.x + dx));
+              const ny = Math.max(0, Math.min(1 - g0.h, g0.y + dy));
+              if (ghostResizeRef.current) {
+                ghostResizeRef.current.setAttrs({
+                  x: nx * SPREAD_W, y: ny * SPREAD_H,
+                  width: g0.w * SPREAD_W, height: g0.h * SPREAD_H,
+                });
+                ghostResizeRef.current.getLayer().batchDraw();
+              }
+            };
+            const onUp = (ev) => {
+              document.body.style.cursor = '';
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+              const dx = (ev.clientX - startX) / (zoom * SPREAD_W);
+              const dy = (ev.clientY - startY) / (zoom * SPREAD_H);
+              const nx = Math.max(0, Math.min(1 - g0.w, g0.x + dx));
+              const ny = Math.max(0, Math.min(1 - g0.h, g0.y + dy));
+              if (Math.abs(nx - g0.x) > 0.001 || Math.abs(ny - g0.y) > 0.001) {
+                commitResizeCell(activeSpreadId, selectedCellIndex, { ...g0, x: nx, y: ny });
+              }
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          };
+
           return (
             <div
               onMouseDown={(e) => e.stopPropagation()}
               style={{
                 position: 'absolute', left, top, width: colW,
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                background: '#141414', border: '1px solid #2a2a2a',
+                background: '#0e1620', border: '1px solid #2a3a55',
                 borderRadius: 6, padding: '4px 3px',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.55)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
                 zIndex: 18, pointerEvents: 'all',
               }}
             >
-              <button style={sideBtn()} title="Copy this cell (⌘C / Ctrl+C)"
+              {/* MOVE — drag to reposition. Bright blue so it stands out. */}
+              <button
+                onMouseDown={startMoveDrag}
+                title="Drag to move this cell"
+                style={sideBtn({
+                  background: '#1a3580', color: '#fff', border: '1px solid #4f8ef7',
+                  cursor: 'grab', fontSize: 14,
+                })}
+              >✥</button>
+
+              {/* Copy / Duplicate */}
+              <button style={sideBtn({ color: '#b89fff', border: '1px solid #2a2240' })}
+                title="Copy this cell (⌘C / Ctrl+C)"
                 onClick={() => copyCell(activeSpreadId, selectedCellIndex)}>⎘</button>
-              <button style={sideBtn()} title="Duplicate this cell on this spread"
+              <button style={sideBtn({ color: '#6fb8d8', border: '1px solid #1e3a5f' })}
+                title="Duplicate this cell on this spread"
                 onClick={() => duplicateCell(activeSpreadId, selectedCellIndex)}>⊞</button>
+
+              {/* Layer order — only meaningful with 2+ cells */}
               {multi && (
                 <>
-                  <div style={{ width: '70%', height: 1, background: '#2a2a2a', margin: '2px 0' }} />
-                  <button style={sideBtn()} title="Bring to front (on top of all)"
+                  <div style={{ width: '70%', height: 1, background: '#2a3a55', margin: '2px 0' }} />
+                  <button style={sideBtn({ color: '#f6c90e', border: '1px solid #3a2a08' })}
+                    title="Bring to front (on top of all)"
                     onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'front')}>⤒</button>
-                  <button style={sideBtn()} title="Bring forward (one layer up)"
+                  <button style={sideBtn({ color: '#f6c90e', border: '1px solid #3a2a08' })}
+                    title="Bring forward (one layer up)"
                     onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'forward')}>↑</button>
-                  <button style={sideBtn()} title="Send backward (one layer down)"
+                  <button style={sideBtn({ color: '#f6c90e', border: '1px solid #3a2a08' })}
+                    title="Send backward (one layer down)"
                     onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'backward')}>↓</button>
-                  <button style={sideBtn()} title="Send to back (behind all)"
+                  <button style={sideBtn({ color: '#f6c90e', border: '1px solid #3a2a08' })}
+                    title="Send to back (behind all)"
                     onClick={() => reorderCellZ(activeSpreadId, selectedCellIndex, 'back')}>⤓</button>
                 </>
               )}
+
+              <div style={{ width: '70%', height: 1, background: '#2a3a55', margin: '2px 0' }} />
+
+              {/* Clear photo (only when cell has a photo) */}
+              {hasPhoto && (
+                <button style={sideBtn({ color: '#e8a050', border: '1px solid #5a3010' })}
+                  title="Remove the photo from this cell"
+                  onClick={() => clearCell(activeSpreadId, selectedCellIndex)}>✕</button>
+              )}
+              {/* Remove the cell entirely */}
+              <button style={sideBtn({ color: '#e05c5c', border: '1px solid #5a1a1a' })}
+                title="Remove this cell from the layout"
+                onClick={() => removeCell(activeSpreadId, selectedCellIndex)}>🗑</button>
             </div>
           );
         })()}
@@ -1507,16 +1571,10 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
 
               {selectedCell.photoId && (
-                <>
-                  <button style={cellBtnStyle({ color: '#9ad' })} title="Rotate photo 90°"
-                    onClick={() => rotateCellPhoto(activeSpreadId, selectedCellIndex)}>
-                    ↻ Rotate
-                  </button>
-                  <button style={cellBtnStyle({ color: '#e05c5c' })} title="Remove photo from cell"
-                    onClick={() => clearCell(activeSpreadId, selectedCellIndex)}>
-                    ✕ Clear
-                  </button>
-                </>
+                <button style={cellBtnStyle({ color: '#9ad' })} title="Rotate photo 90°"
+                  onClick={() => rotateCellPhoto(activeSpreadId, selectedCellIndex)}>
+                  ↻ Rotate
+                </button>
               )}
 
               <button
@@ -1528,14 +1586,6 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               </button>
 
               <div style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 2px' }} />
-
-              <button
-                style={cellBtnStyle({ color: '#e05c5c', borderColor: 'transparent' })}
-                title="Remove this cell from the layout"
-                onClick={() => removeCell(activeSpreadId, selectedCellIndex)}
-              >
-                ✕ Remove Cell
-              </button>
 
               {spreads.length > 1 && spreads[spreads.length - 1]?.id !== activeSpreadId && (
                 <button
