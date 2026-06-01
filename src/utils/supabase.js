@@ -430,6 +430,7 @@ export async function signUpWithPassword(email, password, phone) {
     try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
     markSessionFresh();
     attributeReferralIfPending(trimmed);
+    await enforceDeviceLimit();
     return;
   }
 
@@ -444,7 +445,10 @@ export async function signUpWithPassword(email, password, phone) {
     try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
     markSessionFresh();
     attributeReferralIfPending(trimmed);
+    await enforceDeviceLimit();
   } catch (e) {
+    // Device-limit hits propagate as-is so the UI shows the right modal.
+    if (e?.code === 'DEVICE_BLOCKED') throw e;
     console.error('[signUpWithPassword] account created but immediate sign-in failed', e);
     throw new Error(
       "Your account was created but Supabase requires email confirmation before you can sign in. " +
@@ -556,6 +560,33 @@ export async function signInWithPassword(email, password) {
   // 30s grace period so the liveness check doesn't race a freshly
   // hydrating session and false-positive the user out.
   markSessionFresh();
+  // Enforce the device limit (lazy import to avoid an import cycle
+  // with deviceCheck.js which uses rpcDirect from this module).
+  await enforceDeviceLimit();
+}
+
+// Device-limit enforcement. Calls claim_device on the server; if the
+// account is already in use on too many devices on different networks,
+// signs the user out and throws a DEVICE_BLOCKED error so the UI can
+// surface it. Failures (network glitch, RPC not installed) are
+// non-fatal — we never lock a user out for a flaky network.
+async function enforceDeviceLimit() {
+  try {
+    const { claimDeviceForUser } = await import('./deviceCheck');
+    const result = await claimDeviceForUser();
+    if (result?.status === 'blocked') {
+      const msg = result.message || 'This account is already active on too many devices.';
+      try { window.dispatchEvent(new CustomEvent('autobook:device-blocked', { detail: { message: msg } })); } catch { /* ignore */ }
+      try { await signOut(); } catch { /* signOut already reloads on success */ }
+      const err = new Error(msg);
+      err.code = 'DEVICE_BLOCKED';
+      throw err;
+    }
+  } catch (e) {
+    if (e?.code === 'DEVICE_BLOCKED') throw e;
+    // Anything else (e.g. RPC not installed yet) is non-fatal.
+    console.info('[enforceDeviceLimit] non-fatal:', e?.message);
+  }
 }
 
 // Sets (or changes) the current user's password. Requires an active

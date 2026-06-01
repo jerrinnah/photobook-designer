@@ -14,6 +14,7 @@ import Tour, { hasSeenTour } from './components/Tour';
 import NameProjectHint from './components/NameProjectHint';
 import LandingPage from './components/LandingPage';
 import ShareProgressToast from './components/ShareProgressToast';
+import DeviceBlockedModal from './components/DeviceBlockedModal';
 import { hasEngaged, startSessionLivenessCheck } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 import { useTheme } from './utils/theme';
@@ -24,7 +25,16 @@ export default function App() {
   const [previewing, setPreviewing] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [deviceBlocked, setDeviceBlocked] = useState(null); // { message } | null
   const { isMobile, isPortrait } = useViewport();
+
+  // Listen for device-limit signals fired from supabase.js when a
+  // post-sign-in claim_device returns 'blocked'.
+  useEffect(() => {
+    const onBlocked = (e) => setDeviceBlocked({ message: e?.detail?.message || '' });
+    window.addEventListener('autobook:device-blocked', onBlocked);
+    return () => window.removeEventListener('autobook:device-blocked', onBlocked);
+  }, []);
 
   // Auto-start the tour for first-time visitors. We delay slightly so the
   // toolbar has a chance to mount before Tour queries data-tour selectors.
@@ -88,6 +98,11 @@ export default function App() {
       <>
         <MobileShell stageRef={stageRef} />
         {isPortrait && <RotateOverlay />}
+        <DeviceBlockedModal
+          open={Boolean(deviceBlocked)}
+          message={deviceBlocked?.message}
+          onClose={() => setDeviceBlocked(null)}
+        />
       </>
     );
   }
@@ -109,6 +124,11 @@ export default function App() {
       {printPreviewing && <PrintPreview onClose={() => setPrintPreviewing(false)} />}
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       <ShareProgressToast />
+      <DeviceBlockedModal
+        open={Boolean(deviceBlocked)}
+        message={deviceBlocked?.message}
+        onClose={() => setDeviceBlocked(null)}
+      />
     </div>
   );
 }

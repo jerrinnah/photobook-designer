@@ -565,6 +565,9 @@ export default function AdminDashboard() {
 function UserDetailDrawer({ email, adminPassword, onClose }) {
   const [data, setData] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
+  const [devices, setDevices] = useState(null); // array | null while loading
+  const [devicesErr, setDevicesErr] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   useEffect(() => {
     let alive = true;
     rpcDirect('get_user_detail_admin', {
@@ -574,6 +577,32 @@ function UserDetailDrawer({ email, adminPassword, onClose }) {
       .catch((e) => { if (alive) setLoadErr(e.message); });
     return () => { alive = false; };
   }, [email, adminPassword]);
+
+  // Devices section loads separately (and refetches when admin releases
+  // a device) so the rest of the drawer doesn't have to reload.
+  useEffect(() => {
+    let alive = true;
+    setDevices(null);
+    setDevicesErr(null);
+    rpcDirect('list_user_devices_admin', {
+      p_password: adminPassword, p_email: email,
+    }, { label: 'Devices', timeoutMs: 12_000 })
+      .then((d) => { if (alive) setDevices(Array.isArray(d) ? d : []); })
+      .catch((e) => { if (alive) setDevicesErr(e.message); });
+    return () => { alive = false; };
+  }, [email, adminPassword, refreshTick]);
+
+  const releaseDevice = async (deviceId) => {
+    if (!confirm('Release this device? The user will need to sign in again on that device, and a slot will open up for a new one.')) return;
+    try {
+      await rpcDirect('release_device_admin', {
+        p_password: adminPassword, p_email: email, p_device_id: deviceId,
+      }, { label: 'Release device', timeoutMs: 12_000 });
+      setRefreshTick((n) => n + 1);
+    } catch (e) {
+      alert(`Failed to release device: ${e.message}`);
+    }
+  };
 
   return (
     <div onClick={onClose} style={{
@@ -647,6 +676,60 @@ function UserDetailDrawer({ email, adminPassword, onClose }) {
                   </div>
                 ))
               )}
+            </Section>
+
+            <Section title={`Devices (${devices ? devices.length : '…'}/2)`}>
+              {devicesErr && (
+                <div style={{
+                  padding: '8px 10px', background: '#1a0808', border: '1px solid #5a1a1a',
+                  color: '#e05c5c', fontSize: 11, borderRadius: 5, marginBottom: 6,
+                }}>
+                  {devicesErr}<br />Did you install SUPABASE_DEVICES.sql?
+                </div>
+              )}
+              {!devices && !devicesErr && (
+                <div style={{ color: '#666', fontSize: 11 }}>Loading…</div>
+              )}
+              {devices && devices.length === 0 && !devicesErr && (
+                <div style={{ color: '#555', fontSize: 11 }}>No devices recorded yet.</div>
+              )}
+              {devices && devices.map((d) => (
+                <div key={d.device_id} style={{
+                  padding: '8px 10px', marginBottom: 6,
+                  background: '#0c0c0c', border: '1px solid #1a1a1a', borderRadius: 5,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 11, color: '#ddd' }}>
+                        IP: <span style={{ color: '#9fb8d8' }}>{d.ip || '—'}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#666', marginTop: 2, wordBreak: 'break-all' }}>
+                        <code>{d.device_id.slice(0, 18)}…</code>
+                      </div>
+                      {d.user_agent && (
+                        <div style={{ fontSize: 10, color: '#555', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {d.user_agent}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>
+                        Last seen {formatDate(d.last_seen_at)} · First {formatDate(d.first_seen_at)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => releaseDevice(d.device_id)}
+                      title="Free this slot so the user can sign in on a new device"
+                      style={{
+                        padding: '5px 10px', fontSize: 10, fontWeight: 600,
+                        background: '#3a1c1c', color: '#e89a9a',
+                        border: '1px solid #5a1a1a', borderRadius: 4,
+                        cursor: 'pointer', flexShrink: 0,
+                      }}
+                    >
+                      Release
+                    </button>
+                  </div>
+                </div>
+              ))}
             </Section>
           </>
         )}
