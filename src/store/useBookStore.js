@@ -343,6 +343,7 @@ export const useBookStore = create((set, get) => ({
   selectedCellIndex: null,         // "Primary" cell — drives the floating cell toolbar / panels
   selectedCellIndices: new Set(),  // Full multi-selection (always includes primary when set)
   copiedCell: null,                // { cell, geo } — clipboard for cross-spread copy/paste
+  swapSourceIndex: null,           // cellIndex armed by "↔ Swap" — next cell click swaps with it
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
@@ -384,7 +385,7 @@ export const useBookStore = create((set, get) => ({
   nextPhotoId: () => String(photoIdCounter++),
 
   // ── Settings ───────────────────────────────────────────────────────
-  setActiveSpread: (id) => set({ activeSpreadId: id, selectedCellIndex: null, selectedCellIndices: new Set() }),
+  setActiveSpread: (id) => set({ activeSpreadId: id, selectedCellIndex: null, selectedCellIndices: new Set(), swapSourceIndex: null }),
   setSpreadSize: (id) => set({ spreadSizeId: id }),
   setCustomSize: (size) => set({ customSize: size }),
   setBlendEdges: (val) => set(h(() => ({ blendEdges: val }))),
@@ -863,6 +864,46 @@ export const useBookStore = create((set, get) => ({
       return { ...sp, cells: sp.cells.map((c, i) => i === cellIndex ? { ...c, ...patch, manualCrop: true } : c) };
     }),
   })),
+
+  // Swap the photo (and its in-cell positioning) between two cells on
+  // the same spread. Cell geometry, gradients, captions, and FX stay put
+  // — only what's "about the photo" moves: photoId, zoom, offsetX/Y,
+  // rotation, manualCrop. Clears the swap-arming state on completion so
+  // the caller doesn't have to.
+  swapCellPhotos: (spreadId, indexA, indexB) => {
+    if (indexA === indexB || indexA == null || indexB == null) {
+      set({ swapSourceIndex: null });
+      return;
+    }
+    set(h((s) => ({
+      spreads: s.spreads.map((sp) => {
+        if (sp.id !== spreadId) return sp;
+        const a = sp.cells[indexA];
+        const b = sp.cells[indexB];
+        if (!a || !b) return sp;
+        const move = (from, to) => ({
+          ...to,
+          photoId: from.photoId ?? null,
+          zoom: from.zoom ?? 1,
+          offsetX: from.offsetX ?? 0,
+          offsetY: from.offsetY ?? 0,
+          rotation: from.rotation ?? 0,
+          manualCrop: from.manualCrop ?? false,
+        });
+        return {
+          ...sp,
+          cells: sp.cells.map((c, i) => {
+            if (i === indexA) return move(b, a);
+            if (i === indexB) return move(a, b);
+            return c;
+          }),
+        };
+      }),
+      swapSourceIndex: null,
+    })));
+  },
+  armSwap: (cellIndex) => set({ swapSourceIndex: cellIndex }),
+  cancelSwap: () => set({ swapSourceIndex: null }),
 
   rotateCellPhoto: (spreadId, cellIndex) => set(h((s) => ({
     spreads: s.spreads.map((sp) => {

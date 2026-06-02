@@ -201,7 +201,7 @@ function BlendOverlays({ x, y, w, h }) {
 }
 
 function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blendEdges, bgColor, onPhotoDragStart, onPhotoDragEnd }) {
-  const { photos, selectedCellIndex, selectedCellIndices, setSelectedCell, toggleCellSelection, adjustCell } = useBookStore();
+  const { photos, selectedCellIndex, selectedCellIndices, setSelectedCell, toggleCellSelection, adjustCell, swapSourceIndex, swapCellPhotos } = useBookStore();
   const photo = photos.find((p) => p.id === cell.photoId);
   const [img] = useImage(photo?.src);
   const kImgRef = useRef(null);
@@ -266,6 +266,18 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
   return (
     <Group clipX={x} clipY={y} clipWidth={w} clipHeight={h} onClick={(e) => {
       const ev = e?.evt;
+      // Swap mode wins over normal selection — the next cell click pairs
+      // with the armed source cell and swaps their photos. Clicking the
+      // armed cell again (or any non-cell area, handled elsewhere) cancels.
+      if (swapSourceIndex !== null && swapSourceIndex !== undefined) {
+        if (swapSourceIndex === cellIndex) {
+          useBookStore.setState({ swapSourceIndex: null });
+          return;
+        }
+        swapCellPhotos(spreadId, swapSourceIndex, cellIndex);
+        setSelectedCell(cellIndex);
+        return;
+      }
       // Shift / Cmd (Mac) / Ctrl (Win) toggles the cell in/out of the
       // multi-selection. Plain click replaces selection with this cell.
       if (ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)) toggleCellSelection(cellIndex);
@@ -339,6 +351,13 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
         <Rect x={x} y={y} width={w} height={h}
           stroke="#4f8ef7" strokeWidth={2} fill="transparent" listening={false} />
       )}
+
+      {/* Swap-source marker — dashed orange ring shown on the armed cell
+          while the user is picking the swap target. */}
+      {swapSourceIndex === cellIndex && (
+        <Rect x={x} y={y} width={w} height={h}
+          stroke="#f6a623" strokeWidth={2.5} dash={[6, 4]} fill="transparent" listening={false} />
+      )}
     </Group>
   );
 }
@@ -405,6 +424,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     addCaption, updateCaption, removeCaption, duplicateCaption,
     adjustCell,
     clearPhotoSelection,
+    swapSourceIndex, armSwap, cancelSwap,
   } = useBookStore();
 
   const cellFileInputRef = useRef(null);
@@ -598,6 +618,15 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [activeSpreadId, selectedCellIndex, copiedCell, copyCell, pasteCell]);
+
+  // Esc cancels swap-pick mode regardless of where focus is, so the
+  // user is never stranded with an armed cell they can't disarm.
+  useEffect(() => {
+    if (swapSourceIndex === null || swapSourceIndex === undefined) return;
+    const onKey = (e) => { if (e.key === 'Escape') cancelSwap(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [swapSourceIndex, cancelSwap]);
 
   // Preset sizes (cw/ch for default 12×6 spread, i.e. spreadRatio=2)
   const PRESETS = {
@@ -839,6 +868,37 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
   return (
     <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, minWidth: 0 }}>
+      {/* Swap-mode banner — pinned to the top of the canvas viewport so it
+          stays visible regardless of zoom / scroll. Cancel via the chip, the
+          Esc key, or the X button here. */}
+      {swapSourceIndex !== null && swapSourceIndex !== undefined && (
+        <div style={{
+          position: 'absolute', top: 8, left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 30,
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '6px 12px',
+          background: '#1a1208',
+          border: '1px solid #f6a623',
+          borderRadius: 6,
+          fontSize: 11, color: '#f6c98a',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+          pointerEvents: 'auto',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}>
+          <span style={{ fontSize: 13 }}>↔</span>
+          <span>Swap mode — click another cell to swap photos</span>
+          <button
+            onClick={cancelSwap}
+            title="Cancel swap (Esc)"
+            style={{
+              background: 'transparent', border: 'none',
+              color: '#f6c98a', cursor: 'pointer',
+              fontSize: 13, lineHeight: 1, padding: 0,
+            }}
+          >✕</button>
+        </div>
+      )}
       <div
         ref={zoomContainerRef}
         // Click on the empty viewport area (outside the spread) → deselect.
@@ -1394,6 +1454,28 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
               <button style={sideBtn({ color: '#6fb8d8', border: '1px solid #1e3a5f' })}
                 title="Duplicate this cell on this spread"
                 onClick={() => duplicateCell(activeSpreadId, selectedCellIndex)}>⊞</button>
+
+              {/* Swap photos with another cell — only meaningful when this
+                  cell has a photo. Click once to arm; the next cell click
+                  swaps. Clicking the same cell again or pressing Esc cancels. */}
+              {hasPhoto && (
+                <button
+                  style={sideBtn(
+                    swapSourceIndex === selectedCellIndex
+                      ? { color: '#1a1208', background: '#f6a623', border: '1px solid #f6a623' }
+                      : { color: '#f6a623', border: '1px solid #5a3a10' }
+                  )}
+                  title={
+                    swapSourceIndex === selectedCellIndex
+                      ? 'Swap armed — click another cell to swap, or click here to cancel'
+                      : 'Swap photo with another cell — click, then click the target cell'
+                  }
+                  onClick={() => {
+                    if (swapSourceIndex === selectedCellIndex) cancelSwap();
+                    else armSwap(selectedCellIndex);
+                  }}
+                >↔</button>
+              )}
 
               {/* Layer order — only meaningful with 2+ cells */}
               {multi && (
