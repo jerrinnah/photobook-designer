@@ -46,7 +46,7 @@ const downscaleIfNeeded = async (originalSrc, img) => {
   return { src, width: w, height: h };
 };
 
-export async function loadPhoto(file) {
+export async function loadPhoto(file, batchMeta = null) {
   const originalSrc = await readAsDataURL(file);
   const img = await loadImage(originalSrc);
   const { src, width, height } = await downscaleIfNeeded(originalSrc, img);
@@ -60,5 +60,10 @@ export async function loadPhoto(file) {
     originalSrc,
     origWidth: img.width,
     origHeight: img.height,
+    ...(batchMeta ? {
+      batchId: batchMeta.batchId,
+      batchLabel: batchMeta.batchLabel,
+      batchAt: batchMeta.batchAt,
+    } : {}),
   };
 }

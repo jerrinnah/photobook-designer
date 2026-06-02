@@ -346,6 +346,7 @@ export const useBookStore = create((set, get) => ({
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
+  photoBatch: 'all',    // 'all' | batchId — filter the list to one import batch (sub-folder)
 
   // ── Undo / Redo ────────────────────────────────────────────────────
   past: [],
@@ -1099,6 +1100,24 @@ export const useBookStore = create((set, get) => ({
   setPhotoFilter: (f) => set({ photoFilter: f }),
   setPhotoSort: (s) => set({ photoSort: s }),
   setPhotoSearch: (q) => set({ photoSearch: q }),
+  setPhotoBatch: (b) => set({ photoBatch: b || 'all' }),
+  removePhotosInBatch: (batchId) => set(h((s) => {
+    const remove = new Set(
+      s.photos.filter((p) => (p.batchId || '__legacy') === batchId).map((p) => p.id)
+    );
+    if (remove.size === 0) return {};
+    const sel = new Set(s.selectedPhotoIds);
+    remove.forEach((id) => sel.delete(id));
+    return {
+      photos: s.photos.filter((p) => !remove.has(p.id)),
+      selectedPhotoIds: sel,
+      photoBatch: 'all',
+      spreads: s.spreads.map((sp) => ({
+        ...sp,
+        cells: sp.cells.map((c) => remove.has(c.photoId) ? { ...c, photoId: null } : c),
+      })),
+    };
+  })),
   togglePhotoFavorite: (id) => set((s) => ({
     photos: s.photos.map((p) => p.id === id ? { ...p, favorite: !p.favorite } : p),
   })),

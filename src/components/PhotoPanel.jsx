@@ -88,6 +88,7 @@ export default function PhotoPanel({ mobile = false }) {
     photoFilter, setPhotoFilter,
     photoSort, setPhotoSort,
     photoSearch, setPhotoSearch,
+    photoBatch, setPhotoBatch, removePhotosInBatch,
     togglePhotoFavorite,
     setPhotoFacePriorities,
     resetProject,
@@ -117,19 +118,46 @@ export default function PhotoPanel({ mobile = false }) {
   const folderInputRef = useRef(null);
   const [loadProgress, setLoadProgress] = useState(null); // { done, total } | null
 
-  const ingestFiles = async (files) => {
+  // Stable id per ingest call — every photo in the same batch shares it.
+  // Used so the folder filter and "remove batch" can address a batch.
+  const makeBatchId = () =>
+    `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+  // Time-of-day label like "Imported 4:21 PM" — used when the user picked
+  // individual files (no folder name to borrow).
+  const timeLabel = () => {
+    const d = new Date();
+    const hh = ((d.getHours() + 11) % 12) + 1;
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ampm = d.getHours() < 12 ? 'AM' : 'PM';
+    return `Imported ${hh}:${mm} ${ampm}`;
+  };
+
+  const ingestFiles = async (files, explicitLabel = null) => {
     const images = [...files].filter((f) => f.type?.startsWith('image/'));
     if (images.length === 0) return;
     images.sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
     );
+    // Folder pickers populate webkitRelativePath as "TopFolder/sub/IMG.jpg".
+    // Use the top folder for the label when it's there; fall back to time.
+    const folderFromPath = (() => {
+      const path = images[0]?.webkitRelativePath || '';
+      if (!path.includes('/')) return null;
+      return path.split('/')[0] || null;
+    })();
+    const batchMeta = {
+      batchId: makeBatchId(),
+      batchLabel: explicitLabel || folderFromPath || timeLabel(),
+      batchAt: Date.now(),
+    };
     setLoadProgress({ done: 0, total: images.length });
     // Load + tick progress one at a time so the indicator updates in real time
     const loaded = [];
     let done = 0;
     for (const file of images) {
       try {
-        const photo = await loadPhoto(file);
+        const photo = await loadPhoto(file, batchMeta);
         loaded.push(photo);
       } catch { /* skip unreadable files */ }
       done += 1;
@@ -138,12 +166,15 @@ export default function PhotoPanel({ mobile = false }) {
     addPhotos(loaded);
     setSimMap(null);
     setLoadProgress(null);
+    // Auto-jump the folder filter to the freshly-imported batch so the
+    // user immediately sees what they just dropped in.
+    setPhotoBatch(batchMeta.batchId);
   };
 
   // Drag-and-drop only — we provide our own Images / Folder buttons below.
   const { getRootProps, isDragActive } = useDropzone({
     accept: { 'image/*': [] },
-    onDrop: ingestFiles,
+    onDrop: (files) => ingestFiles(files),
     noClick: true,
     noKeyboard: true,
   });
@@ -173,9 +204,40 @@ export default function PhotoPanel({ mobile = false }) {
     return arr;
   })();
 
-  // Filter + search
+  // Derive batch index for the Folder dropdown. Photos without a batchId
+  // (imported before this feature existed, or restored from an older
+  // autosave) all share the synthetic '__legacy' bucket so they remain
+  // browseable.
+  const batches = (() => {
+    const seen = new Map(); // batchId → { id, label, count, at }
+    for (const p of photos) {
+      const id = p.batchId || '__legacy';
+      const existing = seen.get(id);
+      if (existing) {
+        existing.count++;
+      } else {
+        seen.set(id, {
+          id,
+          label: p.batchLabel || (id === '__legacy' ? 'Earlier imports' : 'Imports'),
+          count: 1,
+          at: p.batchAt || 0,
+        });
+      }
+    }
+    // Most-recent batch first so "Recently imported" sits at the top.
+    return [...seen.values()].sort((a, b) => b.at - a.at);
+  })();
+
+  // Auto-reset the batch filter to 'all' if the selected batch no longer
+  // exists (e.g. after Remove batch or autosave restore).
+  if (photoBatch !== 'all' && !batches.some((b) => b.id === photoBatch)) {
+    queueMicrotask(() => setPhotoBatch('all'));
+  }
+
+  // Filter + search + folder
   const sorted = baseSorted.filter((p) => {
     if (photoSearch && !p.name.toLowerCase().includes(photoSearch.toLowerCase())) return false;
+    if (photoBatch !== 'all' && (p.batchId || '__legacy') !== photoBatch) return false;
     if (photoFilter === 'used')      return usedIds.has(p.id);
     if (photoFilter === 'unused')    return !usedIds.has(p.id);
     if (photoFilter === 'favorites') return !!p.favorite;
@@ -374,6 +436,41 @@ export default function PhotoPanel({ mobile = false }) {
               }}
             >{label}</button>
           ))}
+        </div>
+      )}
+
+      {/* Folder / batch picker — appears when 2+ batches exist */}
+      {batches.length >= 2 && (
+        <div style={{ padding: '0 10px 5px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 9, color: t.textMuted }}>Folder</span>
+          <select
+            value={photoBatch}
+            onChange={(e) => setPhotoBatch(e.target.value)}
+            title="Filter the list to one import batch"
+            style={{ flex: 1, background: t.bgInput, border: `1px solid ${t.border}`, borderRadius: 3, color: t.textDim, fontSize: 9, padding: '2px 4px', cursor: 'pointer', outline: 'none' }}
+          >
+            <option value="all">All ({photos.length})</option>
+            {batches.map((b, i) => (
+              <option key={b.id} value={b.id}>
+                {i === 0 && b.id !== '__legacy' ? '★ ' : ''}{b.label} ({b.count})
+              </option>
+            ))}
+          </select>
+          {photoBatch !== 'all' && (
+            <button
+              onClick={() => {
+                const b = batches.find((x) => x.id === photoBatch);
+                if (!b) return;
+                if (confirm(`Remove all ${b.count} photo${b.count === 1 ? '' : 's'} in "${b.label}"? Any cells using these photos will be cleared.`)) {
+                  removePhotosInBatch(photoBatch);
+                }
+              }}
+              title="Remove every photo in this folder"
+              style={{ fontSize: 9, padding: '2px 6px', background: 'transparent', border: `1px solid ${t.border}`, borderRadius: 3, color: '#e05c5c', cursor: 'pointer', lineHeight: 1 }}
+            >
+              ✕ Batch
+            </button>
+          )}
         </div>
       )}
 
@@ -615,7 +712,16 @@ export default function PhotoPanel({ mobile = false }) {
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}>
+      <div style={{
+        flex: 1,
+        minHeight: 0,                  // critical: lets the flex child shrink past its content so overflow: auto actually scrolls
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        padding: '0 8px 8px',
+        // Give the last row enough breathing room so it isn't flush against
+        // the panel border — makes the bottom thumb clearly reachable.
+        scrollPaddingBottom: 16,
+      }}>
         {sorted.map((p) => {
           const used = usedIds.has(p.id);
           const selected = selectedPhotoIds.has(p.id);
