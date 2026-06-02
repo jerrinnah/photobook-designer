@@ -17,6 +17,7 @@ import DesktopAppModal from './DesktopAppModal';
 import SupportModal from './SupportModal';
 import SpreadExportPicker from './SpreadExportPicker';
 import ReferralModal from './ReferralModal';
+import ExportOverlay from './ExportOverlay';
 import { useTheme } from '../utils/theme';
 
 const makeBtnStyle = (t) => (extra = {}) => ({
@@ -273,15 +274,21 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
 
   const doExportAll = async () => {
     setExporting(true);
-    await exportToFolder(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
-    setExporting(false);
+    try {
+      await exportToFolder(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+    } finally {
+      setExporting(false);
+    }
   };
   const handleExportAll = withSignupGate('export', doExportAll);
 
   const doExportPDF = async () => {
     setExportingPDF(true);
-    await exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
-    setExportingPDF(false);
+    try {
+      await exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+    } finally {
+      setExportingPDF(false);
+    }
   };
   const handleExportPDF = withSignupGate('export', doExportPDF);
 
@@ -299,13 +306,19 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
     const fn = format === 'pdf'
       ? async () => {
           setExportingPDF(true);
-          await exportAsPDF(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
-          setExportingPDF(false);
+          try {
+            await exportAsPDF(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+          } finally {
+            setExportingPDF(false);
+          }
         }
       : async () => {
           setExporting(true);
-          await exportToFolder(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
-          setExporting(false);
+          try {
+            await exportToFolder(stageRef, subset, activeSpreadId, setActiveSpread, spreadSizeId, customSize, bookName);
+          } finally {
+            setExporting(false);
+          }
         };
     await withSignupGate('export', fn)();
   };
@@ -751,6 +764,11 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
           anchorTop={headerBottom}
         />
       </div>
+
+      <ExportOverlay
+        open={exporting || exportingPDF}
+        mode={exportingPDF ? 'pdf' : 'jpg'}
+      />
 
       <AuthModal
         open={Boolean(signup)}

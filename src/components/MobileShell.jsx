@@ -12,6 +12,7 @@ import PreviewMode from './PreviewMode';
 import PrintPreview from './PrintPreview';
 import MobileBottomSheet from './MobileBottomSheet';
 import SignupModal from './SignupModal';
+import ExportOverlay from './ExportOverlay';
 
 const TABS = [
   { id: 'photos',  label: 'Photos',  icon: '🖼' },
@@ -75,9 +76,14 @@ export default function MobileShell({ stageRef }) {
 
   const handleSave = withSignupGate('save', saveProject);
 
-  const handleExportSpread = withSignupGate('export', () =>
-    exportCurrentSpread(stageRef, activeSpreadId, spreadSizeId, customSize, bookName)
-  );
+  const handleExportSpread = withSignupGate('export', async () => {
+    setExporting(true);
+    try {
+      await exportCurrentSpread(stageRef, activeSpreadId, spreadSizeId, customSize, bookName);
+    } finally {
+      setExporting(false);
+    }
+  });
 
   const handleRepeated = () => {
     if (repeatedPhotoIds.size > 0) {
@@ -290,6 +296,10 @@ export default function MobileShell({ stageRef }) {
         action={signup?.action}
         onClose={() => setSignup(null)}
         onComplete={signup?.onComplete}
+      />
+      <ExportOverlay
+        open={exporting || exportingPDF}
+        mode={exportingPDF ? 'pdf' : 'jpg'}
       />
     </div>
   );
