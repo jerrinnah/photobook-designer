@@ -116,7 +116,14 @@ export default function PhotoPanel({ mobile = false }) {
 
   const imagesInputRef = useRef(null);
   const folderInputRef = useRef(null);
+  const scrollerRef = useRef(null);
   const [loadProgress, setLoadProgress] = useState(null); // { done, total } | null
+  const [collapsedBatches, setCollapsedBatches] = useState(() => new Set()); // batchIds the user folded up
+  const toggleBatchCollapse = (id) => setCollapsedBatches((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   // Stable id per ingest call — every photo in the same batch shares it.
   // Used so the folder filter and "remove batch" can address a batch.
@@ -166,9 +173,20 @@ export default function PhotoPanel({ mobile = false }) {
     addPhotos(loaded);
     setSimMap(null);
     setLoadProgress(null);
-    // Auto-jump the folder filter to the freshly-imported batch so the
-    // user immediately sees what they just dropped in.
-    setPhotoBatch(batchMeta.batchId);
+    // Stay on the All view so every category — including the brand-new
+    // one at the top — stays visible. Make sure the new batch's header
+    // is expanded and scroll the list back to the top so the user sees
+    // their fresh import immediately.
+    setPhotoBatch('all');
+    setCollapsedBatches((prev) => {
+      if (!prev.has(batchMeta.batchId)) return prev;
+      const next = new Set(prev);
+      next.delete(batchMeta.batchId);
+      return next;
+    });
+    queueMicrotask(() => {
+      if (scrollerRef.current) scrollerRef.current.scrollTop = 0;
+    });
   };
 
   // Drag-and-drop only — we provide our own Images / Folder buttons below.
@@ -345,6 +363,168 @@ export default function PhotoPanel({ mobile = false }) {
 
   // Group colours for similar badges
   const GROUP_COLORS = ['#e05c5c', '#f6a623', '#b89fff', '#6fcf97', '#4f8ef7', '#f6c90e', '#ff8c69', '#7fffd4'];
+
+  // Single source of truth for the photo tile — used both flat (when a
+  // batch is selected via the dropdown) and inside category sections
+  // (when the All view is active and 2+ batches exist).
+  const renderTile = (p) => {
+    const used = usedIds.has(p.id);
+    const selected = selectedPhotoIds.has(p.id);
+    const simInfo = simMap?.get(p.id);
+    const groupColor = simInfo ? GROUP_COLORS[(simInfo.groupNum - 1) % GROUP_COLORS.length] : null;
+    const isRepeated = repeatedPhotoIds.has(p.id);
+
+    return (
+      <div
+        key={p.id}
+        draggable
+        onDragStart={(e) => e.dataTransfer.setData('photoId', p.id)}
+        onClick={(e) => handlePhotoClick(e, p.id)}
+        style={{
+          position: 'relative',
+          marginBottom: 6,
+          cursor: 'pointer',
+          borderRadius: 4,
+          overflow: 'hidden',
+          opacity: used && !selected ? 0.45 : 1,
+          transition: 'opacity 0.2s',
+          outline: isRepeated
+            ? '2px solid #e05c5c'
+            : selected
+              ? `2px solid ${simInfo && !simInfo.isKeep ? groupColor : '#4f8ef7'}`
+              : simInfo
+                ? `2px solid ${groupColor}55`
+                : '2px solid transparent',
+          outlineOffset: 1,
+          width: isRepeated ? '55%' : undefined,
+        }}
+      >
+        <img
+          src={p.src}
+          alt={p.name}
+          style={{ width: '100%', display: 'block', borderRadius: 4, userSelect: 'none', pointerEvents: 'none' }}
+        />
+        {(p.facePriority || 0) > 0 && (
+          <div style={{
+            position: 'absolute', top: 4, right: 4,
+            width: 18, height: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#f6c90e', color: '#1a1208',
+            borderRadius: '50%', fontSize: 11, lineHeight: 1,
+            fontWeight: 700, pointerEvents: 'none',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+          }} title={`Key person (priority ${(p.facePriority).toFixed(2)})`}>★</div>
+        )}
+        {isRepeated && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(224,92,92,0.28)',
+            borderRadius: 4,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start',
+            padding: '3px 4px',
+            pointerEvents: 'none',
+          }}>
+            <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: '#e05c5c', borderRadius: 2, padding: '1px 3px', letterSpacing: 0.3 }}>DUP</span>
+          </div>
+        )}
+        {simInfo && (
+          <div style={{
+            position: 'absolute',
+            top: 3,
+            left: selected ? 22 : 3,
+            background: simInfo.isKeep ? 'rgba(0,0,0,0.75)' : groupColor,
+            borderRadius: 3,
+            padding: '2px 5px',
+            fontSize: 9,
+            fontWeight: 700,
+            color: simInfo.isKeep ? groupColor : '#fff',
+            lineHeight: 1,
+            letterSpacing: 0.3,
+            border: simInfo.isKeep ? `1px solid ${groupColor}` : 'none',
+          }}>
+            {simInfo.isKeep ? `≈${simInfo.groupNum}` : `≈${simInfo.groupNum} dup`}
+          </div>
+        )}
+        {selected && (
+          <div style={{
+            position: 'absolute', top: 3, left: 3,
+            width: 16, height: 16,
+            background: '#4f8ef7',
+            borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+              <polyline points="2,4.5 3.8,6.5 7,3" stroke="#fff" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        )}
+        {used && !selected && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            background: 'rgba(0,0,0,0.72)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 4, padding: '4px 0',
+          }}>
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+              <circle cx="4.5" cy="4.5" r="4" stroke="#6fcf97" strokeWidth="1"/>
+              <polyline points="2.5,4.5 4,6 6.5,3" stroke="#6fcf97" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span style={{ fontSize: 9, color: '#6fcf97', letterSpacing: 0.5 }}>PLACED</span>
+          </div>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); togglePhotoFavorite(p.id); }}
+          title={p.favorite ? 'Remove from favorites' : 'Add to favorites'}
+          style={{
+            position: 'absolute', bottom: 3, right: 3,
+            background: p.favorite ? 'rgba(246,201,14,0.85)' : 'rgba(0,0,0,0.55)',
+            border: 'none', borderRadius: '50%',
+            width: 18, height: 18,
+            color: p.favorite ? '#1a1200' : '#888',
+            fontSize: 10, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            lineHeight: 1,
+          }}
+        >★</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); removePhoto(p.id); }}
+          style={{
+            position: 'absolute', top: 3, right: 3,
+            background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: '50%',
+            width: 18, height: 18,
+            color: '#fff', fontSize: 10, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            lineHeight: 1,
+          }}
+        >✕</button>
+      </div>
+    );
+  };
+
+  // Build category buckets from the already-filtered+sorted list.
+  // Only used when the user is on the "All" folder view AND there's
+  // more than one batch — otherwise a flat list reads better.
+  const showCategories = photoBatch === 'all' && batches.length >= 2;
+  const categorySections = (() => {
+    if (!showCategories) return null;
+    const map = new Map(); // batchId → { id, label, at, photos }
+    for (const p of sorted) {
+      const id = p.batchId || '__legacy';
+      const existing = map.get(id);
+      if (existing) {
+        existing.photos.push(p);
+      } else {
+        const meta = batches.find((b) => b.id === id);
+        map.set(id, {
+          id,
+          label: meta?.label || (id === '__legacy' ? 'Earlier imports' : 'Imports'),
+          at: meta?.at || 0,
+          photos: [p],
+        });
+      }
+    }
+    return [...map.values()].sort((a, b) => b.at - a.at);
+  })();
 
   if (!mobile && collapsed) {
     return <CollapsedRail label="Photos" side="left" onExpand={() => setCollapsed(false)} />;
@@ -712,194 +892,63 @@ export default function PhotoPanel({ mobile = false }) {
         )}
       </div>
 
-      <div style={{
-        flex: 1,
-        minHeight: 0,                  // critical: lets the flex child shrink past its content so overflow: auto actually scrolls
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        padding: '0 8px 8px',
-        // Give the last row enough breathing room so it isn't flush against
-        // the panel border — makes the bottom thumb clearly reachable.
-        scrollPaddingBottom: 16,
-      }}>
-        {sorted.map((p) => {
-          const used = usedIds.has(p.id);
-          const selected = selectedPhotoIds.has(p.id);
-          const simInfo = simMap?.get(p.id);
-          const groupColor = simInfo ? GROUP_COLORS[(simInfo.groupNum - 1) % GROUP_COLORS.length] : null;
-          const isRepeated = repeatedPhotoIds.has(p.id);
-
-          return (
-            <div
-              key={p.id}
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('photoId', p.id)}
-              onClick={(e) => handlePhotoClick(e, p.id)}
-              style={{
-                position: 'relative',
-                marginBottom: 6,
-                cursor: 'pointer',
-                borderRadius: 4,
-                overflow: 'hidden',
-                opacity: used && !selected ? 0.45 : 1,
-                transition: 'opacity 0.2s',
-                outline: isRepeated
-                  ? '2px solid #e05c5c'
-                  : selected
-                    ? `2px solid ${simInfo && !simInfo.isKeep ? groupColor : '#4f8ef7'}`
-                    : simInfo
-                      ? `2px solid ${groupColor}55`
-                      : '2px solid transparent',
-                outlineOffset: 1,
-                width: isRepeated ? '55%' : undefined,
-              }}
-            >
-              <img
-                src={p.src}
-                alt={p.name}
-                style={{ width: '100%', display: 'block', borderRadius: 4, userSelect: 'none', pointerEvents: 'none' }}
-              />
-
-              {/* Key-person priority badge — gold star chip, top-right */}
-              {(p.facePriority || 0) > 0 && (
-                <div style={{
-                  position: 'absolute', top: 4, right: 4,
-                  width: 18, height: 18,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: '#f6c90e', color: '#1a1208',
-                  borderRadius: '50%', fontSize: 11, lineHeight: 1,
-                  fontWeight: 700, pointerEvents: 'none',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                }} title={`Key person (priority ${(p.facePriority).toFixed(2)})`}>
-                  ★
-                </div>
-              )}
-
-              {/* Repeated overlay */}
-              {isRepeated && (
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'rgba(224,92,92,0.28)',
-                  borderRadius: 4,
-                  display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start',
-                  padding: '3px 4px',
-                  pointerEvents: 'none',
-                }}>
-                  <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: '#e05c5c', borderRadius: 2, padding: '1px 3px', letterSpacing: 0.3 }}>
-                    DUP
-                  </span>
-                </div>
-              )}
-
-              {/* Similarity group badge */}
-              {simInfo && (
-                <div style={{
-                  position: 'absolute',
-                  top: 3,
-                  left: selected ? 22 : 3,
-                  background: simInfo.isKeep ? 'rgba(0,0,0,0.75)' : groupColor,
-                  borderRadius: 3,
-                  padding: '2px 5px',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: simInfo.isKeep ? groupColor : '#fff',
-                  lineHeight: 1,
-                  letterSpacing: 0.3,
-                  border: simInfo.isKeep ? `1px solid ${groupColor}` : 'none',
-                }}>
-                  {simInfo.isKeep ? `≈${simInfo.groupNum}` : `≈${simInfo.groupNum} dup`}
-                </div>
-              )}
-
-              {/* Selected checkmark */}
-              {selected && (
-                <div style={{
-                  position: 'absolute',
-                  top: 3,
-                  left: 3,
-                  width: 16,
-                  height: 16,
-                  background: '#4f8ef7',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                    <polyline points="2,4.5 3.8,6.5 7,3" stroke="#fff" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              )}
-
-              {/* "Placed" badge */}
-              {used && !selected && (
-                <div style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  background: 'rgba(0,0,0,0.72)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 4,
-                  padding: '4px 0',
-                }}>
-                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                    <circle cx="4.5" cy="4.5" r="4" stroke="#6fcf97" strokeWidth="1"/>
-                    <polyline points="2.5,4.5 4,6 6.5,3" stroke="#6fcf97" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span style={{ fontSize: 9, color: '#6fcf97', letterSpacing: 0.5 }}>PLACED</span>
-                </div>
-              )}
-
-              {/* Favorite button */}
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePhotoFavorite(p.id); }}
-                title={p.favorite ? 'Remove from favorites' : 'Add to favorites'}
-                style={{
-                  position: 'absolute',
-                  bottom: 3,
-                  right: 3,
-                  background: p.favorite ? 'rgba(246,201,14,0.85)' : 'rgba(0,0,0,0.55)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 18,
-                  height: 18,
-                  color: p.favorite ? '#1a1200' : '#888',
-                  fontSize: 10,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1,
-                }}
-              >★</button>
-
-              {/* Remove button */}
-              <button
-                onClick={(e) => { e.stopPropagation(); removePhoto(p.id); }}
-                style={{
-                  position: 'absolute',
-                  top: 3,
-                  right: 3,
-                  background: 'rgba(0,0,0,0.7)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 18,
-                  height: 18,
-                  color: '#fff',
-                  fontSize: 10,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1,
-                }}
-              >✕</button>
-            </div>
-          );
-        })}
+      <div
+        ref={scrollerRef}
+        style={{
+          flex: 1,
+          minHeight: 0,                  // critical: lets the flex child shrink past its content so overflow: auto actually scrolls
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          padding: '0 8px 8px',
+          scrollPaddingBottom: 16,
+        }}
+      >
+        {showCategories
+          ? categorySections.map((cat, i) => {
+              const collapsed = collapsedBatches.has(cat.id);
+              const isNewest = i === 0 && cat.id !== '__legacy';
+              return (
+                <section key={cat.id} style={{ marginBottom: 8 }}>
+                  <header style={{
+                    position: 'sticky', top: 0, zIndex: 1,
+                    margin: '4px -8px 4px',
+                    padding: '5px 10px',
+                    background: t.bgPanel2,
+                    borderTop: `1px solid ${t.divider}`,
+                    borderBottom: `1px solid ${t.divider}`,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 10, color: t.textDim,
+                    cursor: 'pointer', userSelect: 'none',
+                  }}
+                  onClick={() => toggleBatchCollapse(cat.id)}
+                  title={collapsed ? 'Expand category' : 'Collapse category'}
+                  >
+                    <span style={{ fontSize: 9, color: t.textFaint, width: 8, textAlign: 'center' }}>
+                      {collapsed ? '▸' : '▾'}
+                    </span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {isNewest && <span style={{ color: '#f6c90e' }}>★ </span>}
+                      📁 {cat.label}
+                    </span>
+                    <span style={{ fontSize: 9, color: t.textFaint, flexShrink: 0 }}>{cat.photos.length}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPhotoBatch(cat.id); }}
+                      title="Show only this folder"
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 9, padding: '1px 5px',
+                        background: 'transparent',
+                        border: `1px solid ${t.border}`,
+                        borderRadius: 3, color: t.textMuted,
+                        cursor: 'pointer', lineHeight: 1,
+                      }}
+                    >Only</button>
+                  </header>
+                  {!collapsed && cat.photos.map(renderTile)}
+                </section>
+              );
+            })
+          : sorted.map(renderTile)}
       </div>
     </aside>
   );
