@@ -4,9 +4,11 @@ import {
   priceForProject,
 } from '../utils/premium';
 import {
-  openPaystackCheckout, claimPlan, isPaystackConfigured, formatPrice,
-  openPerSpreadCheckout, unlockProject,
+  claimPlan, formatPrice, unlockProject,
 } from '../utils/paystack';
+import {
+  openCheckout, openBookCheckout, isCheckoutConfiguredFor,
+} from '../utils/payments';
 import { useCurrency, CURRENCIES, formatMoney } from '../utils/currency';
 import { useAuthUser } from '../utils/supabase';
 import { useBookStore } from '../store/useBookStore';
@@ -34,7 +36,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
   const { code: currencyCode, set: setCurrency, currency, available } = useCurrency();
   if (!open) return null;
 
-  const canPay = isPaystackConfigured() && user?.email;
+  const canPay = isCheckoutConfiguredFor(currencyCode) && user?.email;
   const bookPrice = priceForProject(spreads, currencyCode);
   const projectId = getActiveProjectId();
 
@@ -44,7 +46,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
   // useEffect dependency on `user`.
   const handlePlanClick = (plan) => {
     if (paying || success) return;
-    if (!isPaystackConfigured()) { setError('Payments not configured yet.'); return; }
+    if (!isCheckoutConfiguredFor(currencyCode)) { setError('Payments not configured yet.'); return; }
     if (!user?.email) { setAuthPrompt(plan); return; }
     if (plan === 'book') doPayPerBook(); else doPay(plan);
   };
@@ -54,7 +56,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
     setError(null);
     setPaying(plan);
     try {
-      const reference = await openPaystackCheckout({ email: user.email, plan, currencyCode });
+      const reference = await openCheckout({ email: user.email, plan, currencyCode });
       await claimPlan(plan, reference);
       setSuccess(plan);
       setTimeout(() => window.location.reload(), 1500);
@@ -72,16 +74,16 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
     setError(null);
     setPaying('book');
     try {
-      // Paystack popup. Resolves with the reference on user payment.
-      const reference = await openPerSpreadCheckout({
+      // Gateway popup. Resolves with the reference on user payment.
+      const reference = await openBookCheckout({
         email: user.email,
         projectId,
-        totalNGN: bookPrice.total,
+        total: bookPrice.total,
         spreadCount: bookPrice.spreadCount,
         coverCount: bookPrice.coverCount,
         currencyCode,
       });
-      // Paystack confirmed payment — record it in our DB to grant the unlock.
+      // Gateway confirmed payment — record it in our DB to grant the unlock.
       await unlockProject({
         projectId,
         spreadCount: bookPrice.spreadCount,
@@ -134,8 +136,12 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
             : 'One-time payment. Unlocks Premium features on this account.'}
         </div>
 
-        {!isPaystackConfigured() && (
-          <div style={warnBox}>⚠ Paystack not configured. Owner: set VITE_PAYSTACK_PUBLIC_KEY in .env.production.</div>
+        {!isCheckoutConfiguredFor(currencyCode) && (
+          <div style={warnBox}>
+            ⚠ Payment gateway not configured for {currencyCode}. Owner: set
+            {currency?.processor === 'flutterwave' ? ' VITE_FLUTTERWAVE_PUBLIC_KEY' : ' VITE_PAYSTACK_PUBLIC_KEY'}
+            {' '}in .env.production.
+          </div>
         )}
         {!user?.email && (
           <div style={{ ...warnBox, background: '#0c1620', borderColor: '#1e3a5f', color: '#9fb8d8' }}>
@@ -192,7 +198,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
               'Add photos to a spread first'
             }
             onClick={() => handlePlanClick('book')}
-            disabled={paying || success || bookPrice.total <= 0 || !isPaystackConfigured()}
+            disabled={paying || success || bookPrice.total <= 0 || !isCheckoutConfiguredFor(currencyCode)}
             success={success === 'book'}
           />
           {/* STARTER */}
@@ -209,7 +215,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
               `Choose Starter · ${formatPrice('starter', currencyCode)}`
             }
             onClick={() => handlePlanClick('starter')}
-            disabled={paying || success || !isPaystackConfigured()}
+            disabled={paying || success || !isCheckoutConfiguredFor(currencyCode)}
             success={success === 'starter'}
           />
           {/* PRO */}
@@ -227,7 +233,7 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
               `Choose Pro · ${formatPrice('pro', currencyCode)}`
             }
             onClick={() => handlePlanClick('pro')}
-            disabled={paying || success || !isPaystackConfigured()}
+            disabled={paying || success || !isCheckoutConfiguredFor(currencyCode)}
             success={success === 'pro'}
           />
         </div>

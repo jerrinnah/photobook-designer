@@ -1,9 +1,13 @@
 // Multi-currency pricing + auto-detection.
 //
-// All 5 currencies here are Paystack-supported, so the existing payment
-// flow works without a second processor. Visitors see prices in their
-// local currency by default; they can switch manually via the selector
-// on the landing page + upgrade modal.
+// Most currencies here are Paystack-supported. GBP is NOT — Paystack
+// doesn't accept Pounds — so GBP is routed through Flutterwave instead
+// (Nigerian-based processor that does accept GBP and settles to a
+// Nigerian account). The `processor` field on each entry tells the
+// checkout dispatcher which gateway to open.
+//
+// Visitors see prices in their local currency by default; they can
+// switch manually via the selector on the landing page + upgrade modal.
 //
 // Prices are set per-currency (not auto-converted from NGN) so they can
 // reflect local purchasing-power instead of raw exchange rates.
@@ -31,30 +35,35 @@ export const CURRENCIES = {
     starter: 5, pro: 29,
     spread: 0.5, cover: 1,
     flag: '🌎',
+    processor: 'paystack',
   },
-  KES: {
-    code: 'KES', symbol: 'KSh', label: 'KES',
-    starter: 499, pro: 3999,
-    spread: 65, cover: 99,
-    flag: '🇰🇪',
+  GBP: {
+    code: 'GBP', symbol: '£', label: 'GBP',
+    starter: 4, pro: 23,
+    spread: 0.4, cover: 0.8,
+    flag: '🇬🇧',
+    processor: 'flutterwave',
   },
   NGN: {
     code: 'NGN', symbol: '₦', label: 'NGN',
     starter: 5000, pro: 45000,
     spread: 750, cover: 1000,
     flag: '🇳🇬',
+    processor: 'paystack',
   },
   ZAR: {
     code: 'ZAR', symbol: 'R', label: 'ZAR',
     starter: 59, pro: 549,
     spread: 9, cover: 12,
     flag: '🇿🇦',
+    processor: 'paystack',
   },
   GHS: {
     code: 'GHS', symbol: '₵', label: 'GHS',
     starter: 39, pro: 349,
     spread: 6, cover: 8,
     flag: '🇬🇭',
+    processor: 'paystack',
   },
 };
 
@@ -65,7 +74,7 @@ const LANG_MAP = {
   'en-NG': 'NGN', 'ig': 'NGN', 'yo': 'NGN', 'ha': 'NGN',
   'en-ZA': 'ZAR', 'af': 'ZAR', 'zu': 'ZAR', 'xh': 'ZAR',
   'en-GH': 'GHS',
-  'en-KE': 'KES', 'sw': 'KES', 'sw-KE': 'KES',
+  'en-GB': 'GBP', 'cy': 'GBP', 'gd': 'GBP',
 };
 
 // IANA timezones → currency (covers users with English-language browsers
@@ -74,8 +83,8 @@ const TZ_MAP = {
   'Africa/Lagos': 'NGN',
   'Africa/Johannesburg': 'ZAR',
   'Africa/Accra': 'GHS',
-  'Africa/Nairobi': 'KES',
-  'Africa/Mombasa': 'KES',
+  'Europe/London': 'GBP',
+  'Europe/Belfast': 'GBP',
 };
 
 function detectCurrency() {
