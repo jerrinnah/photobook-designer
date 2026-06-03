@@ -32,6 +32,12 @@ export const CURRENCIES = {
     spread: 0.5, cover: 1,
     flag: '🌎',
   },
+  KES: {
+    code: 'KES', symbol: 'KSh', label: 'KES',
+    starter: 499, pro: 3999,
+    spread: 65, cover: 99,
+    flag: '🇰🇪',
+  },
   NGN: {
     code: 'NGN', symbol: '₦', label: 'NGN',
     starter: 5000, pro: 45000,
@@ -49,12 +55,6 @@ export const CURRENCIES = {
     starter: 39, pro: 349,
     spread: 6, cover: 8,
     flag: '🇬🇭',
-  },
-  KES: {
-    code: 'KES', symbol: 'KSh', label: 'KES',
-    starter: 499, pro: 3999,
-    spread: 65, cover: 99,
-    flag: '🇰🇪',
   },
 };
 
