@@ -52,6 +52,32 @@ export default function App() {
     return startSessionLivenessCheck();
   }, []);
 
+  // Boot-time pending-claim replay. If a payment confirmed in a previous
+  // session but the grant request never landed (network drop, server
+  // hiccup), re-attempt the grant here. Successful claims dispatch
+  // 'autobook:claim-applied' which we listen for to refresh the UI.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { replayPendingClaims } = await import('./utils/pendingClaim');
+        if (!cancelled) await replayPendingClaims();
+      } catch (e) {
+        console.info('[pendingClaim] replay skipped:', e?.message);
+      }
+    })();
+    const onApplied = () => {
+      // Tier likely changed — easiest way to reflect it everywhere is a
+      // soft reload. Delay slightly so the user can see the success.
+      setTimeout(() => window.location.reload(), 800);
+    };
+    window.addEventListener('autobook:claim-applied', onApplied);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('autobook:claim-applied', onApplied);
+    };
+  }, []);
+
   // Listen for replay requests from the profile menu
   useEffect(() => {
     const onReplay = () => setTourOpen(true);

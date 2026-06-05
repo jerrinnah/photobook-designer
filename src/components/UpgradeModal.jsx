@@ -4,11 +4,12 @@ import {
   priceForProject,
 } from '../utils/premium';
 import {
-  claimPlan, formatPrice, unlockProject,
+  claimPlan, formatPrice, unlockProject, priceForPlan,
 } from '../utils/paystack';
 import {
   openCheckout, openBookCheckout, isCheckoutConfiguredFor,
 } from '../utils/payments';
+import { savePending, tryClaimWithRetry } from '../utils/pendingClaim';
 import { useCurrency, CURRENCIES, formatMoney } from '../utils/currency';
 import { useAuthUser } from '../utils/supabase';
 import { useBookStore } from '../store/useBookStore';
@@ -55,13 +56,37 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
     if (!user?.email || paying) return;
     setError(null);
     setPaying(plan);
+    let paidReference = null;
     try {
-      const reference = await openCheckout({ email: user.email, plan, currencyCode });
-      await claimPlan(plan, reference);
+      paidReference = await openCheckout({ email: user.email, plan, currencyCode });
+      // Charge is confirmed by the gateway. Stash everything we need to
+      // grant the plan BEFORE we try the grant — that way a network drop
+      // between here and the next line can be rescued at app boot.
+      const claim = {
+        kind: 'plan',
+        plan,
+        reference: paidReference,
+        currencyCode,
+        amount: priceForPlan(plan, currencyCode),
+      };
+      savePending(claim);
+      const result = await tryClaimWithRetry(claim);
+      if (!result.ok) throw result.error || new Error('Claim failed.');
       setSuccess(plan);
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
-      setError(err.message || 'Payment failed. Try again.');
+      if (paidReference) {
+        // Payment succeeded but every retry to grant the plan failed.
+        // The pendingClaim record stays in localStorage; on the next
+        // app boot replayPendingClaims() will retry automatically.
+        setError(
+          `Payment received successfully — but we couldn't apply your plan yet. `
+          + `Don't worry, it's queued. Refresh in a minute and your plan will be active. `
+          + `Ref: ${paidReference.slice(0, 24)}…`
+        );
+      } else {
+        setError(err.message || 'Payment failed. Try again.');
+      }
     } finally {
       setPaying(false);
     }
@@ -73,9 +98,10 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
     if (bookPrice.totalNGN <= 0) { setError('This book has no spreads to unlock yet.'); return; }
     setError(null);
     setPaying('book');
+    let paidReference = null;
     try {
       // Gateway popup. Resolves with the reference on user payment.
-      const reference = await openBookCheckout({
+      paidReference = await openBookCheckout({
         email: user.email,
         projectId,
         total: bookPrice.total,
@@ -83,15 +109,21 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
         coverCount: bookPrice.coverCount,
         currencyCode,
       });
-      // Gateway confirmed payment — record it in our DB to grant the unlock.
-      await unlockProject({
+      // Charge confirmed by the gateway. Stash the unlock payload BEFORE
+      // we try to record it — so if the next request drops, app-boot
+      // replay can rescue without the user having to contact support.
+      const claim = {
+        kind: 'book',
         projectId,
         spreadCount: bookPrice.spreadCount,
         coverCount: bookPrice.coverCount,
-        totalNGN: bookPrice.total,
-        reference,
+        amount: bookPrice.total,
+        reference: paidReference,
         currencyCode,
-      });
+      };
+      savePending(claim);
+      const result = await tryClaimWithRetry(claim);
+      if (!result.ok) throw result.error || new Error('Claim failed.');
       // Show "Payment success" before triggering download / closing.
       setSuccess('book');
       setPaying(false);
@@ -107,7 +139,15 @@ export default function UpgradeModal({ open, onClose, blockedFeature, onUnlockSu
         }
       }, 1200);
     } catch (err) {
-      setError(err.message || 'Payment failed. Try again.');
+      if (paidReference) {
+        setError(
+          `Payment received successfully — but we couldn't unlock the book yet. `
+          + `It's queued and will retry automatically. Refresh in a minute. `
+          + `Ref: ${paidReference.slice(0, 24)}…`
+        );
+      } else {
+        setError(err.message || 'Payment failed. Try again.');
+      }
       setPaying(false);
     }
   };
