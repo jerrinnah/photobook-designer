@@ -1,6 +1,17 @@
 const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
 const path = require('path');
 
+// Raise V8 / Chromium memory ceiling BEFORE the app is ready. Wedding
+// photobooks routinely hold 30+ full-resolution photos (each 4-8 MB
+// base64) so the default ~1.5 GB Node heap gets exhausted after a few
+// hours of heavy editing. 4 GB max-old-space + 512 MB semi-space gives
+// heavy projects the headroom they need without changing behavior for
+// small ones.
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096 --max-semi-space-size=512');
+// Disable the frame-rate throttle in background tabs so autosave and
+// timers don't stall when the user briefly switches away.
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+
 // Custom URL scheme that mimics http origin — fixes "online features
 // don't work" issues that hit Electron apps loaded from file:// because
 // Supabase + some fetch APIs treat file:// as a null origin and reject
@@ -75,6 +86,46 @@ function createWindow() {
       'Photobook Designer could not load',
       `Error ${errCode}: ${errDesc}\nURL: ${url}\n\nMake sure you have internet, then close and reopen the app. Press F12 inside the app to see details in DevTools.`
     );
+  });
+
+  // Renderer crash recovery. If the Chromium renderer process dies
+  // (out-of-memory, native crash, GPU hang) we ask the user whether
+  // to reload. Their autosave is on disk so the project survives.
+  win.webContents.on('render-process-gone', (_evt, details) => {
+    const reason = details?.reason || 'unknown';
+    // 'clean-exit' and 'killed' happen during normal shutdown — ignore.
+    if (reason === 'clean-exit' || reason === 'killed') return;
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'error',
+      title: 'Photobook Designer stopped responding',
+      message: 'The app hit an unexpected error and needs to reload.',
+      detail:
+        `Reason: ${reason}\n\n`
+        + `Your project is auto-saved every few seconds, so your work is safe. `
+        + `Click Reload to open it right back where you left off.`,
+      buttons: ['Reload', 'Quit'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) win.reload();
+    else app.quit();
+  });
+
+  // Unresponsive detection — 15+ seconds without processing input.
+  // Usually means we're mid-crash. Offer the same reload path.
+  win.on('unresponsive', () => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      title: 'Photobook Designer is slow to respond',
+      message: 'The app has stopped responding.',
+      detail:
+        'Your work is auto-saved. You can wait for it to catch up, '
+        + 'or reload — either way, nothing is lost.',
+      buttons: ['Wait', 'Reload'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (choice === 1) win.reload();
   });
 }
 

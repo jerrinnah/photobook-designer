@@ -15,6 +15,7 @@ import NameProjectHint from './components/NameProjectHint';
 import LandingPage from './components/LandingPage';
 import ShareProgressToast from './components/ShareProgressToast';
 import DeviceBlockedModal from './components/DeviceBlockedModal';
+import CrashRecoveryToast from './components/CrashRecoveryToast';
 import { hasEngaged, startSessionLivenessCheck } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 import { useTheme } from './utils/theme';
@@ -129,6 +130,7 @@ export default function App() {
           message={deviceBlocked?.message}
           onClose={() => setDeviceBlocked(null)}
         />
+        <CrashRecoveryToast />
       </>
     );
   }
@@ -155,6 +157,7 @@ export default function App() {
         message={deviceBlocked?.message}
         onClose={() => setDeviceBlocked(null)}
       />
+      <CrashRecoveryToast />
     </div>
   );
 }

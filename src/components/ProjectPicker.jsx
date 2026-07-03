@@ -11,11 +11,31 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
   const [projects, setProjects] = useState([]);
   const [renaming, setRenaming] = useState(null); // { id, value }
   const [newName, setNewName] = useState('');
+  const [backupState, setBackupState] = useState({ status: 'idle' }); // 'idle' | 'saving' | 'done' | 'error'
   const activeId = getActiveProjectId();
   const fileInputRef = useRef(null);
 
   const handleBackupClick = async () => {
-    if (onSaveBackup) await onSaveBackup();
+    if (!onSaveBackup) return;
+    if (backupState.status === 'saving') return; // already running
+    setBackupState({ status: 'saving' });
+    try {
+      const result = await onSaveBackup();
+      const bytes = result?.bytes;
+      setBackupState({
+        status: 'done',
+        message: bytes
+          ? `Backup saved (${(bytes / 1024 / 1024).toFixed(1)} MB). Check your Downloads folder.`
+          : 'Backup saved. Check your Downloads folder.',
+      });
+      // Auto-clear the "done" chip after 6s so the modal doesn't get stale
+      setTimeout(() => setBackupState((s) => (s.status === 'done' ? { status: 'idle' } : s)), 6000);
+    } catch (e) {
+      setBackupState({
+        status: 'error',
+        message: e?.message || 'Backup failed. Please try again.',
+      });
+    }
   };
 
   const handleRestoreClick = () => {
@@ -154,8 +174,17 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
             Backup
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <button onClick={handleBackupClick} style={btnBackup} title="Download current project as a portable .photobook file">
-              ↓ Download backup
+            <button
+              onClick={handleBackupClick}
+              disabled={backupState.status === 'saving'}
+              style={{
+                ...btnBackup,
+                opacity: backupState.status === 'saving' ? 0.6 : 1,
+                cursor: backupState.status === 'saving' ? 'wait' : 'pointer',
+              }}
+              title="Download current project as a portable .photobook file"
+            >
+              {backupState.status === 'saving' ? '⏳ Preparing backup…' : '↓ Download backup'}
             </button>
             <button onClick={handleRestoreClick} style={btnBackup} title="Restore a .photobook file from disk">
               ↑ Restore from file
@@ -168,6 +197,24 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
               onChange={handleFilePicked}
             />
           </div>
+          {backupState.status === 'done' && (
+            <div style={{
+              padding: '7px 10px', marginBottom: 6,
+              background: '#0e1a10', border: '1px solid #1e3a20',
+              borderRadius: 4, fontSize: 11, color: '#6fcf97', lineHeight: 1.5,
+            }}>
+              ✓ {backupState.message}
+            </div>
+          )}
+          {backupState.status === 'error' && (
+            <div style={{
+              padding: '7px 10px', marginBottom: 6,
+              background: '#1a0808', border: '1px solid #5a1a1a',
+              borderRadius: 4, fontSize: 11, color: '#e05c5c', lineHeight: 1.5,
+            }}>
+              ✕ {backupState.message}
+            </div>
+          )}
           <div style={{ fontSize: 10, color: '#444', lineHeight: 1.5 }}>
             Projects are saved in this browser automatically. Use Download backup before clearing
             cache or moving to a different machine.

@@ -1455,25 +1455,64 @@ export const useBookStore = create((set, get) => ({
   })),
 
   // ── Save / Load project ────────────────────────────────────────────
-  saveProject: () => {
+  // Export the current project as a portable .photobook file.
+  //
+  // Common failure modes we defend against here:
+  //   1. Huge projects (30+ full-res photos ≈ 200+ MB base64) can OOM
+  //      JSON.stringify silently — we now surface any throw as an
+  //      actual error the UI can show instead of eating it.
+  //   2. Chrome revokes the blob URL BEFORE it has time to fetch it
+  //      when we call URL.revokeObjectURL() synchronously after click.
+  //      We revoke on next-frame instead so the download completes.
+  //   3. Users clicking with no feedback — the caller (ProjectPicker)
+  //      wraps this in a spinner; here we just make sure the promise
+  //      resolves only after the download link has actually been used.
+  //
+  // Returns { bytes } on success. Throws with a clear message on failure.
+  saveProject: async () => {
     const s = get();
-    const data = JSON.stringify({
-      version: 2,
-      bookName: s.bookName,
-      spreadSizeId: s.spreadSizeId,
-      customSize: s.customSize,
-      gap: s.gap,
-      blendEdges: s.blendEdges,
-      spreads: s.spreads,
-      photos: s.photos,
-    });
-    const blob = new Blob([data], { type: 'application/json' });
+    let data;
+    try {
+      data = JSON.stringify({
+        version: 2,
+        bookName: s.bookName,
+        spreadSizeId: s.spreadSizeId,
+        customSize: s.customSize,
+        gap: s.gap,
+        blendEdges: s.blendEdges,
+        spreads: s.spreads,
+        photos: s.photos,
+      });
+    } catch (e) {
+      // Almost always "Invalid string length" on very large projects.
+      throw new Error(
+        `Backup too large — the project is beyond what a single .photobook `
+        + `file can hold in this browser (${e?.message || 'stringify failed'}). `
+        + `Try duplicating the project and splitting it, or export the spreads `
+        + `directly and rebuild the layout later.`
+      );
+    }
+    const bytes = data.length;
+    // Yield to the event loop so the caller's spinner paints at least
+    // one frame before we spawn the (potentially large) Blob.
+    await new Promise((r) => setTimeout(r, 30));
+    let blob;
+    try {
+      blob = new Blob([data], { type: 'application/json' });
+    } catch (e) {
+      throw new Error(`Couldn't build the backup file: ${e?.message || 'blob failed'}.`);
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${s.bookName.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'photobook'}.photobook`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    // Give the browser time to actually start fetching the blob before
+    // revoking. Chrome/Edge in particular need at least one frame.
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }, 4000);
+    return { bytes };
   },
 
   loadProject: (json) => {

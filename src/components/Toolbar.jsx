@@ -188,7 +188,7 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
   const withSignupGate = (action, fn) => async () => {
     const user = getStoredUser();
     if (!user) { setSignup({ action }); return; }
-    if (action !== 'export') { await fn(); return; }
+    if (action !== 'export') return await fn();
 
     // Export path: tier or per-book unlock required
     const tier = getEffectiveTier(user);

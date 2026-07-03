@@ -140,8 +140,30 @@ export const startAutosave = (store) => {
   window.addEventListener('pagehide', onPageHide);
   window.addEventListener('beforeunload', onBeforeUnload);
 
+  // Heartbeat autosave — every 30s, force a write if the state has
+  // changed since the last save. Belt-and-braces for long design
+  // sessions where the debounce keeps getting reset by continuous
+  // edits (dragging photos, zooming), and the crash-out risk is
+  // highest exactly then. The write itself is skipped if there's a
+  // pending debounce timer that hasn't fired yet (no point writing
+  // twice within 500ms).
+  let lastHeartbeatState = null;
+  const heartbeat = setInterval(() => {
+    const s = store.getState();
+    // Cheap identity check on spreads + photos — if neither reference
+    // has changed we don't need to persist again.
+    const sig = { spreads: s.spreads, photos: s.photos };
+    if (lastHeartbeatState
+        && lastHeartbeatState.spreads === sig.spreads
+        && lastHeartbeatState.photos === sig.photos) return;
+    if (timer) return; // debounce will fire imminently
+    lastHeartbeatState = sig;
+    writeIDB(s);
+  }, 30_000);
+
   return () => {
     unsub();
+    clearInterval(heartbeat);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('beforeunload', onBeforeUnload);
