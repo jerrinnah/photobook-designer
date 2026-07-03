@@ -18,6 +18,7 @@ import SupportModal from './SupportModal';
 import SpreadExportPicker from './SpreadExportPicker';
 import ReferralModal from './ReferralModal';
 import ExportOverlay from './ExportOverlay';
+import FileMenu from './FileMenu';
 import { useTheme } from '../utils/theme';
 
 const makeBtnStyle = (t) => (extra = {}) => ({
@@ -744,6 +745,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       </button>
 
       <Divider t={t} />
+
+      {/* File — Save / Save As / Open .autobook files to disk */}
+      <FileMenu t={t} btnStyle={btnStyle} />
 
       {/* My Projects — switch / create / duplicate / delete · also holds backup */}
       <button data-tour="projects" onClick={() => setShowProjects(true)}

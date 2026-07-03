@@ -73,10 +73,13 @@ const snap = (s) => ({
 });
 
 // Wraps a state updater to atomically save history before the mutation
+// AND flag the project as dirty (unsaved changes exist relative to the
+// last time it was written to a .autobook file on disk).
 const h = (fn) => (s) => ({
   ...fn(s),
   past: [...s.past.slice(-49), snap(s)],
   future: [],
+  fileDirty: true,
 });
 
 // Photo picker with tiered aspect-ratio matching.
@@ -344,6 +347,7 @@ export const useBookStore = create((set, get) => ({
   selectedCellIndices: new Set(),  // Full multi-selection (always includes primary when set)
   copiedCell: null,                // { cell, geo } — clipboard for cross-spread copy/paste
   swapSourceIndex: null,           // cellIndex armed by "↔ Swap" — next cell click swaps with it
+  fileDirty: false,                // has state changed since the last save-to-file? drives the * indicator
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
@@ -904,6 +908,10 @@ export const useBookStore = create((set, get) => ({
   },
   armSwap: (cellIndex) => set({ swapSourceIndex: cellIndex }),
   cancelSwap: () => set({ swapSourceIndex: null }),
+
+  // Called by projectFile.js after a successful Save-to-file so the
+  // unsaved-changes indicator clears.
+  markProjectSaved: () => set({ fileDirty: false }),
 
   rotateCellPhoto: (spreadId, cellIndex) => set(h((s) => ({
     spreads: s.spreads.map((sp) => {
@@ -1556,6 +1564,7 @@ export const useBookStore = create((set, get) => ({
         selectedCellIndex: null,
         selectedCellIndices: new Set(),
         selectedPhotoIds: new Set(),
+        fileDirty: false, // loaded from disk / backup — nothing unsaved yet
       });
     } catch (e) {
       console.error('Failed to load project:', e);
