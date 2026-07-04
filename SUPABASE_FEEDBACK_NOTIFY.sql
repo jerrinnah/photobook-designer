@@ -37,7 +37,7 @@ create or replace function public.notify_feedback_email()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, extensions
+set search_path = public, extensions, net
 as $$
 declare
   v_owner_email text;
@@ -107,7 +107,7 @@ begin
 
   -- 6. Fire the HTTP request asynchronously via pg_net.
   -- The function returns a request_id but we don't await/inspect it.
-  perform extensions.http_post(
+  perform net.http_post(
     url := 'https://api.resend.com/emails',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || v_resend_key,

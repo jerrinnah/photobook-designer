@@ -23,7 +23,7 @@ create or replace function public.ensure_referral_code_for(p_user_id uuid)
 returns text
 language plpgsql
 security definer
-set search_path = public, extensions
+set search_path = public, extensions, net
 as $$
 declare
   v_code text;
@@ -56,7 +56,7 @@ create or replace function public.send_welcome_email()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, extensions
+set search_path = public, extensions, net
 as $$
 declare
   v_email       text := new.email;
@@ -165,7 +165,7 @@ begin
   );
 
   -- Fire the request non-blocking.
-  perform extensions.http_post(
+  perform net.http_post(
     url := 'https://api.resend.com/emails',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || v_resend_key,
