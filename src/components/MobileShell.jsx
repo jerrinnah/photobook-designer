@@ -12,6 +12,7 @@ import PreviewMode from './PreviewMode';
 import PrintPreview from './PrintPreview';
 import MobileBottomSheet from './MobileBottomSheet';
 import SignupModal from './SignupModal';
+import SupportModal from './SupportModal';
 import ExportOverlay from './ExportOverlay';
 
 const TABS = [
@@ -33,6 +34,7 @@ export default function MobileShell({ stageRef }) {
 
   const [activeSheet, setActiveSheet] = useState(null);  // null | 'photos' | 'layouts' | 'spreads' | 'menu'
   const [previewing, setPreviewing] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [printPreviewing, setPrintPreviewing] = useState(false);
   const [signup, setSignup] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -262,6 +264,11 @@ export default function MobileShell({ stageRef }) {
             <MenuBtn onClick={() => { setPrintPreviewing(true); setActiveSheet(null); }}>⬡ Print Specs</MenuBtn>
           </div>
 
+          <div style={menuSectionStyle}>Help</div>
+          <div style={menuGridStyle}>
+            <MenuBtn onClick={() => { setShowSupport(true); setActiveSheet(null); }}>? Contact support</MenuBtn>
+          </div>
+
           {/* Save / Export */}
           <div style={menuSectionStyle}>Save & Export</div>
           <div style={menuGridStyle}>
@@ -297,6 +304,7 @@ export default function MobileShell({ stageRef }) {
         onClose={() => setSignup(null)}
         onComplete={signup?.onComplete}
       />
+      <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
       <ExportOverlay
         open={exporting || exportingPDF}
         mode={exportingPDF ? 'pdf' : 'jpg'}

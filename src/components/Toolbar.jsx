@@ -750,6 +750,17 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         ✦ Share
       </button>
 
+      {/* Support — sends a ticket straight to the admin dashboard */}
+      <button onClick={() => setShowSupport(true)}
+        style={btnStyle({
+          color: t.mode === 'light' ? '#8a5a10' : '#f6c98a',
+          border: `1px solid ${t.mode === 'light' ? '#e8c090' : '#3a2a10'}`,
+          background: t.mode === 'light' ? '#fdf6e3' : '#1a1408',
+        })}
+        title="Contact support — questions, bug reports, feature requests">
+        ? Support
+      </button>
+
       <Divider t={t} />
 
       {/* File — Save / Save As / Open .autobook files to disk */}

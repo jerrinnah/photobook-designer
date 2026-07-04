@@ -1,19 +1,25 @@
 import { useState } from 'react';
-import { getStoredUser } from '../utils/supabase';
+import { getStoredUser, rpcDirect } from '../utils/supabase';
 
-// Lightweight support contact dialog. Pre-fills a mailto: link with
-// the user's input plus a hidden block of diagnostic info (browser,
-// account email, current page) so the support inbox can triage fast.
-// No backend endpoint required — opens the user's default mail client.
+// Support contact dialog. Primary path: submit to the support_tickets
+// table via submit_support_ticket RPC so it lands in the admin
+// dashboard. Fallback: mailto: link for users whose network can't reach
+// Supabase (offline, blocked corporate proxy, etc.) or before the
+// SUPABASE_SUPPORT_TICKETS.sql migration has been run.
 
 const SUPPORT_EMAIL = 'support@autobookbynej.online';
 
 export default function SupportModal({ open, onClose }) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [email, setEmail] = useState(''); // only shown when user isn't signed in
+  const [state, setState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
+  const [errMsg, setErrMsg] = useState('');
   if (!open) return null;
 
   const user = getStoredUser();
+  const composedSubject = subject.trim() || 'AutoBook support';
+
   const diagnostics = [
     user?.email && `Account: ${user.email}`,
     user?.tier && `Tier: ${user.tier}`,
@@ -22,7 +28,6 @@ export default function SupportModal({ open, onClose }) {
     `Time: ${new Date().toISOString()}`,
   ].filter(Boolean).join('\n');
 
-  const composedSubject = subject.trim() || 'AutoBook support';
   const composedBody = [
     body.trim(),
     '',
@@ -33,9 +38,43 @@ export default function SupportModal({ open, onClose }) {
 
   const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(composedSubject)}&body=${encodeURIComponent(composedBody)}`;
 
+  const handleSend = async () => {
+    if (state === 'sending') return;
+    setErrMsg('');
+    if (!subject.trim()) { setErrMsg('Please add a subject.'); return; }
+    if (!body.trim())    { setErrMsg('Please describe what you need help with.'); return; }
+    if (!user?.email && !email.trim()) {
+      setErrMsg('Please enter an email so we can reply.');
+      return;
+    }
+    setState('sending');
+    try {
+      await rpcDirect('submit_support_ticket', {
+        p_subject:  subject.trim(),
+        p_body:     body.trim(),
+        p_email:    user?.email ? null : email.trim(), // server prefers signed-in email
+        p_browser:  (navigator.userAgent || '').slice(0, 500),
+        p_page_url: window.location.href.slice(0, 500),
+      }, {
+        label: 'Support',
+        timeoutMs: 15_000,
+        useUserToken: Boolean(user?.email),
+      });
+      setState('sent');
+      setTimeout(onClose, 2000);
+    } catch (e) {
+      const msg = (e?.message || '').toLowerCase();
+      if (msg.includes('could not find the function') || msg.includes('404')) {
+        setErrMsg("Support routing isn't installed yet. Falling back to email — click Open in email below.");
+      } else {
+        setErrMsg(e?.message || 'Could not send. Try email fallback below.');
+      }
+      setState('error');
+    }
+  };
+
   const handleOpenMail = () => {
     window.location.href = mailtoUrl;
-    // Give the mail client a moment to open before closing the modal
     setTimeout(onClose, 500);
   };
 
@@ -48,6 +87,8 @@ export default function SupportModal({ open, onClose }) {
     }
   };
 
+  const sent = state === 'sent';
+
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 210,
@@ -58,7 +99,7 @@ export default function SupportModal({ open, onClose }) {
       <div onClick={(e) => e.stopPropagation()} style={{
         background: '#111', border: '1px solid #1f1f1f',
         borderRadius: 10, padding: '24px 28px',
-        width: 460, maxWidth: '94vw',
+        width: 480, maxWidth: '94vw',
         maxHeight: '92vh', overflowY: 'auto',
         boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
         color: '#e0e0e0',
@@ -67,52 +108,101 @@ export default function SupportModal({ open, onClose }) {
           Contact support
         </div>
         <div style={{ fontSize: 12, color: '#888', marginBottom: 18, lineHeight: 1.55 }}>
-          Tell us what's going wrong or what you need. We respond within one business day.
-          Your message opens in your email app — we never store it on our servers.
+          Tell us what's going wrong or what you need. Your message goes directly to our team's
+          dashboard — we usually respond within one business day.
         </div>
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <span style={labelStyle}>Subject</span>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="What's this about?"
-            style={inputStyle}
-          />
-        </label>
-
-        <label style={{ display: 'block', marginBottom: 14 }}>
-          <span style={labelStyle}>Message</span>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Describe the issue, what you were doing, anything that might help us reproduce it…"
-            rows={6}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-          />
-        </label>
-
-        <div style={{
-          fontSize: 10, color: '#555', marginBottom: 14,
-          padding: '8px 10px', background: '#0c0c0c',
-          border: '1px solid #1a1a1a', borderRadius: 4, lineHeight: 1.5,
-        }}>
-          We'll automatically attach: your browser, account email, and current page —
-          so support doesn't have to ask. Nothing else.
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <button onClick={handleCopyEmail} style={{
-            ...btnGhost, marginRight: 'auto', fontSize: 11,
+        {sent ? (
+          <div style={{
+            padding: '18px 16px',
+            background: '#0e1a10', border: '1px solid #2a4a2a',
+            borderRadius: 6, color: '#6fcf97',
+            fontSize: 13, lineHeight: 1.6, textAlign: 'center',
           }}>
-            Copy {SUPPORT_EMAIL}
-          </button>
-          <button onClick={onClose} style={btnGhost}>Cancel</button>
-          <button onClick={handleOpenMail} style={btnPrimary}>
-            ✉ Open in email
-          </button>
-        </div>
+            ✓ Your message was sent. We'll email you back at{' '}
+            <b>{user?.email || email}</b>.
+          </div>
+        ) : (
+          <>
+            {!user?.email && (
+              <label style={{ display: 'block', marginBottom: 12 }}>
+                <span style={labelStyle}>Your email</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com — so we can reply"
+                  style={inputStyle}
+                />
+              </label>
+            )}
+
+            <label style={{ display: 'block', marginBottom: 12 }}>
+              <span style={labelStyle}>Subject</span>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="What's this about?"
+                maxLength={200}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ display: 'block', marginBottom: 14 }}>
+              <span style={labelStyle}>Message</span>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Describe the issue, what you were doing, anything that might help us reproduce it…"
+                rows={6}
+                maxLength={5000}
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </label>
+
+            <div style={{
+              fontSize: 10, color: '#555', marginBottom: 14,
+              padding: '8px 10px', background: '#0c0c0c',
+              border: '1px solid #1a1a1a', borderRadius: 4, lineHeight: 1.5,
+            }}>
+              We'll automatically attach: browser, {user?.email ? 'account email' : 'the email you provided'}, and current page —
+              so support doesn't have to ask. Nothing else.
+            </div>
+
+            {errMsg && (
+              <div style={{
+                fontSize: 11, color: '#e05c5c', marginBottom: 12,
+                padding: '8px 10px', background: '#1a0808',
+                border: '1px solid #5a1a1a', borderRadius: 4, lineHeight: 1.5,
+              }}>
+                {errMsg}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button onClick={handleCopyEmail} style={{
+                ...btnGhost, marginRight: 'auto', fontSize: 11,
+              }}>
+                Copy {SUPPORT_EMAIL}
+              </button>
+              <button onClick={handleOpenMail} style={btnGhost} title="Open your local mail client instead">
+                ✉ Email fallback
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={state === 'sending'}
+                style={{
+                  ...btnPrimary,
+                  opacity: state === 'sending' ? 0.6 : 1,
+                  cursor: state === 'sending' ? 'wait' : 'pointer',
+                }}
+              >
+                {state === 'sending' ? 'Sending…' : '↗ Send to support'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

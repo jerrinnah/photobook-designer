@@ -18,8 +18,11 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set()); // emails of bulk-selected rows
   const [detailEmail, setDetailEmail] = useState(null); // open drawer for this user
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'users' | 'payments' | 'referrals' | 'settings'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'users' | 'payments' | 'referrals' | 'support' | 'settings'
   const [referrals, setReferrals] = useState(null);
+  const [tickets, setTickets] = useState(null);
+  const [ticketFilter, setTicketFilter] = useState('open'); // 'all' | 'open' | 'in_progress' | 'resolved' | 'wont_fix'
+  const [openTicketCount, setOpenTicketCount] = useState(null);
 
   const load = async (pw) => {
     if (!isSupabaseConfigured) {
@@ -69,6 +72,43 @@ export default function AdminDashboard() {
         .catch((e) => console.warn('[Admin] referrals RPC failed:', e.message));
     }
   }, [activeTab, password, referrals]);
+
+  // Support tickets — refetched each time the tab opens or the filter
+  // changes. Kept small (<= 200 rows per call) so it stays responsive.
+  const loadTickets = async (status) => {
+    if (!password) return;
+    try {
+      const rows = await rpcDirect('list_support_tickets_admin', {
+        p_password: password,
+        p_status: status === 'all' ? null : status,
+        p_limit: 200,
+      }, { label: 'Tickets', timeoutMs: 15_000 });
+      setTickets(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      console.warn('[Admin] tickets RPC failed:', e.message);
+      setTickets([]);
+    }
+  };
+  useEffect(() => {
+    if (activeTab === 'support' && password) loadTickets(ticketFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, ticketFilter, password]);
+
+  // Ambient badge — count of open + in-progress tickets so the tab
+  // itself shows attention needed. Refreshed on sign-in + every 3 min.
+  useEffect(() => {
+    if (!password) return;
+    let cancelled = false;
+    const tick = () => {
+      rpcDirect('count_open_support_tickets_admin', { p_password: password }, {
+        label: 'Ticket count', timeoutMs: 8_000,
+      }).then((n) => { if (!cancelled) setOpenTicketCount(typeof n === 'number' ? n : (Array.isArray(n) ? n[0] : null)); })
+        .catch(() => { /* silently — not critical */ });
+    };
+    tick();
+    const t = setInterval(tick, 3 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [password]);
 
   const logout = () => {
     sessionStorage.removeItem(PW_KEY);
@@ -155,6 +195,7 @@ export default function AdminDashboard() {
     { key: 'users',     label: 'Users',     icon: '◉', badge: users.length },
     { key: 'payments',  label: 'Payments',  icon: '◰' },
     { key: 'referrals', label: 'Referrals', icon: '↺' },
+    { key: 'support',   label: 'Support',   icon: '?', badge: openTicketCount, badgeAlert: openTicketCount > 0 },
     { key: 'settings',  label: 'Settings',  icon: '⚙' },
   ];
 
@@ -196,8 +237,12 @@ export default function AdminDashboard() {
                 <span style={{
                   marginLeft: 'auto',
                   fontSize: 9, padding: '1px 6px',
-                  background: activeTab === t.key ? 'rgba(255,255,255,0.18)' : '#1a1a1a',
-                  color: activeTab === t.key ? '#fff' : '#888',
+                  background: t.badgeAlert
+                    ? '#3a1010'
+                    : activeTab === t.key ? 'rgba(255,255,255,0.18)' : '#1a1a1a',
+                  color: t.badgeAlert
+                    ? '#e05c5c'
+                    : activeTab === t.key ? '#fff' : '#888',
                   borderRadius: 8, fontWeight: 600,
                 }}>{t.badge}</span>
               )}
@@ -509,6 +554,15 @@ export default function AdminDashboard() {
 
       {activeTab === 'payments' && <PaymentsPanel activity={overview?.activity || []} />}
       {activeTab === 'referrals' && <ReferralsPanel data={referrals} />}
+      {activeTab === 'support' && (
+        <SupportTicketsPanel
+          tickets={tickets}
+          filter={ticketFilter}
+          onFilterChange={setTicketFilter}
+          adminPassword={password}
+          onChanged={() => loadTickets(ticketFilter)}
+        />
+      )}
 
       {activeTab === 'settings' && (
         <div>
@@ -1431,3 +1485,239 @@ const cellStyle = {
   padding: '10px 12px', color: '#ccc', fontSize: 12,
   borderBottom: 'none',
 };
+
+// ── Support Tickets panel ────────────────────────────────────────
+function SupportTicketsPanel({ tickets, filter, onFilterChange, adminPassword, onChanged }) {
+  const FILTERS = [
+    { key: 'open',        label: 'Open',         color: '#f6c90e' },
+    { key: 'in_progress', label: 'In progress',  color: '#4f8ef7' },
+    { key: 'resolved',    label: 'Resolved',     color: '#6fcf97' },
+    { key: 'wont_fix',    label: "Won't fix",    color: '#888' },
+    { key: 'all',         label: 'All',          color: '#aaa' },
+  ];
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase' }}>
+          Support tickets {tickets && `(${tickets.length})`}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => onFilterChange(f.key)}
+              style={{
+                padding: '4px 10px', fontSize: 10, fontWeight: 500,
+                background: filter === f.key ? '#1a3580' : '#181818',
+                color: filter === f.key ? '#fff' : f.color,
+                border: `1px solid ${filter === f.key ? '#1a3580' : '#252525'}`,
+                borderRadius: 4, cursor: 'pointer',
+                letterSpacing: 0.3,
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tickets == null && (
+        <div style={{ padding: 20, color: '#666', fontSize: 12, textAlign: 'center' }}>
+          Loading tickets…
+        </div>
+      )}
+      {tickets != null && tickets.length === 0 && (
+        <div style={{
+          padding: 30, textAlign: 'center',
+          background: '#111', border: '1px solid #1a1a1a', borderRadius: 8,
+          color: '#666', fontSize: 12, lineHeight: 1.6,
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 8, color: '#2a2a2a' }}>✓</div>
+          Nothing here.<br />
+          {filter === 'open' ? 'No open tickets — nobody\'s asking for help.' : `No tickets in "${filter}" state.`}
+        </div>
+      )}
+
+      {(tickets || []).map((t) => (
+        <TicketRow
+          key={t.id}
+          ticket={t}
+          adminPassword={adminPassword}
+          onChanged={onChanged}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TicketRow({ ticket, adminPassword, onChanged }) {
+  const [expanded, setExpanded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(ticket.admin_note || '');
+
+  const statusStyle = {
+    open:        { bg: '#1a1408', border: '#3a2a10', color: '#f6c90e' },
+    in_progress: { bg: '#0d1a2e', border: '#1e3a5f', color: '#4f8ef7' },
+    resolved:    { bg: '#0e1a10', border: '#2a4a2a', color: '#6fcf97' },
+    wont_fix:    { bg: '#181818', border: '#2a2a2a', color: '#888' },
+  }[ticket.status] || { bg: '#181818', border: '#2a2a2a', color: '#888' };
+
+  const changeStatus = async (newStatus) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await rpcDirect('set_support_ticket_status_admin', {
+        p_password: adminPassword,
+        p_id: ticket.id,
+        p_status: newStatus,
+        p_note: note !== ticket.admin_note ? note : null,
+      }, { label: 'Set ticket status', timeoutMs: 10_000 });
+      onChanged();
+    } catch (e) {
+      alert(`Update failed: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const deleteTicket = async () => {
+    if (!confirm('Delete this ticket permanently?')) return;
+    setBusy(true);
+    try {
+      await rpcDirect('delete_support_ticket_admin', {
+        p_password: adminPassword,
+        p_id: ticket.id,
+      }, { label: 'Delete ticket', timeoutMs: 10_000 });
+      onChanged();
+    } catch (e) {
+      alert(`Delete failed: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const created = new Date(ticket.created_at);
+  const emailForReply = ticket.email || '';
+  const replyMailto = emailForReply
+    ? `mailto:${emailForReply}?subject=${encodeURIComponent('Re: ' + ticket.subject)}&body=${encodeURIComponent('\n\n— Original message —\n' + ticket.body)}`
+    : null;
+
+  return (
+    <div style={{
+      background: '#111', border: '1px solid #1a1a1a', borderRadius: 8,
+      marginBottom: 8, padding: '12px 14px',
+    }}>
+      <div
+        onClick={() => setExpanded((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+      >
+        <span style={{
+          padding: '2px 7px', fontSize: 9, fontWeight: 700,
+          borderRadius: 3, letterSpacing: 0.5, textTransform: 'uppercase',
+          background: statusStyle.bg, border: `1px solid ${statusStyle.border}`,
+          color: statusStyle.color,
+        }}>
+          {ticket.status.replace('_', ' ')}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: '#e0e0e0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {ticket.subject}
+          </div>
+          <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+            {ticket.email || <em style={{ color: '#a55' }}>anonymous</em>}
+            {ticket.app_tier && ` · ${ticket.app_tier}`}
+            {' · '}
+            {created.toLocaleString()}
+          </div>
+        </div>
+        <span style={{ fontSize: 10, color: '#555' }}>{expanded ? '▾' : '▸'}</span>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #1a1a1a' }}>
+          <div style={{
+            fontSize: 12, color: '#ccc', lineHeight: 1.55,
+            padding: '10px 12px', background: '#0c0c0c',
+            border: '1px solid #1a1a1a', borderRadius: 5,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            marginBottom: 10,
+          }}>
+            {ticket.body}
+          </div>
+
+          {(ticket.browser || ticket.page_url) && (
+            <div style={{
+              fontSize: 10, color: '#555', lineHeight: 1.55, marginBottom: 10,
+              padding: '6px 10px', background: '#0a0a0a',
+              border: '1px solid #171717', borderRadius: 4,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            }}>
+              {ticket.page_url && <div>Page: {ticket.page_url}</div>}
+              {ticket.browser && <div>Browser: {ticket.browser}</div>}
+            </div>
+          )}
+
+          <label style={{ display: 'block', fontSize: 10, color: '#666', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>
+            Admin note (private)
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Add a triage note…"
+            rows={2}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: '#0c0c0c', border: '1px solid #1a1a1a', borderRadius: 4,
+              color: '#ccc', fontSize: 11, padding: '6px 8px', outline: 'none',
+              resize: 'vertical', marginBottom: 10,
+              fontFamily: 'inherit',
+            }}
+          />
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {ticket.status !== 'in_progress' && (
+              <button onClick={() => changeStatus('in_progress')} disabled={busy}
+                style={btnAction('#4f8ef7', '#1e3a5f')}>
+                → In progress
+              </button>
+            )}
+            {ticket.status !== 'resolved' && (
+              <button onClick={() => changeStatus('resolved')} disabled={busy}
+                style={btnAction('#6fcf97', '#2a4a2a')}>
+                ✓ Resolve
+              </button>
+            )}
+            {ticket.status !== 'wont_fix' && (
+              <button onClick={() => changeStatus('wont_fix')} disabled={busy}
+                style={btnAction('#888', '#2a2a2a')}>
+                Won't fix
+              </button>
+            )}
+            {ticket.status !== 'open' && (
+              <button onClick={() => changeStatus('open')} disabled={busy}
+                style={btnAction('#f6c90e', '#3a2a10')}>
+                Re-open
+              </button>
+            )}
+            {replyMailto && (
+              <a href={replyMailto} style={{ ...btnAction('#e0e0e0', '#252525'), textDecoration: 'none', display: 'inline-block' }}>
+                ✉ Reply
+              </a>
+            )}
+            <button onClick={deleteTicket} disabled={busy}
+              style={{ ...btnAction('#e05c5c', '#5a1a1a'), marginLeft: 'auto' }}>
+              🗑 Delete
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function btnAction(color, border) {
+  return {
+    padding: '5px 10px', fontSize: 10, fontWeight: 500,
+    background: 'transparent', color, border: `1px solid ${border}`,
+    borderRadius: 4, cursor: 'pointer',
+  };
+}
