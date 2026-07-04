@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Rect, Image as KImage, Group, Line, Text as KText, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Image as KImage, Group, Line, Text as KText, TextPath as KTextPath, Circle } from 'react-konva';
 import Konva from 'konva';
 import { useBookStore } from '../store/useBookStore';
 import { getScreenDims, getEffectiveExportSize } from '../layouts/spreadSizes';
@@ -368,6 +368,90 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
 // Caption rendered as draggable Konva Text
 function CaptionNode({ cap, spreadW, spreadH, isSelected, onSelect, onDblClick, onDragEnd }) {
   const fontStyle = [cap.italic ? 'italic' : '', cap.bold ? 'bold' : ''].filter(Boolean).join(' ') || 'normal';
+
+  // Curved caption path — the text hugs an arc whose vertical rise is
+  // controlled by `cap.arc` (positive = concave up, negative = concave
+  // down, 0 = flat). Rendered via Konva's <TextPath>. Straight captions
+  // stay on the classic <Text> node, unchanged.
+  if (cap.arc && cap.arc !== 0) {
+    const w = cap.w * spreadW;
+    const arcRise = (cap.arc || 0) * w * 0.3; // scale arc parameter to spread width
+    const startX = cap.x * spreadW;
+    const startY = cap.y * spreadH;
+    // Quadratic bezier from (0,0) → (w,0) with control point at (w/2, -arcRise)
+    // gives a smooth arc. Negative arc pushes control point downward.
+    const pathData = `M0,0 Q${w / 2},${-arcRise} ${w},0`;
+    return (
+      <KTextPath
+        x={startX}
+        y={startY}
+        data={pathData}
+        text={cap.text}
+        fontSize={cap.fontSize || 18}
+        fontFamily={cap.fontFamily || 'system-ui, sans-serif'}
+        fontStyle={fontStyle}
+        letterSpacing={cap.letterSpacing ?? 0}
+        fill={cap.color || '#ffffff'}
+        align={cap.align || 'left'}
+        draggable
+        onClick={onSelect}
+        onDblClick={onDblClick}
+        onDragEnd={onDragEnd}
+        shadowColor={cap.shadowColor || 'rgba(0,0,0,0.8)'}
+        shadowBlur={isSelected ? 0 : (cap.shadow ?? 4)}
+        shadowOffset={{ x: 0, y: 1 }}
+        stroke={isSelected ? '#4f8ef7' : undefined}
+        strokeWidth={isSelected ? 0.5 : 0}
+      />
+    );
+  }
+
+  // Drop-cap first-letter — split the first character into a bigger,
+  // fancier glyph rendered as a separate Text node before the body.
+  // Only activates on captions with cap.dropCap and text length > 3.
+  if (cap.dropCap && (cap.text || '').trim().length > 3) {
+    const chars = cap.text.split('');
+    const firstChar = chars[0];
+    const rest = chars.slice(1).join('');
+    const bodyFont = cap.fontSize || 18;
+    const dropSize = bodyFont * 3;
+    const dropWidth = dropSize * 0.6;
+    return (
+      <>
+        <KText
+          x={cap.x * spreadW}
+          y={cap.y * spreadH}
+          text={firstChar}
+          fontSize={dropSize}
+          fontFamily={cap.dropCapFontFamily || cap.fontFamily || 'Playfair Display, serif'}
+          fontStyle="bold"
+          fill={cap.dropCapColor || cap.color || '#ffffff'}
+          draggable
+          onClick={onSelect}
+          onDblClick={onDblClick}
+          onDragEnd={onDragEnd}
+          shadowColor={cap.shadowColor || 'rgba(0,0,0,0.8)'}
+          shadowBlur={isSelected ? 0 : (cap.shadow ?? 4)}
+          shadowOffset={{ x: 0, y: 1 }}
+        />
+        <KText
+          x={cap.x * spreadW + dropWidth}
+          y={cap.y * spreadH + bodyFont * 0.3}
+          width={cap.w * spreadW - dropWidth}
+          text={rest}
+          fontSize={bodyFont}
+          fontFamily={cap.fontFamily || 'system-ui, sans-serif'}
+          fontStyle={fontStyle}
+          letterSpacing={cap.letterSpacing ?? 0}
+          lineHeight={cap.lineHeight ?? 1.2}
+          fill={cap.color || '#ffffff'}
+          align={cap.align || 'left'}
+          listening={false}
+        />
+      </>
+    );
+  }
+
   return (
     <KText
       x={cap.x * spreadW}
@@ -2057,6 +2141,29 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                     onClick={() => upd(p)}
                   >{p.label}</button>
                 ))}
+              </div>
+
+              {/* Row 3: Tier 6 typography — arc curve + drop cap */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                <span style={{ fontSize: 9, color: '#444' }}>Arc</span>
+                <input type="range" min={-1} max={1} step={0.05} value={selCap.arc ?? 0}
+                  onChange={(e) => upd({ arc: parseFloat(e.target.value) })}
+                  title="Curve the text along an arc. 0 = flat, negative = downward smile, positive = upward frown."
+                  style={{ width: 80, accentColor: '#f6c98a' }} />
+                <span style={{ fontSize: 9, color: '#444', minWidth: 26, textAlign: 'right' }}>
+                  {(selCap.arc ?? 0).toFixed(2)}
+                </span>
+                <div style={{ width: 1, height: 12, background: '#2a2a2a' }} />
+                <button
+                  style={cellBtnStyle({
+                    color: selCap.dropCap ? '#f6c98a' : '#555',
+                    fontStyle: 'italic', padding: '2px 7px', fontSize: 9,
+                  })}
+                  title="Drop cap — first letter gets a decorative oversize treatment. Great for the opening spread's intro paragraph."
+                  onClick={() => upd({ dropCap: !selCap.dropCap })}
+                >
+                  ¶ Drop cap{selCap.dropCap ? ' ✓' : ''}
+                </button>
               </div>
             </div>
           );

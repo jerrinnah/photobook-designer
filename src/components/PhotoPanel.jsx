@@ -223,6 +223,7 @@ export default function PhotoPanel({ mobile = false }) {
     const arr = [...photos];
     if (photoSort === 'name') arr.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
     else if (photoSort === 'newest') arr.reverse();
+    else if (photoSort === 'timeline') arr.sort((a, b) => (a.shotAt || 0) - (b.shotAt || 0));
     else if (photoSort === 'portrait') arr.sort((a, b) => (a.height / a.width) - (b.height / b.width)).reverse();
     else if (photoSort === 'landscape') arr.sort((a, b) => (a.width / a.height) - (b.width / b.height)).reverse();
     return arr;
@@ -701,6 +702,7 @@ export default function PhotoPanel({ mobile = false }) {
           >
             <option value="name">Name</option>
             <option value="newest">Newest</option>
+            <option value="timeline">Timeline (shot time)</option>
             <option value="portrait">Portrait first</option>
             <option value="landscape">Landscape first</option>
           </select>
