@@ -105,7 +105,7 @@ as $$
 declare
   v_rows jsonb;
 begin
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
 
@@ -147,7 +147,7 @@ security definer
 set search_path = public, auth
 as $$
 begin
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
   if p_status not in ('open', 'in_progress', 'resolved', 'wont_fix') then
@@ -177,7 +177,7 @@ security definer
 set search_path = public, auth
 as $$
 begin
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
   delete from public.support_tickets where id = p_id;
@@ -197,7 +197,7 @@ as $$
 declare
   v_count int;
 begin
-  if p_password <> 'CHANGE_THIS_PASSWORD' then
+  if p_password <> 'Nej2026' then
     raise exception 'Unauthorized';
   end if;
   select count(*)::int into v_count
