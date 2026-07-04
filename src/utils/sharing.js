@@ -362,6 +362,47 @@ export async function getMyShares() {
   return Array.isArray(data) ? data : [];
 }
 
+// ── Tier 5 additions ──────────────────────────────────────────────
+// Per-cell feedback (a comment tied to a specific cell inside a
+// spread) and per-spread approval state.
+
+export async function addCellFeedback(token, spreadIdx, cellIdx, comment) {
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  const trimmed = (comment || '').trim();
+  if (!trimmed) throw new Error('Please write something before sending.');
+  if (trimmed.length > 1000) throw new Error('Comment is too long (max 1000 characters).');
+  const { error } = await supabase.rpc('add_cell_feedback', {
+    p_token: token,
+    p_spread_idx: spreadIdx,
+    p_cell_idx: cellIdx == null ? null : cellIdx,
+    p_comment: trimmed,
+  });
+  if (error) {
+    // Older backend without the cell_idx RPC — fall back gracefully.
+    if (/could not find the function|404/i.test(error.message)) {
+      return addSpreadFeedback(token, spreadIdx, comment);
+    }
+    throw new Error(error.message);
+  }
+}
+
+export async function setSpreadStatus(token, spreadIdx, status) {
+  if (!isSupabaseConfigured) throw new Error('Backend not configured.');
+  const { error } = await supabase.rpc('set_spread_status', {
+    p_token: token,
+    p_spread_idx: spreadIdx,
+    p_status: status,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function getSpreadStatuses(token) {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.rpc('get_spread_statuses', { p_token: token });
+  if (error) return [];
+  return Array.isArray(data) ? data : [];
+}
+
 // Revoke a share — just delete the DB row. The actual image files
 // stay in storage because they're content-addressed and may be
 // referenced by other shares the user has created (or might create

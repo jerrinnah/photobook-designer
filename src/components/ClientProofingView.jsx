@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { loadShare, setShareStatus, addSpreadFeedback, getSpreadFeedback } from '../utils/sharing';
+import {
+  loadShare, setShareStatus,
+  addSpreadFeedback, addCellFeedback, getSpreadFeedback,
+  setSpreadStatus, getSpreadStatuses,
+} from '../utils/sharing';
 import { getScreenDims } from '../layouts/spreadSizes';
 
 // Standalone viewer — what the client opens when they receive the link.
@@ -15,14 +19,20 @@ export default function ClientProofingView({ token }) {
   const [share, setShare] = useState(null);
   const [idx, setIdx] = useState(0);
   const [status, setStatus] = useState('pending');
-  const [feedback, setFeedback] = useState([]);          // [{ spread_idx, comment, created_at }]
+  const [feedback, setFeedback] = useState([]);          // [{ spread_idx, cell_idx, comment, created_at }]
+  const [spreadStatuses, setSpreadStatuses] = useState({}); // { [spread_idx]: 'approved' | 'changes_requested' | 'pending' }
   const [draftComment, setDraftComment] = useState('');
+  const [draftCellIdx, setDraftCellIdx] = useState(null);   // null = comment on whole spread
   const [sendingComment, setSendingComment] = useState(false);
   const [commentError, setCommentError] = useState(null);
 
   const refreshFeedback = async () => {
     const rows = await getSpreadFeedback(token);
     setFeedback(rows);
+    const statuses = await getSpreadStatuses(token);
+    const map = {};
+    for (const row of statuses) map[row.spread_idx] = row.status;
+    setSpreadStatuses(map);
   };
 
   useEffect(() => {
@@ -35,6 +45,12 @@ export default function ClientProofingView({ token }) {
         setLoading(false);
         const fb = await getSpreadFeedback(token);
         if (!cancelled) setFeedback(fb);
+        const statuses = await getSpreadStatuses(token);
+        if (!cancelled) {
+          const map = {};
+          for (const row of statuses) map[row.spread_idx] = row.status;
+          setSpreadStatuses(map);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -47,6 +63,7 @@ export default function ClientProofingView({ token }) {
   // Clear draft + error when the user moves to a different spread
   useEffect(() => {
     setDraftComment('');
+    setDraftCellIdx(null);
     setCommentError(null);
   }, [idx]);
 
@@ -56,8 +73,16 @@ export default function ClientProofingView({ token }) {
     setSendingComment(true);
     setCommentError(null);
     try {
-      await addSpreadFeedback(token, idx, draftComment);
+      // If the user clicked a cell to comment on, tie the feedback to it.
+      // Falls back to spread-level via the helper's own fallback if the
+      // backend RPC is missing.
+      if (draftCellIdx != null) {
+        await addCellFeedback(token, idx, draftCellIdx, draftComment);
+      } else {
+        await addSpreadFeedback(token, idx, draftComment);
+      }
       setDraftComment('');
+      setDraftCellIdx(null);
       await refreshFeedback();
       // adding feedback auto-flips share to changes_requested on the server
       if (status === 'pending') setStatus('changes_requested');
@@ -66,6 +91,19 @@ export default function ClientProofingView({ token }) {
     } finally {
       setSendingComment(false);
     }
+  };
+
+  // Per-spread approve / changes toggle — replaces the whole-book
+  // decision at the bottom for photographers who want granular sign-off.
+  const currentSpreadStatus = spreadStatuses[idx] || 'pending';
+  const handleSpreadApprove = async () => {
+    setSpreadStatuses((prev) => ({ ...prev, [idx]: 'approved' }));
+    try { await setSpreadStatus(token, idx, 'approved'); } catch { /* ignore */ }
+  };
+  const handleSpreadChanges = async () => {
+    setSpreadStatuses((prev) => ({ ...prev, [idx]: 'changes_requested' }));
+    try { await setSpreadStatus(token, idx, 'changes_requested'); } catch { /* ignore */ }
+    if (status === 'pending') setStatus('changes_requested');
   };
 
   const currentSpreadFeedback = feedback.filter((f) => f.spread_idx === idx);
@@ -143,7 +181,44 @@ export default function ClientProofingView({ token }) {
 
       {/* Preview area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: 24, overflow: 'auto' }}>
-        <SpreadImage spread={spread} aspect={aspect} />
+        <SpreadImage
+          spread={spread}
+          aspect={aspect}
+          activeCellIdx={draftCellIdx}
+          commentedCellIndices={new Set(currentSpreadFeedback.map((f) => f.cell_idx).filter((v) => v != null))}
+          onCellClick={setDraftCellIdx}
+        />
+
+        {/* Per-spread status pill */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+          <SpreadDecisionPill status={currentSpreadStatus} />
+          <button
+            onClick={handleSpreadApprove}
+            disabled={currentSpreadStatus === 'approved'}
+            style={{
+              padding: '5px 12px', fontSize: 11, fontWeight: 600,
+              background: currentSpreadStatus === 'approved' ? '#0e1a10' : '#1a4a2a',
+              color: currentSpreadStatus === 'approved' ? '#6fcf97' : '#fff',
+              border: `1px solid ${currentSpreadStatus === 'approved' ? '#2a4a2a' : '#2a6a3a'}`,
+              borderRadius: 4, cursor: currentSpreadStatus === 'approved' ? 'default' : 'pointer',
+            }}
+          >
+            {currentSpreadStatus === 'approved' ? '✓ Spread approved' : '✓ Approve this spread'}
+          </button>
+          <button
+            onClick={handleSpreadChanges}
+            disabled={currentSpreadStatus === 'changes_requested'}
+            style={{
+              padding: '5px 12px', fontSize: 11,
+              background: 'transparent',
+              color: currentSpreadStatus === 'changes_requested' ? '#e05c5c' : '#f6c90e',
+              border: `1px solid ${currentSpreadStatus === 'changes_requested' ? '#5a1a1a' : '#3a2a10'}`,
+              borderRadius: 4, cursor: currentSpreadStatus === 'changes_requested' ? 'default' : 'pointer',
+            }}
+          >
+            ↺ Needs changes
+          </button>
+        </div>
 
         {/* Nav */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 18 }}>
@@ -218,7 +293,18 @@ function SpreadFeedback({ idx, existing, draft, onDraft, onSend, sending, error 
               background: '#161616', border: '1px solid #232323',
               borderRadius: 4, fontSize: 12, color: '#ccc', lineHeight: 1.5,
             }}>
-              <div>{f.comment}</div>
+              {f.cell_idx != null && (
+                <span style={{
+                  display: 'inline-block',
+                  fontSize: 9, fontWeight: 700,
+                  color: '#f6c98a', background: '#2a1a08',
+                  padding: '1px 6px', borderRadius: 2, letterSpacing: 0.5,
+                  marginRight: 6, marginBottom: 3,
+                }}>
+                  CELL {f.cell_idx + 1}
+                </span>
+              )}
+              <span>{f.comment}</span>
               <div style={{ fontSize: 9, color: '#555', marginTop: 4 }}>
                 {new Date(f.created_at).toLocaleString()}
               </div>
@@ -263,22 +349,43 @@ function SpreadFeedback({ idx, existing, draft, onDraft, onSend, sending, error 
 }
 
 // Single spread display — pure image render, no canvas.
-function SpreadImage({ spread, aspect }) {
+function SpreadImage({ spread, aspect, activeCellIdx, commentedCellIndices, onCellClick }) {
   const previewW = Math.min(window.innerWidth * 0.86, 1400);
   const previewH = Math.round(previewW / aspect);
+  // The share snapshot stores each spread's cells with their normalized
+  // geometry — reuse it to draw hit-boxes over the preview image so the
+  // client can click a specific photo to comment on.
+  const cells = spread?.cells || [];
+  const handleImageClick = (e) => {
+    if (!onCellClick || cells.length === 0) return;
+    const box = e.currentTarget.getBoundingClientRect();
+    const rx = (e.clientX - box.left) / box.width;
+    const ry = (e.clientY - box.top) / box.height;
+    const hit = cells.findIndex((c) => {
+      const g = c.geo || c;
+      return g && rx >= g.x && rx <= g.x + g.w && ry >= g.y && ry <= g.y + g.h;
+    });
+    // Toggle: clicking the same cell clears the arming.
+    onCellClick(hit === -1 ? null : (hit === activeCellIdx ? null : hit));
+  };
   return (
-    <div style={{
-      width: previewW, height: previewH,
-      background: '#111',
-      boxShadow: '0 12px 60px rgba(0,0,0,0.7)',
-      borderRadius: 2,
-      overflow: 'hidden',
-    }}>
+    <div
+      onClick={handleImageClick}
+      style={{
+        width: previewW, height: previewH,
+        position: 'relative',
+        background: '#111',
+        boxShadow: '0 12px 60px rgba(0,0,0,0.7)',
+        borderRadius: 2,
+        overflow: 'hidden',
+        cursor: onCellClick && cells.length > 0 ? 'crosshair' : 'default',
+      }}
+    >
       {spread?.imageUrl ? (
         <img
           src={spread.imageUrl}
           alt={`Spread ${spread.id}`}
-          style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
+          style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain', pointerEvents: 'none' }}
           draggable={false}
         />
       ) : (
@@ -286,7 +393,59 @@ function SpreadImage({ spread, aspect }) {
           (no image)
         </div>
       )}
+      {/* Cell overlays — highlighted when armed for a comment, tinted
+          when they already have a comment attached. */}
+      {cells.map((c, i) => {
+        const g = c.geo || c;
+        if (!g) return null;
+        const armed = i === activeCellIdx;
+        const hasComment = commentedCellIndices?.has?.(i);
+        if (!armed && !hasComment) return null;
+        return (
+          <div key={i} style={{
+            position: 'absolute',
+            left: `${g.x * 100}%`, top: `${g.y * 100}%`,
+            width: `${g.w * 100}%`, height: `${g.h * 100}%`,
+            boxSizing: 'border-box',
+            border: armed ? '2px solid #f6c90e' : '2px solid rgba(224, 92, 92, 0.7)',
+            background: armed
+              ? 'rgba(246, 201, 14, 0.10)'
+              : 'rgba(224, 92, 92, 0.08)',
+            pointerEvents: 'none',
+            transition: 'all 0.15s',
+          }}>
+            {armed && (
+              <span style={{
+                position: 'absolute', top: 6, left: 8,
+                background: '#f6c90e', color: '#1a1208',
+                padding: '2px 8px', fontSize: 10, fontWeight: 700,
+                borderRadius: 3, letterSpacing: 0.5,
+              }}>
+                COMMENTING ON CELL {i + 1}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
+  );
+}
+
+function SpreadDecisionPill({ status }) {
+  const styles = {
+    pending:           { bg: '#181818', border: '#2a2a2a', color: '#888', label: 'Not reviewed' },
+    approved:          { bg: '#0e1a10', border: '#2a4a2a', color: '#6fcf97', label: 'Approved' },
+    changes_requested: { bg: '#2a0808', border: '#5a1a1a', color: '#e05c5c', label: 'Needs changes' },
+  };
+  const s = styles[status] || styles.pending;
+  return (
+    <span style={{
+      fontSize: 10, color: s.color, background: s.bg,
+      border: `1px solid ${s.border}`,
+      padding: '3px 8px', borderRadius: 3, letterSpacing: 0.5, textTransform: 'uppercase', fontWeight: 600,
+    }}>
+      ● {s.label}
+    </span>
   );
 }
 
