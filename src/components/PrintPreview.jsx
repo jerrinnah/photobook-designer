@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useBookStore } from '../store/useBookStore';
 import { SPREAD_SIZES, getEffectiveExportSize } from '../layouts/spreadSizes';
+import { PRINT_BUREAUS } from '../layouts/printBureaus';
 
 // Standard print sizes (inches) for DPI guidance
 const PRINT_SIZES = [
@@ -128,9 +129,27 @@ function SpreadMiniature({ spread, cmyk, photos }) {
 }
 
 export default function PrintPreview({ onClose, mobile = false }) {
-  const { spreads, photos, spreadSizeId, customSize, bookName } = useBookStore();
+  const { spreads, photos, spreadSizeId, customSize, bookName, setSpreadSize } = useBookStore();
   const [cmyk, setCmyk] = useState(false);
   const [selectedSize, setSelectedSize] = useState('4×6"');
+  const [bureauId, setBureauId] = useState('');
+
+  const applyBureau = (id) => {
+    setBureauId(id);
+    const bureau = PRINT_BUREAUS.find((b) => b.id === id);
+    if (!bureau) return;
+    if (bureau.spreadSizeId !== spreadSizeId) {
+      if (confirm(
+        `Switch page size to match ${bureau.label}?\n\n`
+        + `Current: ${SPREAD_SIZES.find((s) => s.id === spreadSizeId)?.label || spreadSizeId}\n`
+        + `New: ${SPREAD_SIZES.find((s) => s.id === bureau.spreadSizeId)?.label || bureau.spreadSizeId}`
+      )) {
+        setSpreadSize(bureau.spreadSizeId);
+      }
+    }
+  };
+
+  const matchedBureaus = PRINT_BUREAUS.filter((b) => b.spreadSizeId === spreadSizeId);
 
   const { exportW, exportH } = getEffectiveExportSize(spreadSizeId, customSize);
   const spreadLabel = SPREAD_SIZES.find((s) => s.id === spreadSizeId)?.label || spreadSizeId;
@@ -207,6 +226,44 @@ export default function PrintPreview({ onClose, mobile = false }) {
         }}>
           <div style={{ fontSize: 10, color: '#444', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
             Print Specs
+          </div>
+
+          {/* Print bureau presets */}
+          <div style={{ background: '#181818', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#555', marginBottom: 6 }}>Print bureau</div>
+            <select
+              value={bureauId}
+              onChange={(e) => applyBureau(e.target.value)}
+              style={{
+                width: '100%', background: '#141414', border: '1px solid #252525',
+                borderRadius: 3, color: '#aaa', fontSize: 10, padding: '4px 5px',
+                cursor: 'pointer', outline: 'none', marginBottom: 6,
+              }}
+            >
+              <option value="">— Pick a printer to match its spec —</option>
+              {PRINT_BUREAUS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.spreadSizeId === spreadSizeId ? '✓ ' : ''}{b.label} · {b.country}
+                </option>
+              ))}
+            </select>
+            {matchedBureaus.length > 0 && !bureauId && (
+              <div style={{ fontSize: 9, color: '#6fcf97', lineHeight: 1.4, marginBottom: 4 }}>
+                ✓ Your current page size matches: {matchedBureaus.map((b) => b.label.split(' ')[0]).join(', ')}
+              </div>
+            )}
+            {bureauId && (() => {
+              const b = PRINT_BUREAUS.find((x) => x.id === bureauId);
+              if (!b) return null;
+              return (
+                <div style={{ fontSize: 9, color: '#888', lineHeight: 1.5, marginTop: 4 }}>
+                  <div style={{ marginBottom: 3 }}>
+                    {b.dpi} DPI · {b.colorSpace} · {b.bleedInches}" bleed
+                  </div>
+                  <div style={{ color: '#666' }}>{b.notes}</div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Project stats */}
@@ -304,13 +361,14 @@ export default function PrintPreview({ onClose, mobile = false }) {
             </div>
           </div>
 
-          {/* Colour profile note */}
-          <div style={{ marginTop: 10, fontSize: 9, color: '#444', lineHeight: 1.6 }}>
-            <div style={{ color: '#555', marginBottom: 3 }}>Colour profile tips</div>
-            <div>· Export at sRGB for online labs</div>
-            <div>· Request ICC profile from your printer</div>
-            <div>· Add 3mm bleed when uploading</div>
-            <div>· Safe zone: 5mm inside trim</div>
+          {/* Colour profile + CMYK export guidance */}
+          <div style={{ marginTop: 10, fontSize: 9, color: '#666', lineHeight: 1.6 }}>
+            <div style={{ color: '#888', marginBottom: 4, fontWeight: 600 }}>Colour profile tips</div>
+            <div>· Export at sRGB for online labs — most modern labs (Blurb, SnapFish, Photobook Worldwide) convert to CMYK press-side.</div>
+            <div>· For traditional offset presses, ask your printer for their ICC profile and use it in Photoshop to soft-proof before ordering.</div>
+            <div>· Bleed: {0.125}" (3mm) is applied automatically per spread unless you toggle NO BLD in the spread nav.</div>
+            <div>· Safe zone: keep faces and captions ≥ 0.25" (5mm) inside the trim.</div>
+            <div>· If your printer requires CMYK: export the PDF here, then convert in Adobe Acrobat (File → Export → Convert Colors → Working CMYK: U.S. Web Coated SWOP v2).</div>
           </div>
         </div>
 

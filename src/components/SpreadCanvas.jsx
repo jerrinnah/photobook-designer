@@ -425,6 +425,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     adjustCell,
     clearPhotoSelection,
     swapSourceIndex, armSwap, cancelSwap,
+    softProof,
   } = useBookStore();
 
   const cellFileInputRef = useRef(null);
@@ -910,6 +911,15 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
         style={{
           flex: 1, overflow: 'auto',
           minHeight: 0, minWidth: 0,
+          // Soft-proof simulation: compress the RGB gamut to something
+          // closer to what a CMYK press produces on uncoated paper.
+          // The numbers are a hand-tuned approximation, not a real ICC
+          // conversion — enough to catch "this magenta is too vibrant
+          // for print" without needing Ghostscript / Little CMS.
+          filter: softProof
+            ? 'saturate(0.78) contrast(1.06) brightness(0.96)'
+            : 'none',
+          transition: 'filter 0.25s',
         }}
       >
       {/* Wrapper grows when zoom > 1, but stays at least viewport size so the

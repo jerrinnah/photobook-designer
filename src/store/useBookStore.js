@@ -348,6 +348,7 @@ export const useBookStore = create((set, get) => ({
   copiedCell: null,                // { cell, geo } — clipboard for cross-spread copy/paste
   swapSourceIndex: null,           // cellIndex armed by "↔ Swap" — next cell click swaps with it
   fileDirty: false,                // has state changed since the last save-to-file? drives the * indicator
+  softProof: false,                // canvas-wide "how it'll look on paper" filter — CMYK gamut sim
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
@@ -535,6 +536,16 @@ export const useBookStore = create((set, get) => ({
   setSpreadRole: (spreadId, role) => set(h((s) => ({
     spreads: s.spreads.map((sp) =>
       sp.id !== spreadId ? sp : { ...sp, role }
+    ),
+  }))),
+
+  // Opt individual spreads OUT of the bleed extension the PDF export
+  // adds by default. Title / colophon / spec pages that print with a
+  // trim-flush white margin can flip this on so the printer's cut line
+  // doesn't chop into the design.
+  setSpreadNoBleed: (spreadId, noBleed) => set(h((s) => ({
+    spreads: s.spreads.map((sp) =>
+      sp.id !== spreadId ? sp : { ...sp, noBleed: !!noBleed }
     ),
   }))),
 
@@ -912,6 +923,8 @@ export const useBookStore = create((set, get) => ({
   // Called by projectFile.js after a successful Save-to-file so the
   // unsaved-changes indicator clears.
   markProjectSaved: () => set({ fileDirty: false }),
+
+  toggleSoftProof: () => set((s) => ({ softProof: !s.softProof })),
 
   rotateCellPhoto: (spreadId, cellIndex) => set(h((s) => ({
     spreads: s.spreads.map((sp) => {

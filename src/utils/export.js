@@ -218,7 +218,7 @@ async function captureAll(stageRef, spreads, activeSpreadId, setActiveSpread, sp
     try { stageRef.current?.getLayers?.().forEach((l) => l.batchDraw()); } catch { /* ignore */ }
     let dataURL = stageRef.current.toDataURL({ pixelRatio, mimeType: 'image/jpeg', quality: 0.95 });
     dataURL = await maybeWatermark(dataURL);
-    frames.push({ idx: i + 1, dataURL, role: designed[i].role });
+    frames.push({ idx: i + 1, dataURL, role: designed[i].role, noBleed: designed[i].noBleed === true });
   }
 
   setActiveSpread(origId);
@@ -352,12 +352,20 @@ export async function exportAsPDF(stageRef, spreads, activeSpreadId, setActiveSp
 
   // ── Each spread becomes one page WITH bleed extension ─────────────
   for (let i = 0; i < frames.length; i++) {
-    // Extend the captured spread image with bleed
-    const bleededImage = await extendForBleed(frames[i].dataURL, bleedPx);
-
+    const frame = frames[i];
     pdf.addPage([pagePtW, pagePtH], pagePtW >= pagePtH ? 'landscape' : 'portrait');
-    // The bled image fills the whole page (including bleed)
-    pdf.addImage(bleededImage, 'JPEG', 0, 0, pagePtW, pagePtH, undefined, 'FAST');
+    if (frame.noBleed) {
+      // Spread opted out of bleed (title / colophon / spec page). Draw
+      // the design flush inside the trim rectangle, leaving the bleed
+      // area white so the printer's cut can drift without exposing
+      // design content.
+      pdf.addImage(frame.dataURL, 'JPEG', bleedPt, bleedPt, trimPtW, trimPtH, undefined, 'FAST');
+    } else {
+      // Default: extend with edge-pixel bleed so the design survives
+      // trim drift.
+      const bleededImage = await extendForBleed(frame.dataURL, bleedPx);
+      pdf.addImage(bleededImage, 'JPEG', 0, 0, pagePtW, pagePtH, undefined, 'FAST');
+    }
     // Crop marks sit AT the trim edge — the printer cuts here
     drawCropMarks(pdf, pagePtW, pagePtH, bleedPt);
     // Page number — placed in the bleed area so it gets trimmed off

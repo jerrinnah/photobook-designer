@@ -734,6 +734,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
         ▶ Preview
       </button>
 
+      {/* Soft-proof — canvas-wide CMYK gamut simulation */}
+      <SoftProofToggle t={t} btnStyle={btnStyle} />
+
       <button data-tour="share" onClick={() => setShowShare(true)}
         style={btnStyle({
           color: t.mode === 'light' ? '#3a6020' : '#9fb88b',
@@ -1071,3 +1074,25 @@ const makeMenuItem = (t) => ({
   cursor: 'pointer',
   borderRadius: 3,
 });
+
+function SoftProofToggle({ t, btnStyle }) {
+  const softProof = useBookStore((s) => s.softProof);
+  const toggleSoftProof = useBookStore((s) => s.toggleSoftProof);
+  return (
+    <button
+      onClick={toggleSoftProof}
+      title={
+        softProof
+          ? 'Soft-proof ON — canvas mimics CMYK press colour. Click to turn off.'
+          : 'Soft-proof: preview how colours will look on paper (CMYK gamut approximation).'
+      }
+      style={btnStyle(
+        softProof
+          ? { color: '#1a1208', background: '#d4843a', border: '1px solid #d4843a' }
+          : { color: t.text, border: `1px solid ${t.border}` }
+      )}
+    >
+      ◎ Soft proof{softProof ? ' ON' : ''}
+    </button>
+  );
+}

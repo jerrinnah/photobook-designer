@@ -11,7 +11,7 @@ const ROLE_COLORS = { cover: '#f6c90e', back: '#888' };
 
 function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDrop, isDragTarget }) {
   const { t } = useTheme();
-  const { photos, setActiveSpread, removeSpread, duplicateSpread, setSpreadRole, setSpreadBgColor } = useBookStore();
+  const { photos, setActiveSpread, removeSpread, duplicateSpread, setSpreadRole, setSpreadBgColor, setSpreadNoBleed } = useBookStore();
   const geo = spread.cellGeometry || [];
   const colorInputRef = useRef(null);
 
@@ -125,6 +125,31 @@ function SpreadThumb({ spread, displayNum, active, onDragStart, onDragOver, onDr
           }}
         >
           {spread.role ? spread.role.toUpperCase() : '—'}
+        </button>
+
+        {/* Per-spread bleed toggle — for title / colophon / spec pages
+            that should print flush inside the trim, no ink to the edge. */}
+        <button
+          title={
+            spread.noBleed
+              ? 'Bleed disabled — this spread prints flush inside the trim (title / colophon).'
+              : 'Toggle bleed: OFF for title / colophon pages that print inside the trim.'
+          }
+          onClick={() => setSpreadNoBleed(spread.id, !spread.noBleed)}
+          style={{
+            fontSize: 8,
+            fontWeight: 'bold',
+            background: 'none',
+            border: `1px solid ${spread.noBleed ? '#4a3010' : t.border}`,
+            borderRadius: 2,
+            color: spread.noBleed ? '#d4843a' : t.textMuted,
+            cursor: 'pointer',
+            padding: '1px 4px',
+            lineHeight: 1.4,
+            letterSpacing: 0.5,
+          }}
+        >
+          {spread.noBleed ? '⊟ NO BLD' : '⊞ BLD'}
         </button>
 
         {/* Duplicate */}
