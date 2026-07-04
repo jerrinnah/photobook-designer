@@ -16,6 +16,8 @@ import LandingPage from './components/LandingPage';
 import ShareProgressToast from './components/ShareProgressToast';
 import DeviceBlockedModal from './components/DeviceBlockedModal';
 import CrashRecoveryToast from './components/CrashRecoveryToast';
+import StorageQuotaBanner from './components/StorageQuotaBanner';
+import CloudSyncBanner from './components/CloudSyncBanner';
 import { hasEngaged, startSessionLivenessCheck } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 import { useTheme } from './utils/theme';
@@ -51,6 +53,20 @@ export default function App() {
   // dead JWT until expiry (default 1 hour).
   useEffect(() => {
     return startSessionLivenessCheck();
+  }, []);
+
+  // Rehydrate the linked .autobook file handle so ⌘S keeps writing to
+  // the same file after a page refresh. Silent no-op on browsers that
+  // don't support File System Access (Safari, Firefox) or on first run.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { restoreLinkedFileHandle } = await import('./utils/projectFile');
+        await restoreLinkedFileHandle();
+      } catch (e) {
+        console.info('[projectFile] restore skipped:', e?.message);
+      }
+    })();
   }, []);
 
   // Boot-time pending-claim replay. If a payment confirmed in a previous
@@ -131,6 +147,8 @@ export default function App() {
           onClose={() => setDeviceBlocked(null)}
         />
         <CrashRecoveryToast />
+        <StorageQuotaBanner />
+        <CloudSyncBanner />
       </>
     );
   }

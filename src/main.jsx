@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { preloadAutosave, startAutosave } from './store/autosave'
+import { startHistoryRecording } from './store/history'
+import { getActiveProjectId } from './store/projects'
+import { startCloudSync } from './utils/cloudSync'
 import { trackAppUseOncePerSession, refreshUserTier, onAuthStateChange } from './utils/supabase'
 
 async function boot() {
@@ -12,6 +15,13 @@ async function boot() {
   const { useBookStore } = await import('./store/useBookStore');
 
   startAutosave(useBookStore);
+  // Version-history recorder — snapshots every 5 min while a project is
+  // active. Runs alongside autosave; unrelated storage keys.
+  startHistoryRecording(useBookStore, getActiveProjectId);
+  // Cloud sync — mirrors the active project to Supabase Storage every
+  // 60s of quiet. Silent no-op until the user signs in and the
+  // 'project-backups' bucket exists (see SUPABASE_CLOUD_SYNC.sql).
+  startCloudSync(useBookStore);
   trackAppUseOncePerSession();
   refreshUserTier();
 

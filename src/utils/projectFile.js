@@ -22,8 +22,16 @@
 // the bare project object directly (no envelope). loadProjectFile()
 // detects and unwraps both shapes transparently.
 
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { useBookStore } from '../store/useBookStore';
 import { getStoredUser } from './supabase';
+
+// Key under which we stash the FileSystemFileHandle so ⌘S keeps working
+// across page refreshes / new sessions. The handle survives serialization
+// in IndexedDB (Chrome + Edge), but the permission grant does NOT — the
+// browser re-prompts once per session before the first write. That's a
+// browser policy, not something we can bypass.
+const FILE_HANDLE_IDB_KEY = 'autobook-linked-file-handle-v1';
 
 export const AUTOBOOK_MAGIC = 'autobook.project';
 export const AUTOBOOK_FORMAT_VERSION = 1;
@@ -106,10 +114,9 @@ export function parseAutobookPayload(text) {
   throw new Error("This file isn't in a format AutoBook recognizes.");
 }
 
-// In-memory handle for the current project's linked disk file. Not
-// persisted — File System Access handles can't be serialized to JSON
-// (they can be stashed in IndexedDB but we keep it simple for now).
-// Losing the handle only means the next ⌘S falls back to Save As.
+// In-memory handle for the current project's linked disk file.
+// Persisted to IndexedDB (Chrome / Edge / Electron only) so ⌘S keeps
+// writing to the same file across page refreshes.
 let _fileHandle = null;
 let _fileName = null;
 const _handleListeners = new Set();
@@ -117,6 +124,44 @@ const _handleListeners = new Set();
 function notifyHandleChanged() {
   for (const fn of _handleListeners) {
     try { fn({ fileName: _fileName, hasHandle: Boolean(_fileHandle) }); } catch { /* ignore */ }
+  }
+}
+
+async function persistHandle() {
+  if (!supportsFileSystemAccess) return;
+  try {
+    if (_fileHandle) await idbSet(FILE_HANDLE_IDB_KEY, { handle: _fileHandle, fileName: _fileName });
+    else await idbDel(FILE_HANDLE_IDB_KEY);
+  } catch (e) {
+    console.info('[projectFile] persistHandle failed:', e?.message);
+  }
+}
+
+// Called once at app boot from App.jsx. Rehydrates the handle so the
+// currently-open project stays linked to its .autobook file after a
+// refresh. Silent on failure — Save As remains available.
+export async function restoreLinkedFileHandle() {
+  if (!supportsFileSystemAccess) return;
+  try {
+    const stored = await idbGet(FILE_HANDLE_IDB_KEY);
+    if (!stored?.handle) return;
+    // Sanity-check the handle is still usable. queryPermission does NOT
+    // trigger a prompt — it just tells us whether we already have rights.
+    // If it comes back 'prompt', we still keep the handle: the first
+    // save this session will re-prompt the user, and if they grant it,
+    // subsequent saves in this session write silently.
+    if (typeof stored.handle.queryPermission === 'function') {
+      const state = await stored.handle.queryPermission({ mode: 'readwrite' });
+      if (state === 'denied') {
+        await idbDel(FILE_HANDLE_IDB_KEY);
+        return;
+      }
+    }
+    _fileHandle = stored.handle;
+    _fileName = stored.fileName || stored.handle.name || null;
+    notifyHandleChanged();
+  } catch (e) {
+    console.info('[projectFile] restore skipped:', e?.message);
   }
 }
 
@@ -177,6 +222,7 @@ export async function saveProjectToFileAs() {
     _fileHandle = handle;
     _fileName = handle.name || suggested;
     notifyHandleChanged();
+    persistHandle();
     return result;
   }
   return downloadFallback(state, suggested);
@@ -260,6 +306,7 @@ export async function openProjectFromFile() {
     _fileHandle = handle;
     _fileName = handle.name || file.name || null;
     notifyHandleChanged();
+    persistHandle();
     return { status: 'loaded', ...parsed, fileName: _fileName };
   }
   return { status: 'needs-input-fallback' };
@@ -285,4 +332,5 @@ export function clearLinkedFile() {
   _fileHandle = null;
   _fileName = null;
   notifyHandleChanged();
+  persistHandle();
 }

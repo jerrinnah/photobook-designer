@@ -3,6 +3,8 @@ import {
   getProjectIndex, createProject, deleteProject, duplicateProject,
   setActiveProjectId, getActiveProjectId, saveProject,
 } from '../store/projects';
+import { listSnapshots, loadSnapshot } from '../store/history';
+import { useBookStore } from '../store/useBookStore';
 
 // "My Projects" modal — lists every project saved in this browser.
 // Click to switch (reloads the app). Plus / Duplicate / Delete actions.
@@ -12,6 +14,9 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
   const [renaming, setRenaming] = useState(null); // { id, value }
   const [newName, setNewName] = useState('');
   const [backupState, setBackupState] = useState({ status: 'idle' }); // 'idle' | 'saving' | 'done' | 'error'
+  const [snapshots, setSnapshots] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const activeId = getActiveProjectId();
   const fileInputRef = useRef(null);
 
@@ -57,9 +62,33 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
   const refresh = async () => {
     const idx = await getProjectIndex();
     setProjects(idx.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)));
+    if (activeId) {
+      setSnapshots(await listSnapshots(activeId));
+    } else {
+      setSnapshots([]);
+    }
   };
 
   useEffect(() => { if (open) refresh(); }, [open]);
+
+  const restoreSnapshot = async (snapshotId, savedAt) => {
+    if (!activeId || historyBusy) return;
+    const stamp = new Date(savedAt).toLocaleString();
+    if (!confirm(`Restore your project to the version from ${stamp}? The current state will be replaced (but is safe in the most recent auto-snapshot).`)) return;
+    setHistoryBusy(true);
+    try {
+      const snap = await loadSnapshot(activeId, snapshotId);
+      if (!snap) throw new Error('That version could not be loaded.');
+      // Re-use the store's loadProject which accepts a JSON string and
+      // normalizes photo IDs / caption IDs / dup photos.
+      useBookStore.getState().loadProject(JSON.stringify(snap));
+      onClose();
+    } catch (e) {
+      alert(e.message || 'Restore failed.');
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -84,6 +113,11 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
   const handleDelete = async (proj) => {
     if (!confirm(`Delete "${proj.name}"? This cannot be undone.`)) return;
     await deleteProject(proj.id);
+    // Also wipe its version-history entries to reclaim storage.
+    try {
+      const { clearProjectHistory } = await import('../store/history');
+      await clearProjectHistory(proj.id);
+    } catch { /* non-fatal */ }
     if (proj.id === activeId) {
       // We just deleted the active project — go to a fresh project
       setActiveProjectId(null);
@@ -167,6 +201,60 @@ export default function ProjectPicker({ open, onClose, onSaveBackup, onLoadBacku
             </div>
           ))}
         </div>
+
+        {/* Version history — periodic snapshots of the active project */}
+        {activeId && (
+          <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 12, marginTop: 4 }}>
+            <button
+              onClick={() => setHistoryOpen((v) => !v)}
+              style={{
+                background: 'none', border: 'none', color: '#666',
+                fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase',
+                marginBottom: 8, padding: 0, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 9, color: '#555' }}>{historyOpen ? '▾' : '▸'}</span>
+              Version history ({snapshots.length})
+            </button>
+            {historyOpen && (
+              snapshots.length === 0 ? (
+                <div style={{ fontSize: 10, color: '#555', paddingBottom: 8 }}>
+                  No snapshots yet. One is captured automatically every 5 minutes of active work.
+                </div>
+              ) : (
+                <div style={{ maxHeight: 160, overflowY: 'auto', marginBottom: 8 }}>
+                  {snapshots.map((snap) => (
+                    <div key={snap.id} style={{
+                      padding: '6px 8px', marginBottom: 4,
+                      background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: '#ccc' }}>{formatDate(snap.savedAt)}</div>
+                        <div style={{ fontSize: 9, color: '#666', marginTop: 1 }}>
+                          {snap.photoCount} photo{snap.photoCount === 1 ? '' : 's'} ·{' '}
+                          {snap.spreadCount} spread{snap.spreadCount === 1 ? '' : 's'} ·{' '}
+                          {(snap.bytes / 1024 / 1024).toFixed(1)} MB
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => restoreSnapshot(snap.id, snap.savedAt)}
+                        disabled={historyBusy}
+                        style={{
+                          padding: '3px 8px', fontSize: 9, fontWeight: 600,
+                          background: '#1a3580', color: '#fff', border: 'none',
+                          borderRadius: 3, cursor: historyBusy ? 'wait' : 'pointer',
+                          opacity: historyBusy ? 0.5 : 1,
+                        }}
+                      >Restore</button>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )}
 
         {/* Backup section — portable .photobook file export/import */}
         <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: 12, marginTop: 4 }}>
