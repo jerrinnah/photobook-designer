@@ -923,4 +923,151 @@ export const TEMPLATES = [
       { x: 0.20, y: 0.90, w: 0.60, text: 'A Tour of the Old World', fontSize: 18, color: '#6a6458', align: 'center', fontFamily: 'Cormorant Garamond, serif', italic: true, letterSpacing: 2 },
     ],
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ══ EVENT PACKS — new categories for Tier 4                          ══
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ──── ENGAGEMENT ────────────────────────────────────────────────────
+  { id: 'eng-first-portrait', name: 'The First Portrait', category: 'Engagement', cells: [
+    { x: 0.10, y: 0.05, w: 0.80, h: 0.90, hint: '45' },
+  ]},
+  { id: 'eng-close-away', name: 'Close & Away', category: 'Engagement', cells: [
+    { x: 0.03, y: 0.10, w: 0.42, h: 0.80, hint: '45' },
+    { x: 0.55, y: 0.10, w: 0.42, h: 0.80, hint: '45' },
+  ]},
+  { id: 'eng-ring-triptych', name: 'The Ring Triptych', category: 'Engagement', cells: [
+    { x: 0.02, y: 0.14, w: 0.30, h: 0.72, hint: '45' },
+    { x: 0.35, y: 0.05, w: 0.30, h: 0.90, hint: '45' },
+    { x: 0.68, y: 0.14, w: 0.30, h: 0.72, hint: '45' },
+  ]},
+  { id: 'eng-story-strip', name: 'Story Strip', category: 'Engagement', cells: [
+    { x: 0.00, y: 0.35, w: 0.32, h: 0.30, hint: '169' },
+    { x: 0.34, y: 0.35, w: 0.32, h: 0.30, hint: '169' },
+    { x: 0.68, y: 0.35, w: 0.32, h: 0.30, hint: '169' },
+  ]},
+
+  // ──── BABY SHOWER ───────────────────────────────────────────────────
+  { id: 'baby-hero-solo', name: 'Little One', category: 'Baby Shower', cells: [
+    { x: 0.20, y: 0.06, w: 0.60, h: 0.88, hint: '45' },
+  ]},
+  { id: 'baby-cake-and-guests', name: 'Cake + Guests', category: 'Baby Shower', cells: [
+    { x: 0.02, y: 0.06, w: 0.48, h: 0.88, hint: '45' },
+    { x: 0.52, y: 0.06, w: 0.46, h: 0.42, hint: '169' },
+    { x: 0.52, y: 0.52, w: 0.46, h: 0.42, hint: '169' },
+  ]},
+  { id: 'baby-details-quad', name: 'Shower Details Grid', category: 'Baby Shower', cells: [
+    { x: 0.02, y: 0.05, w: 0.47, h: 0.44, hint: '43' },
+    { x: 0.51, y: 0.05, w: 0.47, h: 0.44, hint: '43' },
+    { x: 0.02, y: 0.51, w: 0.47, h: 0.44, hint: '43' },
+    { x: 0.51, y: 0.51, w: 0.47, h: 0.44, hint: '43' },
+  ]},
+  { id: 'baby-name-reveal', name: 'Name Reveal', category: 'Baby Shower', cells: [
+    { x: 0.06, y: 0.08, w: 0.88, h: 0.60, hint: '169' },
+    { x: 0.20, y: 0.72, w: 0.28, h: 0.24, hint: '11' },
+    { x: 0.52, y: 0.72, w: 0.28, h: 0.24, hint: '11' },
+  ]},
+
+  // ──── BIRTHDAY ──────────────────────────────────────────────────────
+  { id: 'bday-hero-cake', name: 'The Cake Moment', category: 'Birthday', cells: [
+    { x: 0.05, y: 0.05, w: 0.90, h: 0.90, hint: '169' },
+  ]},
+  { id: 'bday-guests-collage', name: 'Guest Collage', category: 'Birthday', cells: [
+    { x: 0.02, y: 0.04, w: 0.30, h: 0.44, hint: '43' },
+    { x: 0.34, y: 0.04, w: 0.30, h: 0.44, hint: '43' },
+    { x: 0.66, y: 0.04, w: 0.32, h: 0.44, hint: '43' },
+    { x: 0.02, y: 0.52, w: 0.46, h: 0.44, hint: '169' },
+    { x: 0.50, y: 0.52, w: 0.48, h: 0.44, hint: '169' },
+  ]},
+  { id: 'bday-solo-portrait-quote', name: 'Portrait with Quote', category: 'Birthday', cells: [
+    { x: 0.06, y: 0.10, w: 0.50, h: 0.80, hint: '45' },
+  ],
+    captions: [
+      { x: 0.60, y: 0.30, w: 0.36, text: 'ANOTHER TRIP AROUND THE SUN', fontSize: 22, color: '#8a5a20', align: 'left', fontFamily: 'Playfair Display, serif', bold: true, letterSpacing: 2 },
+      { x: 0.60, y: 0.55, w: 0.36, text: 'Grateful for every memory.', fontSize: 14, color: '#a8845a', align: 'left', fontFamily: 'Cormorant Garamond, serif', italic: true },
+    ],
+  },
+  { id: 'bday-candles-detail', name: 'Candles & Details', category: 'Birthday', cells: [
+    { x: 0.05, y: 0.06, w: 0.55, h: 0.88, hint: '45' },
+    { x: 0.63, y: 0.06, w: 0.32, h: 0.42, hint: '11' },
+    { x: 0.63, y: 0.52, w: 0.32, h: 0.42, hint: '11' },
+  ]},
+
+  // ──── CORPORATE YEARBOOK ────────────────────────────────────────────
+  { id: 'corp-team-hero', name: 'Team Portrait Hero', category: 'Corporate', cells: [
+    { x: 0.05, y: 0.10, w: 0.90, h: 0.80, hint: '169' },
+  ]},
+  { id: 'corp-milestones-quad', name: 'Milestones Grid', category: 'Corporate', cells: [
+    { x: 0.02, y: 0.04, w: 0.47, h: 0.44, hint: '169' },
+    { x: 0.51, y: 0.04, w: 0.47, h: 0.44, hint: '169' },
+    { x: 0.02, y: 0.52, w: 0.47, h: 0.44, hint: '169' },
+    { x: 0.51, y: 0.52, w: 0.47, h: 0.44, hint: '169' },
+  ]},
+  { id: 'corp-timeline-row', name: 'Timeline Strip', category: 'Corporate', cells: [
+    { x: 0.00, y: 0.30, w: 0.25, h: 0.40, hint: '43' },
+    { x: 0.25, y: 0.30, w: 0.25, h: 0.40, hint: '43' },
+    { x: 0.50, y: 0.30, w: 0.25, h: 0.40, hint: '43' },
+    { x: 0.75, y: 0.30, w: 0.25, h: 0.40, hint: '43' },
+  ]},
+  { id: 'corp-office-and-team', name: 'Office + Team', category: 'Corporate', cells: [
+    { x: 0.02, y: 0.06, w: 0.60, h: 0.88, hint: '169' },
+    { x: 0.65, y: 0.06, w: 0.33, h: 0.42, hint: '11' },
+    { x: 0.65, y: 0.52, w: 0.33, h: 0.42, hint: '11' },
+  ]},
+
+  // ──── FUNERAL / MEMORIAL — dignified, faith-friendly ────────────────
+  { id: 'mem-solo-portrait', name: 'Portrait in Repose', category: 'Memorial', cells: [
+    { x: 0.30, y: 0.10, w: 0.40, h: 0.80, hint: '45' },
+  ],
+    captions: [
+      { x: 0.10, y: 0.02, w: 0.80, text: 'In Loving Memory', fontSize: 20, color: '#3a3a3a', align: 'center', fontFamily: 'Cormorant Garamond, serif', italic: true, letterSpacing: 2 },
+    ],
+  },
+  { id: 'mem-life-and-legacy', name: 'Life & Legacy', category: 'Memorial', cells: [
+    { x: 0.05, y: 0.08, w: 0.42, h: 0.84, hint: '45' },
+    { x: 0.53, y: 0.08, w: 0.42, h: 0.40, hint: '169' },
+    { x: 0.53, y: 0.52, w: 0.42, h: 0.40, hint: '169' },
+  ]},
+  { id: 'mem-verse-page', name: 'Verse & Portrait', category: 'Memorial',
+    bgColor: '#f7f4ec',
+    cells: [
+      { x: 0.55, y: 0.10, w: 0.40, h: 0.80, hint: '45' },
+    ],
+    captions: [
+      { x: 0.05, y: 0.28, w: 0.44, text: '"He gives his beloved sleep."', fontSize: 22, color: '#5a5040', align: 'center', fontFamily: 'Cormorant Garamond, serif', italic: true, letterSpacing: 1 },
+      { x: 0.05, y: 0.44, w: 0.44, text: '— Psalm 127:2', fontSize: 14, color: '#8a7a60', align: 'center', fontFamily: 'Cormorant Garamond, serif' },
+    ],
+  },
+  { id: 'mem-family-collage', name: 'Family Remembers', category: 'Memorial', cells: [
+    { x: 0.02, y: 0.05, w: 0.32, h: 0.42, hint: '45' },
+    { x: 0.36, y: 0.05, w: 0.30, h: 0.42, hint: '169' },
+    { x: 0.68, y: 0.05, w: 0.30, h: 0.42, hint: '45' },
+    { x: 0.02, y: 0.51, w: 0.30, h: 0.44, hint: '169' },
+    { x: 0.34, y: 0.51, w: 0.32, h: 0.44, hint: '45' },
+    { x: 0.68, y: 0.51, w: 0.30, h: 0.44, hint: '169' },
+  ]},
+  { id: 'mem-order-of-service', name: 'Order of Service', category: 'Memorial',
+    bgColor: '#f7f4ec',
+    cells: [
+      { x: 0.35, y: 0.06, w: 0.30, h: 0.44, hint: '45' },
+    ],
+    captions: [
+      { x: 0.10, y: 0.54, w: 0.80, text: 'ORDER OF SERVICE', fontSize: 24, color: '#3a3a3a', align: 'center', fontFamily: 'Cormorant Garamond, serif', bold: true, letterSpacing: 4 },
+      { x: 0.15, y: 0.62, w: 0.70, text: 'Opening Hymn\\nWords of Welcome\\nScripture Reading\\nTribute from the Family\\nSermon\\nCommittal\\nClosing Hymn', fontSize: 13, color: '#5a5040', align: 'left', fontFamily: 'Cormorant Garamond, serif', lineHeight: 2 },
+    ],
+  },
+
+  // ──── CHRISTENING / BAPTISM ────────────────────────────────────────
+  { id: 'chr-solo-baby', name: 'The Blessing', category: 'Christening', cells: [
+    { x: 0.25, y: 0.06, w: 0.50, h: 0.88, hint: '45' },
+  ]},
+  { id: 'chr-priest-and-family', name: 'Priest + Family', category: 'Christening', cells: [
+    { x: 0.02, y: 0.08, w: 0.60, h: 0.84, hint: '169' },
+    { x: 0.65, y: 0.08, w: 0.33, h: 0.40, hint: '11' },
+    { x: 0.65, y: 0.52, w: 0.33, h: 0.40, hint: '11' },
+  ]},
+  { id: 'chr-font-and-parents', name: 'At the Font', category: 'Christening', cells: [
+    { x: 0.02, y: 0.05, w: 0.48, h: 0.90, hint: '45' },
+    { x: 0.52, y: 0.05, w: 0.46, h: 0.90, hint: '45' },
+  ]},
 ];

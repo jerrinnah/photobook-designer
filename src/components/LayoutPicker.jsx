@@ -80,12 +80,16 @@ export default function LayoutPicker({ mobile = false }) {
     return <CollapsedRail label="Layouts" side="right" onExpand={() => setCollapsed(false)} />;
   }
 
+  // Newer "life-event" categories added in Tier 4 — grouped together
+  // under the same Events filter tab to keep the UI compact.
+  const LIFE_EVENT_CATEGORIES = ['Event', 'Engagement', 'Baby Shower', 'Birthday', 'Corporate', 'Memorial', 'Christening'];
+
   const visibleTemplates = TEMPLATES.filter((tmpl) => {
     if (catFilter === 'all') return true;
     if (catFilter === 'Cover') return tmpl.category === 'Cover';
     if (catFilter === 'Print') return tmpl.printSize;
     if (catFilter === 'Wedding') return tmpl.category === 'Wedding';
-    if (catFilter === 'Event') return tmpl.category === 'Event';
+    if (catFilter === 'Event') return LIFE_EVENT_CATEGORIES.includes(tmpl.category);
     return !tmpl.printSize && !tmpl.category; // Standard
   });
 
@@ -94,8 +98,12 @@ export default function LayoutPicker({ mobile = false }) {
     let label;
     if (tmpl.category === 'Cover') {
       label = 'Cover';
-    } else if (tmpl.category === 'Wedding' || tmpl.category === 'Event') {
-      label = tmpl.category === 'Wedding' ? 'Wedding' : 'Event';
+    } else if (tmpl.category === 'Wedding') {
+      label = 'Wedding';
+    } else if (LIFE_EVENT_CATEGORIES.includes(tmpl.category)) {
+      // Preserve original category name as its own group header so
+      // Engagement, Baby Shower, etc. get their own sections.
+      label = tmpl.category;
     } else if (tmpl.printSize) {
       label = 'Print Sizes';
     } else {
@@ -108,11 +116,14 @@ export default function LayoutPicker({ mobile = false }) {
     return acc;
   }, {});
 
-  const WEDDING_ORDER = ['Wedding', 'Event'];
-  const ALL_ORDER = ['Cover', 'Wedding', 'Event', 'Print Sizes', 'Single', 'Two–Three', 'Four–Five', 'Six–Seven', 'Eight–Eleven', 'Twelve–Fourteen', 'Fifteen–Seventeen', '18+ Dense'];
-  const sortedLabels = catFilter === 'Wedding' || catFilter === 'Event'
+  const WEDDING_ORDER = ['Wedding'];
+  const EVENT_ORDER = ['Engagement', 'Baby Shower', 'Birthday', 'Christening', 'Corporate', 'Memorial', 'Event'];
+  const ALL_ORDER = ['Cover', 'Wedding', ...EVENT_ORDER, 'Print Sizes', 'Single', 'Two–Three', 'Four–Five', 'Six–Seven', 'Eight–Eleven', 'Twelve–Fourteen', 'Fifteen–Seventeen', '18+ Dense'];
+  const sortedLabels = catFilter === 'Wedding'
     ? WEDDING_ORDER.filter((k) => groups[k])
-    : ALL_ORDER.filter((k) => groups[k]);
+    : catFilter === 'Event'
+      ? EVENT_ORDER.filter((k) => groups[k])
+      : ALL_ORDER.filter((k) => groups[k]);
 
   return (
     <aside data-tour="layouts" style={{ width: mobile ? '100%' : 200, height: mobile ? '100%' : undefined, background: t.bgPanel, borderLeft: mobile ? 'none' : `1px solid ${t.divider}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -155,13 +166,26 @@ export default function LayoutPicker({ mobile = false }) {
               fontSize: 9, letterSpacing: 1, textTransform: 'uppercase',
               marginBottom: 5, marginTop: 4,
               color: label === 'Print Sizes' ? '#4a7a4a' : label === '18+ Dense' ? '#c9a227'
-                : label === 'Wedding' ? '#c08040' : label === 'Event' ? '#4a7a9d'
+                : label === 'Wedding' ? '#c08040'
+                : label === 'Engagement' ? '#e8a0a0'
+                : label === 'Baby Shower' ? '#a8c8e8'
+                : label === 'Birthday' ? '#f6c98a'
+                : label === 'Christening' ? '#c8b0e8'
+                : label === 'Corporate' ? '#8fb8cf'
+                : label === 'Memorial' ? '#a89f8f'
+                : label === 'Event' ? '#4a7a9d'
                 : label === 'Cover' ? '#a07a30' : t.textFaint,
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
               {label === 'Print Sizes' && <span style={{ color: '#4a7a4a' }}>⬛</span>}
               {label === '18+ Dense' && <span>⚡</span>}
               {label === 'Wedding' && <span>♥</span>}
+              {label === 'Engagement' && <span>❦</span>}
+              {label === 'Baby Shower' && <span>◒</span>}
+              {label === 'Birthday' && <span>✿</span>}
+              {label === 'Christening' && <span>✝</span>}
+              {label === 'Corporate' && <span>■</span>}
+              {label === 'Memorial' && <span>❋</span>}
               {label === 'Event' && <span>★</span>}
               {label === 'Cover' && <span>✦</span>}
               {label}

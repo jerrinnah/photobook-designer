@@ -13,10 +13,11 @@ export default function ReferralModal({ open, onClose }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [leaderboard, setLeaderboard] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    setData(null); setErr(null); setCopied(false);
+    setData(null); setErr(null); setCopied(false); setLeaderboard(null);
     let alive = true;
     (async () => {
       try {
@@ -28,6 +29,14 @@ export default function ReferralModal({ open, onClose }) {
           label: 'Ref summary', timeoutMs: 10_000, useUserToken: true,
         });
         if (alive) setData(summary);
+        // Leaderboard — separate call so a missing/older RPC doesn't
+        // break the personal summary rendering.
+        try {
+          const board = await rpcDirect('get_referral_leaderboard', { p_limit: 10 }, {
+            label: 'Ref leaderboard', timeoutMs: 10_000, useUserToken: true,
+          });
+          if (alive) setLeaderboard(Array.isArray(board) ? board : []);
+        } catch { if (alive) setLeaderboard([]); }
       } catch (e) {
         if (!alive) return;
         const msg = (e?.message || '').toLowerCase();
@@ -169,6 +178,45 @@ export default function ReferralModal({ open, onClose }) {
                       </span>
                     </div>
                   ))}
+                </div>
+              </>
+            )}
+
+            {/* Leaderboard — small social-proof panel showing top 10 refers */}
+            {leaderboard && leaderboard.length > 0 && (
+              <>
+                <div style={{ fontSize: 10, color: '#666', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 }}>
+                  Top referrers
+                </div>
+                <div style={{ background: '#0c0c0c', border: '1px solid #1a1a1a', borderRadius: 6, padding: 6, maxHeight: 220, overflowY: 'auto' }}>
+                  {leaderboard.map((row, i) => {
+                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`;
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 8px', fontSize: 11,
+                        borderBottom: i < leaderboard.length - 1 ? '1px solid #161616' : 'none',
+                      }}>
+                        <span style={{ minWidth: 22, textAlign: 'center', fontSize: i < 3 ? 14 : 10, color: i < 3 ? '#f6c90e' : '#666' }}>
+                          {medal}
+                        </span>
+                        <span style={{ flex: 1, color: '#bbb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {row.who}
+                        </span>
+                        <span style={{ fontSize: 10, color: '#6fcf97', fontVariantNumeric: 'tabular-nums' }}>
+                          {row.conversions} paid
+                        </span>
+                        {row.days_active > 0 && (
+                          <span style={{ fontSize: 9, color: '#555', fontVariantNumeric: 'tabular-nums' }}>
+                            · {row.days_active}d
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 10, color: '#555', marginTop: 6, lineHeight: 1.5 }}>
+                  You can see who's paid-converted — but only their masked handle. Nobody sees yours.
                 </div>
               </>
             )}
