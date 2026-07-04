@@ -349,6 +349,8 @@ export const useBookStore = create((set, get) => ({
   swapSourceIndex: null,           // cellIndex armed by "↔ Swap" — next cell click swaps with it
   fileDirty: false,                // has state changed since the last save-to-file? drives the * indicator
   softProof: false,                // canvas-wide "how it'll look on paper" filter — CMYK gamut sim
+  showGuides: false,               // show fold-line + safe-zone guides on the spread
+  showRulers: false,               // show ruler bar with inches at the current spread size
   photoFilter: 'all',   // 'all' | 'used' | 'unused' | 'favorites'
   photoSort: 'name',    // 'name' | 'newest' | 'portrait' | 'landscape'
   photoSearch: '',
@@ -925,6 +927,8 @@ export const useBookStore = create((set, get) => ({
   markProjectSaved: () => set({ fileDirty: false }),
 
   toggleSoftProof: () => set((s) => ({ softProof: !s.softProof })),
+  toggleGuides: () => set((s) => ({ showGuides: !s.showGuides })),
+  toggleRulers: () => set((s) => ({ showRulers: !s.showRulers })),
 
   rotateCellPhoto: (spreadId, cellIndex) => set(h((s) => ({
     spreads: s.spreads.map((sp) => {
@@ -1191,6 +1195,34 @@ export const useBookStore = create((set, get) => ({
       return { ...sp, cells: sp.cells.map((c, i) => i === cellIndex ? { ...c, effects } : c) };
     }),
   }))),
+
+  // Apply a color-match patch — one { brightness, contrast, saturation }
+  // triple per photoId — to every cell that currently holds one of those
+  // photos. Existing per-cell effects (b&w, sepia, vignette, blur) are
+  // preserved; the numeric channels are merged in / overwritten.
+  applyColorMatchToCells: (patchMap) => set(h((s) => {
+    if (!patchMap || patchMap.size === 0) return {};
+    return {
+      spreads: s.spreads.map((sp) => ({
+        ...sp,
+        cells: sp.cells.map((c) => {
+          if (!c.photoId) return c;
+          const patch = patchMap.get(c.photoId);
+          if (!patch) return c;
+          const prev = c.effects || {};
+          return {
+            ...c,
+            effects: {
+              ...prev,
+              brightness: patch.brightness ?? 0,
+              contrast: patch.contrast ?? 0,
+              saturation: patch.saturation ?? 0,
+            },
+          };
+        }),
+      })),
+    };
+  })),
 
   // ── Captions ───────────────────────────────────────────────────────
   addCaption: (spreadId, cap) => set(h((s) => ({

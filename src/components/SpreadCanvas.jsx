@@ -218,9 +218,10 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
     if ((fx?.blur ?? 0) > 0)  filters.push(Konva.Filters.Blur);
     if ((fx?.brightness ?? 0) !== 0) filters.push(Konva.Filters.Brighten);
     if ((fx?.contrast ?? 0) !== 0)   filters.push(Konva.Filters.Contrast);
+    if ((fx?.saturation ?? 0) !== 0) filters.push(Konva.Filters.HSV);
     if (filters.length > 0) node.cache();
     else node.clearCache();
-  }, [img, fx?.bw, fx?.sepia, fx?.blur, fx?.brightness, fx?.contrast]);
+  }, [img, fx?.bw, fx?.sepia, fx?.blur, fx?.brightness, fx?.contrast, fx?.saturation]);
 
   const x = geo.x * spreadW + gap / 2;
   const y = geo.y * spreadH + gap / 2;
@@ -240,6 +241,7 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
     if (fx.blur > 0)    activeFilters.push(Konva.Filters.Blur);
     if (fx.brightness !== 0) activeFilters.push(Konva.Filters.Brighten);
     if (fx.contrast !== 0)   activeFilters.push(Konva.Filters.Contrast);
+    if ((fx.saturation ?? 0) !== 0) activeFilters.push(Konva.Filters.HSV);
   }
 
   const imgProps = (() => {
@@ -301,6 +303,7 @@ function PhotoCell({ cell, geo, spreadId, cellIndex, spreadW, spreadH, gap, blen
           blurRadius={fx?.blur ?? 0}
           brightness={fx?.brightness ?? 0}
           contrast={fx?.contrast ?? 0}
+          saturation={fx?.saturation ?? 0}
           onDragStart={() => onPhotoDragStart?.(cellIndex)}
           onDragEnd={(e) => {
             onPhotoDragEnd?.();
@@ -425,7 +428,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
     adjustCell,
     clearPhotoSelection,
     swapSourceIndex, armSwap, cancelSwap,
-    softProof,
+    softProof, showGuides, showRulers,
   } = useBookStore();
 
   const cellFileInputRef = useRef(null);
@@ -981,6 +984,69 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 middle. Less visual noise while the user is composing. */}
             <Circle x={SPREAD_W / 2} y={6}             radius={2} fill="#3a3a3a" listening={false} />
             <Circle x={SPREAD_W / 2} y={SPREAD_H - 6}  radius={2} fill="#3a3a3a" listening={false} />
+
+            {/* Rulers + guides — toggled from the toolbar. Rendered
+                on top of everything so they read clearly against
+                photos. Non-interactive (listening={false}). */}
+            {showGuides && (() => {
+              // Safe-zone rectangle: 0.25" inside the trim. We derive
+              // the on-screen inset from the export dimensions so it
+              // stays proportional at any spread size.
+              const { exportW } = getEffectiveExportSize(spreadSizeId, customSize);
+              const safeInsetPx = SPREAD_W * (0.25 / (exportW / 300));
+              return (
+                <>
+                  {/* Full fold line down the middle */}
+                  <Line
+                    points={[SPREAD_W / 2, 0, SPREAD_W / 2, SPREAD_H]}
+                    stroke="rgba(255, 45, 138, 0.55)"
+                    strokeWidth={1}
+                    dash={[6, 4]}
+                    listening={false}
+                  />
+                  {/* Safe zone rectangle */}
+                  <Rect
+                    x={safeInsetPx} y={safeInsetPx}
+                    width={SPREAD_W - safeInsetPx * 2}
+                    height={SPREAD_H - safeInsetPx * 2}
+                    stroke="rgba(111, 207, 151, 0.55)"
+                    strokeWidth={1}
+                    dash={[4, 4]}
+                    fill="transparent"
+                    listening={false}
+                  />
+                </>
+              );
+            })()}
+
+            {showRulers && (() => {
+              // 0.25-inch tick marks along top + left edges of the spread.
+              // Numbers every 1" so the eye can quickly place things.
+              const { exportW } = getEffectiveExportSize(spreadSizeId, customSize);
+              const inchesW = exportW / 300;               // full-spread inches
+              const pxPerInch = SPREAD_W / inchesW;
+              const marks = [];
+              for (let inch = 0; inch <= Math.ceil(inchesW); inch++) {
+                const x = inch * pxPerInch;
+                marks.push(
+                  <Line key={`vT${inch}`} points={[x, 0, x, 10]} stroke="#666" strokeWidth={0.5} listening={false} />
+                );
+                marks.push(
+                  <KText key={`vTL${inch}`} x={x + 2} y={1} text={String(inch)} fontSize={7} fill="#666" listening={false} />
+                );
+              }
+              const inchesH = SPREAD_H / pxPerInch;
+              for (let inch = 0; inch <= Math.ceil(inchesH); inch++) {
+                const y = inch * pxPerInch;
+                marks.push(
+                  <Line key={`hT${inch}`} points={[0, y, 10, y]} stroke="#666" strokeWidth={0.5} listening={false} />
+                );
+                marks.push(
+                  <KText key={`hTL${inch}`} x={2} y={y + 2} text={String(inch)} fontSize={7} fill="#666" listening={false} />
+                );
+              }
+              return <>{marks}</>;
+            })()}
 
             {dragOver !== null && cellGeometry[dragOver] && (() => {
               const c = cellGeometry[dragOver];
@@ -1669,6 +1735,22 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 </button>
               )}
 
+              {/* Reset crop — snaps the photo back to auto-fit centered
+                  in the cell (clears the user's manual offset + zoom). */}
+              {selectedCell.photoId && selectedCell.manualCrop && (
+                <button
+                  style={cellBtnStyle({ color: '#9ad' })}
+                  title="Reset the photo's position and zoom inside this cell (auto-fit centered)"
+                  onClick={() => {
+                    adjustCell(activeSpreadId, selectedCellIndex, {
+                      offsetX: 0, offsetY: 0, zoom: 1, manualCrop: false,
+                    });
+                  }}
+                >
+                  ⌂ Fit
+                </button>
+              )}
+
               <button
                 style={cellBtnStyle({ color: selectedCell.locked ? '#f6c90e' : '#666' })}
                 title={selectedCell.locked ? 'Unlock cell' : 'Lock cell (skipped by Auto Design)'}
@@ -1798,10 +1880,10 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
 
         {/* Cell FX panel */}
         {floatToolbar && selectedCell && showFxPanel && (() => {
-          const fx = selectedCell.effects || { bw: false, sepia: false, blur: 0, brightness: 0, contrast: 0, vignette: false };
+          const fx = selectedCell.effects || { bw: false, sepia: false, blur: 0, brightness: 0, contrast: 0, saturation: 0, vignette: false };
           const setFx = (patch) => setCellEffects(activeSpreadId, selectedCellIndex, { ...fx, ...patch });
           const clearFx = () => setCellEffects(activeSpreadId, selectedCellIndex, null);
-          const hasAny = selectedCell.effects && (fx.bw || fx.sepia || fx.blur > 0 || fx.brightness !== 0 || fx.contrast !== 0 || fx.vignette);
+          const hasAny = selectedCell.effects && (fx.bw || fx.sepia || fx.blur > 0 || fx.brightness !== 0 || fx.contrast !== 0 || (fx.saturation ?? 0) !== 0 || fx.vignette);
           const togBtn = (active) => ({
             padding: '4px 9px', fontSize: 10, borderRadius: 3, cursor: 'pointer',
             background: active ? '#162516' : '#181818',
@@ -1846,6 +1928,7 @@ export default function SpreadCanvas({ stageRef, mobile = false }) {
                 { label: 'Blur',       key: 'blur',       min: 0,    max: 20,  step: 0.5, fmt: (v) => `${v}px` },
                 { label: 'Brightness', key: 'brightness', min: -1,   max: 1,   step: 0.05, fmt: (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%` },
                 { label: 'Contrast',   key: 'contrast',   min: -100, max: 100, step: 5,   fmt: (v) => `${v > 0 ? '+' : ''}${v}` },
+                { label: 'Saturation', key: 'saturation', min: -2,   max: 5,   step: 0.1, fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}` },
               ].map(({ label, key, min, max, step, fmt }) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <span style={{ fontSize: 9, color: '#555', minWidth: 58 }}>{label}</span>

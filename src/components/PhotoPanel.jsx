@@ -91,8 +91,14 @@ export default function PhotoPanel({ mobile = false }) {
     photoBatch, setPhotoBatch, removePhotosInBatch,
     togglePhotoFavorite,
     setPhotoFacePriorities,
+    applyColorMatchToCells,
     resetProject,
   } = useBookStore();
+
+  // Color-match state — mirrors the face-priority scanner pattern.
+  const [colorMatchState, setColorMatchState] = useState(null); // 'scanning' | 'done' | null
+  const [colorMatchProgress, setColorMatchProgress] = useState({ done: 0, total: 0 });
+  const [colorMatchErr, setColorMatchErr] = useState(null);
 
   const [simMap, setSimMap] = useState(null);   // Map photoId → {groupNum, isKeep} | null
   const [computing, setComputing] = useState(false);
@@ -335,6 +341,36 @@ export default function PhotoPanel({ mobile = false }) {
     setPhotoFacePriorities(null);
     setFaceState(null);
     setFaceErr(null);
+  };
+
+  // ── Auto-colour match to a reference photo ─────────────────────────
+  const handleColorMatch = async () => {
+    if (colorMatchState === 'scanning') return;
+    setColorMatchErr(null);
+    if (selectedPhotoIds.size !== 1) {
+      setColorMatchErr('Select exactly one reference photo whose look you want the others matched to, then click again.');
+      return;
+    }
+    const refId = [...selectedPhotoIds][0];
+    const refPhoto = photos.find((p) => p.id === refId);
+    if (!refPhoto) { setColorMatchErr('Reference photo not found.'); return; }
+
+    setColorMatchState('scanning');
+    setColorMatchProgress({ done: 0, total: photos.length - 1 });
+    try {
+      const { computeColorMatchAcrossPhotos } = await import('../utils/colorMatch');
+      const patches = await computeColorMatchAcrossPhotos(refPhoto, photos, (done, total) => {
+        setColorMatchProgress({ done, total });
+      });
+      applyColorMatchToCells(patches);
+      setColorMatchState('done');
+      clearPhotoSelection();
+      // Auto-clear the "done" chip after a few seconds so the panel returns to normal.
+      setTimeout(() => setColorMatchState((s) => (s === 'done' ? null : s)), 5000);
+    } catch (e) {
+      setColorMatchState(null);
+      setColorMatchErr(e.message || 'Colour match failed.');
+    }
   };
 
   // Count duplicate groups found
@@ -712,6 +748,46 @@ export default function PhotoPanel({ mobile = false }) {
           )}
           {faceErr && (
             <div style={{ marginTop: 4, fontSize: 9, color: '#e05c5c', lineHeight: 1.4 }}>{faceErr}</div>
+          )}
+        </div>
+      )}
+
+      {/* Auto-colour-match to a reference photo */}
+      {photos.length >= 2 && (
+        <div style={{ padding: '0 10px 6px' }}>
+          {colorMatchState === 'scanning' ? (
+            <div style={{
+              padding: '6px 8px',
+              background: t.mode === 'light' ? '#e8f4f2' : '#0a1a1e',
+              border: `1px solid ${t.mode === 'light' ? '#a8d4d0' : '#1e4048'}`,
+              borderRadius: 4, fontSize: 10, color: '#6fcfc0', lineHeight: 1.5,
+            }}>
+              ▧ Matching colours… {colorMatchProgress.done}/{colorMatchProgress.total}
+            </div>
+          ) : colorMatchState === 'done' ? (
+            <div style={{
+              padding: '6px 8px',
+              background: t.mode === 'light' ? '#e6f4ea' : '#0a1a10',
+              border: `1px solid ${t.mode === 'light' ? '#8fc9a5' : '#1e4a2a'}`,
+              borderRadius: 4, fontSize: 10, color: '#6fcf97', lineHeight: 1.5,
+            }}>
+              ✓ Colours matched. Fine-tune per photo in the FX panel.
+            </div>
+          ) : (
+            <button
+              onClick={handleColorMatch}
+              title="Select one reference photo whose look you want the others to match, then click — this sets brightness / contrast / saturation on each placed photo automatically."
+              style={{
+                width: '100%', padding: '5px 0',
+                background: t.bgInput, border: `1px solid ${t.border}`,
+                borderRadius: 4, color: t.textMuted, fontSize: 10, cursor: 'pointer',
+              }}
+            >
+              ▧ Auto-colour match
+            </button>
+          )}
+          {colorMatchErr && (
+            <div style={{ marginTop: 4, fontSize: 9, color: '#e05c5c', lineHeight: 1.4 }}>{colorMatchErr}</div>
           )}
         </div>
       )}

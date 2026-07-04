@@ -737,6 +737,9 @@ export default function Toolbar({ stageRef, onPreview, onPrintPreview }) {
       {/* Soft-proof — canvas-wide CMYK gamut simulation */}
       <SoftProofToggle t={t} btnStyle={btnStyle} />
 
+      {/* View — guides + rulers toggles */}
+      <ViewMenu t={t} btnStyle={btnStyle} />
+
       <button data-tour="share" onClick={() => setShowShare(true)}
         style={btnStyle({
           color: t.mode === 'light' ? '#3a6020' : '#9fb88b',
@@ -1094,5 +1097,60 @@ function SoftProofToggle({ t, btnStyle }) {
     >
       ◎ Soft proof{softProof ? ' ON' : ''}
     </button>
+  );
+}
+
+function ViewMenu({ t, btnStyle }) {
+  const showGuides = useBookStore((s) => s.showGuides);
+  const showRulers = useBookStore((s) => s.showRulers);
+  const toggleGuides = useBookStore((s) => s.toggleGuides);
+  const toggleRulers = useBookStore((s) => s.toggleRulers);
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Rulers & guides"
+        style={btnStyle({
+          color: (showGuides || showRulers) ? '#6fcf97' : t.text,
+          border: `1px solid ${(showGuides || showRulers) ? '#2a4a2a' : t.border}`,
+        })}
+      >
+        ▦ View{(showGuides || showRulers) ? ' ●' : ''}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, marginTop: 4,
+            minWidth: 200, zIndex: 41,
+            background: '#141414', border: '1px solid #2a2a2a',
+            borderRadius: 6, padding: '4px 0',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.55)',
+          }}>
+            {[
+              ['Fold line + safe zone', showGuides, toggleGuides],
+              ['Inch rulers', showRulers, toggleRulers],
+            ].map(([label, on, toggle]) => (
+              <button
+                key={label}
+                onClick={() => { toggle(); setOpen(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  width: '100%', padding: '8px 14px',
+                  background: 'transparent', border: 'none',
+                  color: '#ddd', fontSize: 12, textAlign: 'left', cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#1e1e1e'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span>{label}</span>
+                <span style={{ fontSize: 10, color: on ? '#6fcf97' : '#555' }}>{on ? '● ON' : '○ off'}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
