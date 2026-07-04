@@ -192,7 +192,16 @@ create trigger trg_send_welcome_email
 -- ── (Optional) Confirm the wiring ────────────────────────────────
 -- After running this + any test signup:
 --
---   select * from extensions.net._http_response order by id desc limit 5;
+--   select id, status_code, url, created
+--     from net._http_response
+--     order by id desc
+--     limit 5;
+--
+-- (If that errors with "relation does not exist" — pg_net put the
+-- table in a different schema. Locate it with:
+--   select n.nspname, c.relname
+--     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+--     where c.relname = '_http_response';)
 --
 -- A 200 row from api.resend.com means it fired. A 4xx means the
 -- Vault key is wrong or the Resend from-address isn't verified in

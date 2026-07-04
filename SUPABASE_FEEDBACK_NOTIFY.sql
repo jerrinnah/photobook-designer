@@ -132,7 +132,15 @@ create trigger trg_notify_feedback_email
 -- ── 5. (Optional) Test it ───────────────────────────────────────────
 -- After running the above, you can confirm the wiring with:
 --
---   select * from extensions.net._http_response order by id desc limit 5;
+--   select id, status_code, url, created
+--     from net._http_response
+--     order by id desc
+--     limit 5;
 --
 -- If the trigger fires successfully you'll see 200-status rows from
 -- api.resend.com. Non-200 means the API key is missing or wrong.
+-- (If that query errors with "relation does not exist", pg_net put
+-- the table in a different schema — locate with:
+--   select n.nspname, c.relname
+--     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+--     where c.relname = '_http_response';)
