@@ -16,7 +16,12 @@ const KEY = 'photobook-autosave-v2';
 const META_KEY = 'photobook-autosave-meta-v2';
 const LEGACY_KEY = 'photobook-autosave-v1';
 const LEGACY_META = 'photobook-autosave-meta-v1';
-const DEBOUNCE_MS = 500;
+// Synchronous emergency snapshot key. Written to localStorage during
+// visibility-hidden / beforeunload — guaranteed to land before the
+// browser tears down the tab. IndexedDB writes are async and may not
+// complete during page teardown, so this is the belt to IDB's braces.
+const EMERGENCY_KEY = 'photobook-emergency-snapshot-v1';
+const DEBOUNCE_MS = 250; // was 500 — halved so less can be lost between edits and unload
 
 let timer = null;
 let lastStatus = 'idle'; // 'idle' | 'saving' | 'saved' | 'error'
@@ -49,6 +54,62 @@ const buildSnapshot = (state) => ({
   spreads: state.spreads,
   photos: state.photos,
 });
+
+// Compact snapshot for the emergency localStorage backup. Strips the
+// base64 photo blobs (photos.src / photos.originalSrc) because those
+// are big and would blow past localStorage's ~5MB limit. Layout,
+// captions, and photo metadata (name, dimensions, batch info) are
+// preserved. On recovery, we merge these back with the last IDB save's
+// photo blobs so no design work is lost.
+const buildEmergencySnapshot = (state, activeProjectId) => ({
+  v: 1,
+  savedAt: Date.now(),
+  activeProjectId,
+  bookName: state.bookName,
+  spreadSizeId: state.spreadSizeId,
+  customSize: state.customSize,
+  gap: state.gap,
+  blendEdges: state.blendEdges,
+  spreads: state.spreads,
+  // Photo metadata only — no base64. Enough to know which slots are
+  // filled and to re-associate them with cached photo blobs from IDB.
+  photoMeta: (state.photos || []).map((p) => ({
+    id: p.id, name: p.name, width: p.width, height: p.height,
+    origWidth: p.origWidth, origHeight: p.origHeight,
+    favorite: p.favorite || false,
+    facePriority: p.facePriority || 0,
+    batchId: p.batchId, batchLabel: p.batchLabel, batchAt: p.batchAt,
+    shotAt: p.shotAt,
+  })),
+});
+
+const writeEmergencySnapshot = (state) => {
+  try {
+    const activeId = getActiveProjectId();
+    const snap = buildEmergencySnapshot(state, activeId);
+    // JSON.stringify + setItem is fully synchronous — completes before
+    // the browser can unload the tab. This is the whole point.
+    localStorage.setItem(EMERGENCY_KEY, JSON.stringify(snap));
+  } catch (e) {
+    // QuotaExceededError on very large layouts is the only realistic
+    // failure. Nothing else to do — IDB is still the primary save.
+    console.info('[autosave] emergency snapshot skipped:', e?.message);
+  }
+};
+
+const clearEmergencySnapshot = () => {
+  try { localStorage.removeItem(EMERGENCY_KEY); } catch { /* ignore */ }
+};
+
+export const readEmergencySnapshot = () => {
+  try {
+    const raw = localStorage.getItem(EMERGENCY_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+
+// Exported for the boot-time recovery in preloadAutosave.
+export { clearEmergencySnapshot };
 
 const writeIDB = async (state) => {
   const snap = buildSnapshot(state);
@@ -127,31 +188,46 @@ export const startAutosave = (store) => {
   _flushFn = flush;
 
   // Save signals — fire on every "user might be leaving" event the
-  // browser exposes. visibilitychange catches tab switches + mobile
-  // backgrounding; pagehide catches Safari navigation; beforeunload
-  // catches desktop close / refresh. Belt-and-braces redundancy.
-  const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden' && timer) flush();
+  // browser exposes. Two-layer protection:
+  //   1) fire the async IDB flush (may or may not complete)
+  //   2) fire the SYNCHRONOUS emergency snapshot to localStorage
+  //      (guaranteed to complete before teardown — this is what
+  //      actually rescues the last few edits from a refresh)
+  const emergencyBackup = () => {
+    try { writeEmergencySnapshot(store.getState()); } catch { /* non-fatal */ }
   };
-  const onPageHide = () => { if (timer) flush(); };
-  const onBeforeUnload = () => { if (timer) flush(); };
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      emergencyBackup();
+      if (timer) flush();
+    }
+  };
+  const onPageHide = () => {
+    emergencyBackup();
+    if (timer) flush();
+  };
+  const onBeforeUnload = () => {
+    emergencyBackup();
+    if (timer) flush();
+  };
 
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pagehide', onPageHide);
   window.addEventListener('beforeunload', onBeforeUnload);
 
-  // Heartbeat autosave — every 30s, force a write if the state has
-  // changed since the last save. Belt-and-braces for long design
-  // sessions where the debounce keeps getting reset by continuous
-  // edits (dragging photos, zooming), and the crash-out risk is
-  // highest exactly then. The write itself is skipped if there's a
-  // pending debounce timer that hasn't fired yet (no point writing
-  // twice within 500ms).
+  // Heartbeat autosave — every 15s, force a write if the state has
+  // changed since the last save. Halved from 30s so long design
+  // sessions (where the debounce keeps getting reset by continuous
+  // edits) never leave a gap wider than a quarter-minute. The write
+  // itself is skipped if a debounce timer is imminent (no double-write
+  // within 250ms).
+  //
+  // Also refreshes the emergency snapshot so it stays close to live —
+  // an unexpected browser crash mid-heartbeat still has an at-most-
+  // 15-second-old snapshot to rescue.
   let lastHeartbeatState = null;
   const heartbeat = setInterval(() => {
     const s = store.getState();
-    // Cheap identity check on spreads + photos — if neither reference
-    // has changed we don't need to persist again.
     const sig = { spreads: s.spreads, photos: s.photos };
     if (lastHeartbeatState
         && lastHeartbeatState.spreads === sig.spreads
@@ -159,7 +235,8 @@ export const startAutosave = (store) => {
     if (timer) return; // debounce will fire imminently
     lastHeartbeatState = sig;
     writeIDB(s);
-  }, 30_000);
+    writeEmergencySnapshot(s);
+  }, 15_000);
 
   return () => {
     unsub();
@@ -222,6 +299,55 @@ export async function preloadAutosave() {
       const meta = await idbGet(META_KEY);
       if (meta) lastMeta = meta;
     }
+
+    // 4) Emergency-snapshot recovery. Runs AFTER we've loaded whatever
+    //    IDB knows about. If a synchronous emergency snapshot was
+    //    written on the last visibility-hidden / pagehide / beforeunload
+    //    AND it's newer than what IDB has, the browser tore down before
+    //    the async IDB write committed — restore the emergency layout
+    //    but keep the photo blobs from IDB (matched by photoId).
+    const emergency = readEmergencySnapshot();
+    if (emergency && emergency.savedAt) {
+      const idbSavedAt = _cachedRestore?.savedAt || 0;
+      const isNewer = emergency.savedAt > idbSavedAt + 1_000; // 1s slack for clock jitter
+      const sameProject = !activeId || emergency.activeProjectId === activeId;
+      if (isNewer && sameProject) {
+        // Build a photoId → full-photo lookup from whatever IDB had.
+        const idbPhotos = _cachedRestore?.photos || [];
+        const photoById = new Map(idbPhotos.map((p) => [String(p.id), p]));
+        const rebuiltPhotos = (emergency.photoMeta || []).map((meta) => {
+          const idbCopy = photoById.get(String(meta.id));
+          // Merge: emergency meta wins for lightweight fields, IDB blob
+          // wins for the actual base64 src / originalSrc. If IDB had no
+          // record of this photo (rare), we keep just the meta — the
+          // cell will render an "image missing" state and the user can
+          // re-import that one.
+          return {
+            ...(idbCopy || {}),
+            ...meta,
+            src: idbCopy?.src,
+            originalSrc: idbCopy?.originalSrc,
+          };
+        });
+        _cachedRestore = {
+          v: 2,
+          savedAt: emergency.savedAt,
+          bookName: emergency.bookName,
+          spreadSizeId: emergency.spreadSizeId,
+          customSize: emergency.customSize,
+          gap: emergency.gap,
+          blendEdges: emergency.blendEdges,
+          spreads: emergency.spreads,
+          photos: rebuiltPhotos,
+        };
+        lastMeta = { savedAt: emergency.savedAt, bytes: estimateBytes(_cachedRestore), recovered: true };
+        console.info('[autosave] recovered from emergency snapshot — layout newer than IDB by',
+          Math.round((emergency.savedAt - idbSavedAt) / 1000), 's');
+      }
+    }
+    // Whether we recovered or not, clear the emergency snapshot now
+    // that it's been either used or superseded by IDB.
+    clearEmergencySnapshot();
   } catch {
     _cachedRestore = null;
   }
