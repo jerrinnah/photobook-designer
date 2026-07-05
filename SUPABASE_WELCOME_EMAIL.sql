@@ -3,16 +3,26 @@
 -- lands in public.users.
 --
 -- Includes:
---   • Real Supabase Auth magic link (calls the /auth/v1/admin/generate_link
---     endpoint) so clicking the button signs the user in AND proves
---     the email was actually delivered / received
+--   • Strong intro copy — pain-point first, feature list second
 --   • YouTube walkthrough video for the "how do I get started" moment
 --   • The user's referral link so they can start sharing on day zero
 --
 -- Depends on:
---   • Vault secrets 'resend_api_key' AND 'supabase_service_role_key'
+--   • Vault secret 'resend_api_key'
 --   • SUPABASE_REFERRALS.sql (the referral_codes table + helpers)
 --   • pg_net extension
+--
+-- NOTE: an earlier revision called Supabase Auth's admin API from
+-- inside this trigger to mint a real one-click magic link. That
+-- required a sync poll on pg_net's response table which blocked the
+-- users-insert for up to 5 seconds — signup felt frozen. Reverted to
+-- a plain app link with email prefill so signup stays instant. The
+-- mint_magic_link_for helper is dropped below in case an old copy
+-- exists in the DB.
+--
+-- If you want the magic-link feature back later, move it out of the
+-- trigger onto a pg_cron job or an Edge Function so it doesn't block
+-- the client.
 --
 -- Non-blocking: any failure in the trigger (missing key, HTTP down,
 -- network glitch) is swallowed and the user insert still commits.
@@ -55,72 +65,9 @@ begin
 end;
 $$;
 
--- Helper — synchronously fetch a Supabase Auth magic link for an
--- email address. Uses the admin API (requires service_role_key). Since
--- pg_net is async we fire the request then poll _http_response for up
--- to ~5 seconds. Returns the action_link string or NULL on failure.
+-- (Removed) mint_magic_link_for — used to sync-poll pg_net to embed
+-- a real magic link in the welcome email. See file header for why.
 drop function if exists public.mint_magic_link_for(text);
-create or replace function public.mint_magic_link_for(p_email text)
-returns text
-language plpgsql
-security definer
-set search_path = public, extensions, net
-as $$
-declare
-  v_service_key text;
-  v_project_ref text := 'qjvvnyhjeqbxakosasfi';  -- your Supabase project ref
-  v_api_url     text;
-  v_request_id  bigint;
-  v_content     jsonb;
-  v_link        text;
-  v_attempt     int := 0;
-begin
-  if p_email is null or trim(p_email) = '' then return null; end if;
-
-  begin
-    select decrypted_secret into v_service_key
-      from vault.decrypted_secrets
-      where name = 'supabase_service_role_key' limit 1;
-  exception when others then return null; end;
-  if v_service_key is null or trim(v_service_key) = '' then return null; end if;
-
-  v_api_url := 'https://' || v_project_ref || '.supabase.co/auth/v1/admin/generate_link';
-
-  v_request_id := net.http_post(
-    url := v_api_url,
-    headers := jsonb_build_object(
-      'apikey',        v_service_key,
-      'Authorization', 'Bearer ' || v_service_key,
-      'Content-Type',  'application/json'
-    ),
-    body := jsonb_build_object(
-      'type',        'magiclink',
-      'email',       p_email,
-      'redirect_to', 'https://autobookbynej.online/?app=1'
-    )
-  );
-
-  -- Poll for the response up to ~5s in 200ms increments.
-  for v_attempt in 1..25 loop
-    select content::jsonb into v_content
-      from net._http_response
-      where id = v_request_id
-        and status_code is not null;
-    exit when v_content is not null;
-    perform pg_sleep(0.2);
-  end loop;
-
-  if v_content is null then return null; end if;
-
-  -- Supabase returns { action_link: "https://..." }. Newer versions
-  -- nest it under `properties.action_link`. Try both.
-  v_link := v_content->>'action_link';
-  if v_link is null then v_link := v_content->'properties'->>'action_link'; end if;
-  return v_link;
-exception when others then
-  return null;
-end;
-$$;
 
 -- ── Trigger function ─────────────────────────────────────────────
 drop function if exists public.send_welcome_email() cascade;
@@ -154,12 +101,14 @@ begin
   v_ref_link := case when v_ref_code is null then null
                      else 'https://autobookbynej.online/?ref=' || v_ref_code end;
 
-  -- Real Supabase magic link — click to sign in. Falls back to a
-  -- plain app link if the admin API is unreachable or unset.
-  v_magic_link := public.mint_magic_link_for(v_email);
-  if v_magic_link is null then
-    v_magic_link := 'https://autobookbynej.online/?app=1';
-  end if;
+  -- Plain app link — the fresh signup already has an active session
+  -- cookie on their device, so opening the app just works. We used to
+  -- mint a Supabase magic link here, but the sync poll blocked the
+  -- users-insert for up to 5s and made signup feel frozen.
+  --
+  -- Users opening the email on a different device just land on the
+  -- sign-in screen with their existing email prefill flow.
+  v_magic_link := 'https://autobookbynej.online/?app=1&email=' || replace(v_email, '@', '%40');
 
   -- First name derived from local-part of the email
   v_first_name := initcap(split_part(v_email, '@', 1));
@@ -181,22 +130,22 @@ begin
 
         -- ══ Stronger intro — sets the tone + pain point ══
         '<p style="font-size:16px;line-height:1.65;color:#222;margin:0 0 16px;font-weight:500;">' ||
-          'Photobook design shouldn''t take a weekend. AutoBook fixes that.' ||
+          'Photobook design shouldn''t take a weekend or longer hours. AutoBook fixes that.' ||
         '</p>' ||
         '<p style="font-size:14px;line-height:1.7;color:#444;margin:0 0 12px;">' ||
-          'You just joined thousands of photographers who''ve stopped fighting InDesign templates. ' ||
-          'Drop a wedding folder, hit <strong>Design All</strong>, and in under two minutes you have a ' ||
+          'You just joined hundreds of photographers who''ve stopped fighting InDesign/Photoshop templates and Corel Draw stressful layouts. ' ||
+          'Drop a wedding folder, an event folder or a studio session folder, hit <strong>Design All</strong>, and in under two minutes you have a ' ||
           'full print-ready book with proper photo hierarchy, sensible spreads, and cover typography that doesn''t look like Word.' ||
         '</p>' ||
         '<p style="font-size:14px;line-height:1.7;color:#444;margin:0 0 18px;">' ||
-          'Tweak what the AI got wrong (usually a few swaps), export a bleed-ready PDF with crop marks, ' ||
+          'Tweak what the engine got wrong (usually a few swaps), export a bleed-ready JPEG/PDF with crop marks, ' ||
           'and send your client a review link. That''s the whole loop. No plug-ins. No InDesign licence. No manual grid-snapping.' ||
         '</p>' ||
 
-        -- ══ Primary magic-link CTA — signs them in ══
+        -- ══ Primary CTA ══
         '<div style="text-align:center;margin:28px 0;">' ||
-          '<a href="' || v_magic_link || '" style="background:#1a3580;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:600;font-size:15px;display:inline-block;box-shadow:0 2px 6px rgba(26,53,128,0.25);">Open AutoBook & sign in →</a>' ||
-          '<div style="font-size:11px;color:#888;margin-top:8px;">One click signs you in — no password needed.</div>' ||
+          '<a href="' || v_magic_link || '" style="background:#1a3580;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:600;font-size:15px;display:inline-block;box-shadow:0 2px 6px rgba(26,53,128,0.25);">Open AutoBook →</a>' ||
+          '<div style="font-size:11px;color:#888;margin-top:8px;">Pick up right where you signed up.</div>' ||
         '</div>' ||
 
         -- ══ Video tutorial block ══
@@ -281,5 +230,6 @@ create trigger trg_send_welcome_email
 --     order by id desc
 --     limit 5;
 --
--- Two 200 rows expected per signup: one from supabase.co (magic
--- link generation), one from api.resend.com (email delivery).
+-- One 200 row expected per signup — from api.resend.com. If you
+-- also want the magic-link-in-email feature, move that logic to a
+-- pg_cron job or Edge Function so it never blocks the trigger.
