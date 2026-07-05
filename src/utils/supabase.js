@@ -430,7 +430,14 @@ export async function signUpWithPassword(email, password, phone) {
     try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
     markSessionFresh();
     attributeReferralIfPending(trimmed);
-    await enforceDeviceLimit();
+    // Fire-and-forget the device claim on signup: this is by definition
+    // a brand-new device (first-ever sign-in), so it can't hit the
+    // 2-device limit. Awaiting the ipify + Supabase round trip here
+    // added 4-14s of "Creating account…" hang for no benefit. If the
+    // check DOES come back blocked (edge case: user manually recycled
+    // their device UUID), enforceDeviceLimit still dispatches the
+    // 'autobook:device-blocked' event and signs the session out.
+    enforceDeviceLimit().catch((e) => console.info('[enforceDeviceLimit] deferred:', e?.message));
     return;
   }
 
@@ -445,7 +452,8 @@ export async function signUpWithPassword(email, password, phone) {
     try { localStorage.setItem('photobook-engaged-v1', '1'); } catch { /* ignore */ }
     markSessionFresh();
     attributeReferralIfPending(trimmed);
-    await enforceDeviceLimit();
+    // Same fire-and-forget rationale as the session-included path above.
+    enforceDeviceLimit().catch((e) => console.info('[enforceDeviceLimit] deferred:', e?.message));
   } catch (e) {
     // Device-limit hits propagate as-is so the UI shows the right modal.
     if (e?.code === 'DEVICE_BLOCKED') throw e;
@@ -562,7 +570,13 @@ export async function signInWithPassword(email, password) {
   markSessionFresh();
   // Enforce the device limit (lazy import to avoid an import cycle
   // with deviceCheck.js which uses rpcDirect from this module).
-  await enforceDeviceLimit();
+  //
+  // Fire-and-forget: awaiting this could block sign-in for up to 14s
+  // (ipify + Supabase RPC round-trip on slow networks). If the check
+  // comes back blocked, enforceDeviceLimit itself dispatches
+  // 'autobook:device-blocked' and signs the session out — same UX
+  // as before, just async. Sign-in itself completes instantly.
+  enforceDeviceLimit().catch((e) => console.info('[enforceDeviceLimit] deferred:', e?.message));
 }
 
 // Device-limit enforcement. Calls claim_device on the server; if the
