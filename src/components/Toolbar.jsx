@@ -1049,17 +1049,43 @@ const makeExportMenuItem = (_t) => ({
 });
 
 function AutosaveBadge({ t, status, meta }) {
+  // Refresh the relative-time label every 15s so "Saved · 2m ago"
+  // doesn't stay frozen at the moment of the last save.
+  const [, forceRender] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => forceRender((n) => n + 1), 15_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const relative = (savedAt) => {
+    if (!savedAt) return '';
+    const diffSec = Math.round((Date.now() - savedAt) / 1000);
+    if (diffSec < 5) return 'just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
+    if (diffSec < 3600) return `${Math.round(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`;
+    return `${Math.round(diffSec / 86400)}d ago`;
+  };
+
+  // Persistent-visibility strategy: if we have a savedAt in meta we
+  // always show the badge — users need continuous confirmation that
+  // their work is safe before hitting refresh. Only truly-blank boots
+  // (no autosave data yet) hide the badge.
+  const savedAt = meta?.savedAt;
+
   const map = {
-    idle:        { label: '',                color: t.textFaint, bg: 'transparent' },
-    saving:      { label: '⋯ Saving',        color: t.textMuted, bg: t.bgInput },
-    saved:       { label: '✓ Saved',         color: '#6fcf97',   bg: t.mode === 'light' ? '#e8f5ec' : '#0e1a10' },
+    idle:        savedAt
+      ? { label: `✓ Saved · ${relative(savedAt)}`, color: '#6fcf97', bg: t.mode === 'light' ? '#e8f5ec' : '#0e1a10' }
+      : { label: '', color: t.textFaint, bg: 'transparent' },
+    saving:      { label: '⋯ Saving…',        color: t.textMuted, bg: t.bgInput },
+    saved:       { label: `✓ Saved · ${relative(savedAt) || 'just now'}`, color: '#6fcf97', bg: t.mode === 'light' ? '#e8f5ec' : '#0e1a10' },
     'too-large': { label: '⚠ Layout saved (photos too large)', color: '#c9a227', bg: t.mode === 'light' ? '#fdf6e3' : '#1a1408' },
     error:       { label: '⚠ Autosave failed', color: '#e05c5c', bg: t.mode === 'light' ? '#fde8e8' : '#1a0808' },
   };
   const s = map[status] || map.idle;
   if (!s.label) return null;
-  const tooltip = meta?.savedAt
-    ? `Autosaved ${new Date(meta.savedAt).toLocaleTimeString()} · ${(meta.bytes / 1024).toFixed(0)} KB`
+  const tooltip = savedAt
+    ? `Autosaved at ${new Date(savedAt).toLocaleTimeString()} · ${(meta.bytes / 1024).toFixed(0)} KB. Refresh anytime — your work is safe. Only Reset or opening a different project clears it.`
     : status === 'too-large'
       ? 'Photos exceeded 4.5 MB — only layout was autosaved. Use ↓ Save to keep a full backup.'
       : '';

@@ -18,6 +18,7 @@ import DeviceBlockedModal from './components/DeviceBlockedModal';
 import CrashRecoveryToast from './components/CrashRecoveryToast';
 import StorageQuotaBanner from './components/StorageQuotaBanner';
 import CloudSyncBanner from './components/CloudSyncBanner';
+import ResumeToast from './components/ResumeToast';
 import { hasEngaged, startSessionLivenessCheck } from './utils/supabase';
 import { useViewport } from './hooks/useIsMobile';
 import { useTheme } from './utils/theme';
@@ -149,6 +150,7 @@ export default function App() {
         <CrashRecoveryToast />
         <StorageQuotaBanner />
         <CloudSyncBanner />
+        <ResumeToast />
       </>
     );
   }
